@@ -9,7 +9,7 @@ import '../../shared/widgets/app_shell.dart';
 import '../../shared/widgets/status_badge.dart';
 import 'event_data_tab.dart';
 import 'validators_tab.dart';
-import 'settlements_tab.dart';
+import 'collectors_tab.dart';
 import 'summary_tab.dart';
 import 'tickets_tab.dart';
 import 'sellers_tab.dart';
@@ -19,7 +19,7 @@ enum EventTab {
   tickets,
   sellers,
   validators,
-  settlements,
+  collectors,
   eventData,
 }
 
@@ -51,8 +51,8 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
         body = SellersTab(eventId: widget.eventId);
       case EventTab.validators:
         body = ValidatorsTab(eventId: widget.eventId);
-      case EventTab.settlements:
-        body = SettlementsTab(eventId: widget.eventId);
+      case EventTab.collectors:
+        body = CollectorsTab(eventId: widget.eventId);
       case EventTab.eventData:
         body = EventDataTab(eventId: widget.eventId);
     }
@@ -111,7 +111,7 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.tickets => Icons.confirmation_number_outlined,
       EventTab.sellers => Icons.groups_outlined,
       EventTab.validators => Icons.qr_code_scanner_outlined,
-      EventTab.settlements => Icons.fact_check_outlined,
+      EventTab.collectors => Icons.account_balance_wallet_outlined,
       EventTab.eventData => Icons.event_note_outlined,
     };
   }
@@ -122,7 +122,7 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.tickets => 'Tickets',
       EventTab.sellers => 'Vendedores',
       EventTab.validators => 'Validadores',
-      EventTab.settlements => 'Rendiciones',
+      EventTab.collectors => 'Recaudadores',
       EventTab.eventData => 'Datos del evento',
     };
   }

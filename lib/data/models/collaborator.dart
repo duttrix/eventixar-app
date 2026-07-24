@@ -1,11 +1,15 @@
 /// Role of a collaborator invited to an event via deeplink (no account required up front).
-enum CollaboratorRole { seller, validator }
+enum CollaboratorRole { seller, validator, collector }
 
 extension CollaboratorRoleX on CollaboratorRole {
-  String get label => this == CollaboratorRole.seller ? 'Vendedor' : 'Validador';
+  String get label => switch (this) {
+        CollaboratorRole.seller => 'Vendedor',
+        CollaboratorRole.validator => 'Validador',
+        CollaboratorRole.collector => 'Recaudador',
+      };
 }
 
-/// A seller or validator slot on an event, accessed through a shareable deeplink token.
+/// A seller, validator or collector slot on an event, accessed through a shareable deeplink token.
 class Collaborator {
   Collaborator({
     required this.id,
@@ -28,7 +32,7 @@ class Collaborator {
   /// Opaque token used in deeplinks: eventixar://join/{token}
   final String token;
 
-  /// Ticket number ranges assigned to this seller (empty for validators).
+  /// Ticket number ranges assigned to this seller (empty for validators / collectors).
   final List<TicketRange> ranges;
 
   String get deeplink => 'eventixar://join/$token';

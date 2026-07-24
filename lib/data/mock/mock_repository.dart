@@ -51,6 +51,10 @@ class MockRepository extends ChangeNotifier {
       .where((c) => c.eventId == eventId && c.role == CollaboratorRole.validator)
       .toList();
 
+  List<Collaborator> collectorsForEvent(String eventId) => collaborators
+      .where((c) => c.eventId == eventId && c.role == CollaboratorRole.collector)
+      .toList();
+
   Collaborator collaboratorById(String id) =>
       collaborators.firstWhere((c) => c.id == id);
 
@@ -66,6 +70,9 @@ class MockRepository extends ChangeNotifier {
 
   List<Ticket> ticketsValidatedBy(String validatorId) =>
       tickets.where((t) => t.validatorId == validatorId).toList();
+
+  List<Ticket> ticketsSettledBy(String collectorId) =>
+      tickets.where((t) => t.collectorId == collectorId).toList();
 
   Ticket? ticketById(String id) {
     for (final t in tickets) {
@@ -163,10 +170,12 @@ class MockRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// True if any assigned ticket is still with a seller (not collected/returned/delivered).
+  /// True if any ticket is still with a seller or sold but not yet settled with a collector.
   bool hasPendingSettlementTickets(String eventId) {
     return tickets.any(
-      (t) => t.eventId == eventId && t.status == TicketStatus.withSeller,
+      (t) =>
+          t.eventId == eventId &&
+          (t.status == TicketStatus.withSeller || t.status == TicketStatus.collected),
     );
   }
 
@@ -205,8 +214,13 @@ class MockRepository extends ChangeNotifier {
     required String phone,
     String notes = '',
   }) {
+    final idPrefix = switch (role) {
+      CollaboratorRole.seller => 'sel_',
+      CollaboratorRole.validator => 'val_',
+      CollaboratorRole.collector => 'col_',
+    };
     final collaborator = Collaborator(
-      id: _nextId(role == CollaboratorRole.seller ? 'sel_' : 'val_'),
+      id: _nextId(idPrefix),
       eventId: eventId,
       role: role,
       name: name,
@@ -262,12 +276,20 @@ class MockRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateTicketStatus(String ticketId, TicketStatus newStatus) {
+  void updateTicketStatus(String ticketId, TicketStatus newStatus, {String? buyerName}) {
     final ticket = tickets.firstWhere((t) => t.id == ticketId);
-    if (ticket.status == newStatus) return;
-    _shiftAggregate(ticket.eventId, ticket.status, -1);
-    _shiftAggregate(ticket.eventId, newStatus, 1);
-    ticket.status = newStatus;
+    if (ticket.status != newStatus) {
+      _shiftAggregate(ticket.eventId, ticket.status, -1);
+      _shiftAggregate(ticket.eventId, newStatus, 1);
+      ticket.status = newStatus;
+    }
+    if (buyerName != null) ticket.buyerName = buyerName;
+    notifyListeners();
+  }
+
+  void updateTicketBuyer(String ticketId, {required String buyerName}) {
+    final ticket = tickets.firstWhere((t) => t.id == ticketId);
+    ticket.buyerName = buyerName;
     notifyListeners();
   }
 
@@ -290,6 +312,34 @@ class MockRepository extends ChangeNotifier {
       ticket.status = TicketStatus.delivered;
     }
     if (validatorId != null) ticket.validatorId = validatorId;
+    notifyListeners();
+  }
+
+  /// Recaudador cobranza al vendedor: solo tickets cobrados → rendidos.
+  void markSettled(String ticketId, {required String collectorId}) {
+    final ticket = tickets.firstWhere((t) => t.id == ticketId);
+    if (ticket.status == TicketStatus.collected) {
+      _shiftAggregate(ticket.eventId, TicketStatus.collected, -1);
+      _shiftAggregate(ticket.eventId, TicketStatus.settled, 1);
+      ticket.status = TicketStatus.settled;
+    }
+    ticket.collectorId = collectorId;
+    notifyListeners();
+  }
+
+  void markTicketsSettled({
+    required Iterable<String> ticketIds,
+    required String collectorId,
+  }) {
+    for (final id in ticketIds) {
+      final ticket = tickets.firstWhere((t) => t.id == id);
+      if (ticket.status != TicketStatus.collected) continue;
+      _shiftAggregate(ticket.eventId, TicketStatus.collected, -1);
+      _shiftAggregate(ticket.eventId, TicketStatus.settled, 1);
+      ticket
+        ..status = TicketStatus.settled
+        ..collectorId = collectorId;
+    }
     notifyListeners();
   }
 
@@ -441,10 +491,11 @@ class MockRepository extends ChangeNotifier {
     events.addAll([active, awaiting, past, pastLocro, pastBingo, pastEmpanadas, pastPaella]);
 
     ticketAggregate['ev1'] = {
-      TicketStatus.unassigned: 80,
-      TicketStatus.withSeller: 40,
-      TicketStatus.collected: 60,
-      TicketStatus.returned: 10,
+      TicketStatus.unassigned: 130,
+      TicketStatus.withSeller: 48,
+      TicketStatus.collected: 4,
+      TicketStatus.settled: 4,
+      TicketStatus.returned: 4,
       TicketStatus.delivered: 10,
     };
     ticketAggregate['ev2'] = {
@@ -453,17 +504,14 @@ class MockRepository extends ChangeNotifier {
     ticketAggregate['ev3'] = {
       TicketStatus.unassigned: 0,
       TicketStatus.withSeller: 0,
-      TicketStatus.collected: 20,
+      TicketStatus.collected: 10,
+      TicketStatus.settled: 10,
       TicketStatus.returned: 5,
       TicketStatus.delivered: 95,
     };
     for (final id in ['ev4', 'ev5', 'ev6', 'ev7']) {
       ticketAggregate[id] = {
-        TicketStatus.unassigned: 0,
-        TicketStatus.withSeller: 0,
-        TicketStatus.collected: 0,
-        TicketStatus.returned: 0,
-        TicketStatus.delivered: 0,
+        for (final s in TicketStatus.values) s: 0,
       };
     }
 
@@ -508,17 +556,56 @@ class MockRepository extends ChangeNotifier {
       phone: '351-5556666',
       token: 'validator-carlos-demo',
     );
+    final laura = Collaborator(
+      id: 'col1',
+      eventId: 'ev1',
+      role: CollaboratorRole.collector,
+      name: 'Laura Méndez',
+      phone: '351-7778888',
+      token: 'collector-laura-demo',
+      notes: 'Recauda los viernes en sede.',
+    );
 
-    collaborators.addAll([ana, diego, carlos]);
+    collaborators.addAll([ana, diego, carlos, laura]);
+
+    const sampleBuyers = [
+      'Juan Pérez',
+      'María López',
+      'Pedro Sánchez',
+      'Lucía Fernández',
+      'Diego Álvarez',
+      'Sofía Ruiz',
+      'Martín Gómez',
+      'Valentina Díaz',
+      'Nicolás Torres',
+      'Camila Romero',
+      'Agustín Morales',
+      'Florencia Castro',
+      'Tomás Herrera',
+      'Julieta Navarro',
+      'Facundo Silva',
+      'Martina Ríos',
+      'Lautaro Vega',
+      'Paula Méndez',
+    ];
 
     for (var n = 1; n <= 30; n++) {
       final TicketStatus status;
       String? validatorId;
+      String? collectorId;
+      var buyerName = '';
       if (n <= 10) {
         status = TicketStatus.delivered;
         validatorId = 'val1';
+        collectorId = 'col1';
+        buyerName = sampleBuyers[n - 1];
+      } else if (n <= 14) {
+        status = TicketStatus.settled;
+        collectorId = 'col1';
+        buyerName = sampleBuyers[n - 1];
       } else if (n <= 18) {
         status = TicketStatus.collected;
+        buyerName = sampleBuyers[n - 1];
       } else if (n <= 26) {
         status = TicketStatus.withSeller;
       } else {
@@ -532,6 +619,8 @@ class MockRepository extends ChangeNotifier {
           status: status,
           sellerId: 'sel1',
           validatorId: validatorId,
+          collectorId: collectorId,
+          buyerName: buyerName,
         ),
       );
     }

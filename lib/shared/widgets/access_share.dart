@@ -11,12 +11,17 @@ class AccessShare {
   AccessShare._();
 
   static String messageFor(Collaborator person, {required String eventName}) {
-    if (person.role == CollaboratorRole.seller) {
-      return 'Hola ${person.name}, te comparto tu acceso a los tickets de "$eventName". '
-          'Abrí el link y vas a ver tus tickets. No necesitás registrarte.\n\n${person.shareUrl}';
-    }
-    return 'Hola ${person.name}, te comparto tu acceso de validador para "$eventName". '
-        'Abrí el link para leer tickets (retiro o entrada). No necesitás registrarte.\n\n${person.shareUrl}';
+    return switch (person.role) {
+      CollaboratorRole.seller =>
+        'Hola ${person.name}, te comparto tu acceso a los tickets de "$eventName". '
+            'Abrí el link y vas a ver tus tickets. No necesitás registrarte.\n\n${person.shareUrl}',
+      CollaboratorRole.validator =>
+        'Hola ${person.name}, te comparto tu acceso de validador para "$eventName". '
+            'Abrí el link para leer tickets (retiro o entrada). No necesitás registrarte.\n\n${person.shareUrl}',
+      CollaboratorRole.collector =>
+        'Hola ${person.name}, te comparto tu acceso de recaudador para "$eventName". '
+            'Abrí el link para cobrar las rendiciones de los vendedores. No necesitás registrarte.\n\n${person.shareUrl}',
+    };
   }
 
   static Future<void> copy(
@@ -30,9 +35,7 @@ class AccessShare {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          person.role == CollaboratorRole.seller
-              ? 'Acceso de ${person.name} listo para enviar por WhatsApp. Abre el link sin registrarse.'
-              : 'Acceso de ${person.name} listo para enviar por WhatsApp.',
+          'Acceso de ${person.name} (${person.role.label}) listo para enviar por WhatsApp.',
         ),
       ),
     );
@@ -42,6 +45,7 @@ class AccessShare {
 BadgeTone ticketStatusTone(TicketStatus status) {
   return switch (status) {
     TicketStatus.collected => BadgeTone.success,
+    TicketStatus.settled => BadgeTone.success,
     TicketStatus.returned => BadgeTone.danger,
     TicketStatus.delivered => BadgeTone.info,
     TicketStatus.withSeller => BadgeTone.warn,
@@ -52,6 +56,7 @@ BadgeTone ticketStatusTone(TicketStatus status) {
 Color ticketStatusBg(TicketStatus status) {
   return switch (status) {
     TicketStatus.collected => AppColors.successBg,
+    TicketStatus.settled => AppColors.accentBg,
     TicketStatus.returned => AppColors.dangerBg,
     TicketStatus.delivered => AppColors.accentBg,
     TicketStatus.withSeller => AppColors.warnBg,
@@ -79,6 +84,7 @@ class TicketStatusSummary extends StatelessWidget {
     final order = [
       TicketStatus.withSeller,
       TicketStatus.collected,
+      TicketStatus.settled,
       TicketStatus.returned,
       TicketStatus.delivered,
     ];
@@ -102,6 +108,7 @@ class TicketStatusSummary extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: switch (status) {
                     TicketStatus.collected => AppColors.successText,
+                    TicketStatus.settled => AppColors.accentText,
                     TicketStatus.returned => AppColors.dangerText,
                     TicketStatus.delivered => AppColors.accentText,
                     TicketStatus.withSeller => AppColors.warnText,

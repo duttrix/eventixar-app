@@ -90,7 +90,11 @@ final effectiveRoleProvider = Provider<Role>((ref) {
   if (token != null) {
     final collab = ref.watch(repositoryProvider).collaboratorByToken(token);
     if (collab != null) {
-      return collab.role == CollaboratorRole.seller ? Role.seller : Role.validator;
+      return switch (collab.role) {
+        CollaboratorRole.seller => Role.seller,
+        CollaboratorRole.validator => Role.validator,
+        CollaboratorRole.collector => Role.collector,
+      };
     }
   }
   return Role.organizer;

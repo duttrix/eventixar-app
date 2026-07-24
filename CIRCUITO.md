@@ -13,8 +13,9 @@ Eventixar sirve para organizar un evento con tickets (ej. pollo a beneficio, rif
 2. Asigna **rangos de tickets** a cada vendedor (pueden ser cantidades distintas).
 3. Comparte un **link** a cada vendedor y a cada validador.
 4. El **vendedor** abre el link, ve sus tickets, imprime o marca cobros.
-5. El **validador** abre su link y lee el ticket/tarjeta: en el retiro del producto o en la entrada del evento.
-6. El organizador ve el resumen y las rendiciones.
+5. El **recaudador** abre su link, elige un vendedor y cobra lo vendido (rendición).
+6. El **validador** abre su link y lee el ticket/tarjeta: en el retiro del producto o en la entrada del evento.
+7. El organizador ve el resumen, el detalle por vendedor y lo recaudado por cada recaudador.
 
 ### Formato de los tickets (imagen vs PDF)
 
@@ -45,13 +46,14 @@ Los cambios son solo locales a la pantalla (no se guardan todavía). Más adelan
 
 ---
 
-## 2. Los 3 roles
+## 2. Los 4 roles
 
 | Rol | ¿Necesita cuenta? | Cómo entra en la demo |
 |-----|-------------------|------------------------|
 | **Organizador** | Sí (login) | Botón **Entrar como organizador** |
 | **Vendedor** | No | Botón **Simular deeplink vendedor** |
 | **Validador** | No | Botón **Simular deeplink validador** |
+| **Recaudador** | No | Botón **Simular deeplink recaudador** |
 
 También podés usar **Continuar con Google** o **Continuar con Apple**: en la demo hacen lo mismo que entrar como organizador.
 
@@ -64,13 +66,14 @@ Al abrir el APK ves:
 - Título: **Eventixar** / *Tickets para tu evento*
 - Texto: *Iniciá sesión para crear tu evento y gestionar tickets.*
 - Botones Google / Apple (mock)
-- Caja **Modo demo · accesos rápidos** con 3 opciones:
+- Caja **Modo demo · accesos rápidos** con 4 opciones:
 
 | Botón | Qué hace |
 |-------|----------|
 | **Entrar como organizador** | Entra a **Mis eventos** como María Organizadora |
 | **Simular deeplink vendedor** | Entra al portal de **Ana Gómez** (vendedor del evento demo) |
 | **Simular deeplink validador** | Entra al portal de **Carlos Ruiz** (validador del evento demo) |
+| **Simular deeplink recaudador** | Entra al portal de **Laura Méndez** (recaudador del evento demo) |
 
 Para volver al login: ícono de **cerrar sesión** (arriba a la derecha) o **Salir** en los portales de vendedor/validador.
 
@@ -101,8 +104,16 @@ Al entrar como organizador vas a ver 3 eventos de ejemplo:
 |--------|-------------------|
 | Carlos Ruiz | `validator-carlos-demo` |
 
+**Recaudador precargado**
+
+| Nombre | Token / link demo |
+|--------|-------------------|
+| Laura Méndez | `collector-laura-demo` |
+
 Estado aproximado de tickets de Ana (1–30):
-- 1–18 → **Cobrado**
+- 1–10 → **Validado** (ya rendidos a Laura)
+- 11–14 → **Rendido** (Laura)
+- 15–18 → **Cobrado** (pendientes de rendir)
 - 19–26 → **En poder del vendedor**
 - 27–30 → **Devuelto**
 
@@ -196,11 +207,11 @@ Entrá a **Pollo a beneficio** (o al evento que acabás de crear/pagar).
 
 | Menú | Para qué sirve |
 |------|----------------|
-| **Resumen** | Recaudación, tickets por estado y desempeño por vendedor |
+| **Resumen** | Recaudación, desempeño por rol y **Finalizar evento** |
 | **Tickets** | Desglose + PDF + diseño del ticket |
 | **Vendedores** | Alta de vendedores, ver rangos y estados, compartir acceso |
 | **Validadores** | Alta de validadores, compartir acceso |
-| **Rendiciones** | Cuadre por vendedor + **Finalizar evento** (último paso) |
+| **Recaudadores** | Alta, acceso y detalle informativo de lo rendido por cada uno |
 | **Datos del evento** | Editar nombre, producto, precio, fecha, retiro, notas |
 
 Botón **Mis eventos** (arriba) vuelve al Home.
@@ -265,17 +276,17 @@ Simulación rápida: Login → **Simular deeplink validador** (Carlos).
 
 ---
 
-### 5.8 Rendiciones (cierre del evento)
+### 5.8 Recaudadores y cierre del evento
 
-Es el **último paso** operativo.
+La rendición la registra el recaudador desde su portal. El organizador solo consulta:
 
-1. Menú **Rendiciones**.
-2. Ves una card por vendedor (asignados / cobrados / en poder / devueltos) con estado **Pendiente** o **Lista**.
-3. Entrá a un vendedor para cuadrar ticket a ticket (o **Todos como cobrado**) y **Guardar rendición**. Eso **no** cierra el evento.
-4. Cuando corresponda, tocá **Finalizar evento** (abajo):
+1. Menú **Recaudadores**: ves cuánto rindió cada uno.
+2. Tocá un recaudador: ves total, importe, desglose por vendedor y tickets.
+3. Menú **Vendedores**: tocá uno para ver todos sus tickets, destinatario, estado y quién lo recaudó.
+4. Para cerrar, entrá a **Resumen** (abajo) y tocá **Finalizar evento**:
    - Diálogo de confirmación contundente.
-   - Si todavía hay tickets en poder, avisa y permite **Finalizar igual**.
-5. El evento pasa a **Finalizado** (banner *solo consulta*). Las rendiciones quedan en lectura; el hard-lock total de toda la app queda para después (es cuestionable).
+   - Si todavía hay tickets en poder o cobrados sin rendir, avisa y permite **Finalizar igual**.
+5. El evento pasa a **Finalizado** (banner *solo consulta*).
 
 ---
 
@@ -287,13 +298,13 @@ Es el **último paso** operativo.
    - Rangos asignados (ej. `1–30`)
    - Botón **Imprimir lote** (simulado → en producto real será **PDF**)
    - Lista de tickets con estado
-4. En cada ticket pendiente: botón **Cobrar** a la derecha.
-5. Cuando está cobrado: aparece **Compartir** (simulado → en producto real será **imagen** del ticket + share sheet nativo).
+4. En cada ticket pendiente: **Cobrar** marca que el vendedor cobró al comprador.
+5. Seleccioná uno o varios → **Imprimir lote** (PDF) o **Links** (arriba). Ahí se pide destinatario / detalle y se actualiza el **Para**.
 
 **Qué simular**
 - Ana “vende” un ticket → **Cobrar**
-- Quiere enviárselo al comprador → **Compartir** (imagen)
-- Quiere la hoja de varios → **Imprimir lote** (PDF)
+- Quiere enviárselo → seleccionar + **Links** (destinatario)
+- Quiere la hoja de varios → seleccionar + **Imprimir lote**
 
 Salí con el ícono de **cerrar sesión** (arriba) para volver al login.
 
@@ -308,14 +319,31 @@ Salí con el ícono de **cerrar sesión** (arriba) para volver al login.
    - **Escanear QR (simulado)** → avisa que uses el número manual
    - Campo **Número de ticket** + **Buscar**
 5. Resultados típicos:
-   - Si el ticket está **Cobrado** → podés **Marcar validado**
+   - Si el ticket está **Cobrado** o **Rendido** → podés **Marcar validado**
    - Si no está cobrado → avisa que no figura como cobrado
    - Si ya estaba validado → no se vuelve a validar
 
 **Números útiles para probar (seed de Ana)**
 - Ticket **18** → cobrado → debería permitir validar
+- Ticket **12** → rendido → también debería permitir validar
 - Ticket **20** → en poder del vendedor → no debería validar sin estar cobrado
 - Ticket **999** → no existe
+
+---
+
+## 7.1 Recorrido del RECAUDADOR (simulación)
+
+1. En Login tocá **Simular deeplink recaudador**.
+2. Entrá al portal de **Laura Méndez**.
+3. Ves la lista de **todos los vendedores** del evento (por ahora sin filtro).
+4. Entrá a **Ana Gómez**:
+   - Tickets **Cobrados** se pueden seleccionar
+   - Tocá **Rendir selección** → pasan a **Rendido** y quedan asociados a Laura
+5. Volvé a la lista: Ana debería bajar “por cobrar”.
+
+**Números útiles**
+- Tickets **15–18** de Ana → cobrados, listos para rendir
+- Tickets **11–14** → ya rendidos a Laura
 
 ---
 
@@ -325,8 +353,10 @@ Salí con el ícono de **cerrar sesión** (arriba) para volver al login.
 Sin asignar
     ↓  (organizador asigna rango al vendedor)
 En poder del vendedor
-    ↓  (vendedor marca cobro)          ↘ Devuelto (vuelve / no se vendió)
+    ↓  (vendedor cobra al comprador)          ↘ Devuelto (vuelve / no se vendió)
 Cobrado
+    ↓  (recaudador cobra al vendedor)
+Rendido
     ↓  (validador marca validado en retiro o entrada)
 Validado
 ```
@@ -335,9 +365,12 @@ Validado
 |--------|---------------|-------------|
 | Sin asignar | Sistema al crear evento | Todavía no se repartió |
 | En poder del vendedor | Al asignar rango | El vendedor lo tiene para vender |
-| Cobrado | Vendedor (o rendición) | Ya se cobró al comprador |
+| Cobrado | Vendedor | Ya cobró al comprador; todavía no rindió |
+| Rendido | Recaudador | El recaudador cobró esa plata al vendedor |
 | Devuelto | Vendedor / rendición | No se vendió / se devolvió |
 | Validado | Validador | Ciclo cerrado: producto entregado o acceso concedido |
+
+Hay **dos cobros distintos**: el vendedor cobra al comprador (`Cobrado`) y el recaudador cobra al vendedor (`Rendido`). Se guarda qué recaudador hizo cada rendición.
 
 ---
 
@@ -398,12 +431,16 @@ ORGANIZADOR
   crear evento → cotizar → pagar
        ↓
   repartir rangos a vendedores → compartir acceso
-  dar de alta validadores → compartir acceso
+  dar de alta validadores / recaudadores → compartir acceso
        ↓
-VENDEDOR (link)          VALIDADOR (link)
-  imprimir / cobrar         leer ticket / validar
-       ↓                         ↓
-ORGANIZADOR ve resumen y rendiciones
+VENDEDOR (link)          RECAUDADOR (link)         VALIDADOR (link)
+  imprimir / cobrar         elegir vendedor            leer ticket / validar
+  (cobra al comprador)      cobrar selección
+                            (rinde / cobra al vendedor)
+       ↓
+ORGANIZADOR ve resumen, vendedores y recaudadores
+       ↓
+Resumen → Finalizar evento
 ```
 
 ---

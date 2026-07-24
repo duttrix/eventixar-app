@@ -104,6 +104,13 @@ class LoginScreen extends ConsumerWidget {
                             child: const Text('Simular deeplink validador'),
                           ),
                         ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => context.go('/join/collector-laura-demo'),
+                            child: const Text('Simular deeplink recaudador'),
+                          ),
+                        ),
                       ],
                     ),
                   ),

@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/mock/providers.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/event_workspace/collector_detail_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
-import '../../features/event_workspace/settlement_detail_screen.dart';
 import '../../features/event_workspace/seller_detail_screen.dart';
 import '../../features/event_workspace/ticket_design_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -22,6 +22,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isJoin = location.startsWith('/join/') ||
           location.startsWith('/seller/') ||
           location.startsWith('/validator/') ||
+          location.startsWith('/collector/') ||
           location.startsWith('/ticket/');
 
       if (!session.isLoggedIn && !isLogin && !isJoin) {
@@ -59,6 +60,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             ValidatorPortalScreen(token: state.pathParameters['token']!),
       ),
       GoRoute(
+        path: '/collector/:token',
+        builder: (context, state) =>
+            CollectorPortalScreen(token: state.pathParameters['token']!),
+      ),
+      GoRoute(
         path: '/ticket/:ticketId',
         builder: (context, state) =>
             PublicTicketScreen(ticketId: state.pathParameters['ticketId']!),
@@ -81,10 +87,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: 'settlements/:sellerId',
-            builder: (context, state) => SettlementDetailScreen(
+            path: 'collectors/:collectorId',
+            builder: (context, state) => CollectorDetailScreen(
               eventId: state.pathParameters['eventId']!,
-              sellerId: state.pathParameters['sellerId']!,
+              collectorId: state.pathParameters['collectorId']!,
             ),
           ),
         ],

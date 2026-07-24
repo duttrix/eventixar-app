@@ -126,9 +126,34 @@ class SellerDetailScreen extends ConsumerWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          'Ticket #${ticket.number}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ticket #${ticket.number}',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            if (ticket.buyerName.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Para: ${ticket.buyerName}',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                            if (ticket.collectorId != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Recaudó: ${repo.collaboratorById(ticket.collectorId!).name}',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       StatusBadge(

@@ -21,7 +21,9 @@ class TicketShare {
     String? sellerName,
   }) {
     final from = sellerName == null ? '' : ' (de $sellerName)';
+    final para = ticket.buyerName.trim().isEmpty ? '' : 'Para: ${ticket.buyerName.trim()}\n';
     return '¡Hola! Te comparto tu ticket #${ticket.number} de "${event.name}"$from.\n'
+        '$para'
         '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)}\n'
         'Abrí el link para verlo (no necesitás registrarte):\n'
         '${ticket.shareUrl}';
@@ -35,6 +37,43 @@ class TicketShare {
     return Share.share(
       messageFor(ticket: ticket, event: event, sellerName: sellerName),
       subject: 'Ticket #${ticket.number} · ${event.name}',
+    );
+  }
+
+  /// Share several tickets as a list of links (demo / WhatsApp text).
+  static Future<void> shareMany({
+    required List<Ticket> tickets,
+    required Event event,
+    String? sellerName,
+    String? note,
+  }) {
+    if (tickets.isEmpty) return Future.value();
+    if (tickets.length == 1) {
+      final t = tickets.first;
+      final from = sellerName == null ? '' : ' (de $sellerName)';
+      final para = t.buyerName.trim().isEmpty ? '' : 'Para: ${t.buyerName.trim()}\n';
+      final noteLine = (note == null || note.trim().isEmpty) ? '' : '\nDetalle: ${note.trim()}\n';
+      return Share.share(
+        '¡Hola! Te comparto tu ticket #${t.number} de "${event.name}"$from.\n'
+        '$para'
+        '$noteLine'
+        '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)}\n'
+        'Abrí el link para verlo (no necesitás registrarte):\n'
+        '${t.shareUrl}',
+        subject: 'Ticket #${t.number} · ${event.name}',
+      );
+    }
+    final from = sellerName == null ? '' : ' (de $sellerName)';
+    final lines = tickets.map((t) {
+      final para = t.buyerName.trim().isEmpty ? '' : ' · ${t.buyerName.trim()}';
+      return '• Ticket #${t.number}$para: ${t.shareUrl}';
+    }).join('\n');
+    final noteLine = (note == null || note.trim().isEmpty) ? '' : '\n\nDetalle: ${note.trim()}';
+    return Share.share(
+      '¡Hola! Te comparto ${tickets.length} tickets de "${event.name}"$from.\n'
+      '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)} c/u\n\n'
+      '$lines$noteLine',
+      subject: '${tickets.length} tickets · ${event.name}',
     );
   }
 }
@@ -233,6 +272,13 @@ class TicketSharePreview extends StatelessWidget {
                         fontWeight: style.titleWeight,
                       ),
                     ),
+                    if (ticket.buyerName.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Para: ${ticket.buyerName.trim()}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ],
                 ),
               ),

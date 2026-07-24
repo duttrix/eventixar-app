@@ -55,7 +55,9 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
 
   @override
   Widget build(BuildContext context) {
-    final event = ref.watch(repositoryProvider).eventById(widget.eventId);
+    final repo = ref.watch(repositoryProvider);
+    final event = repo.eventById(widget.eventId);
+    final finished = event.status == EventStatus.finished;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
       _priceController = TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
@@ -82,25 +84,28 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 initialValue: _product,
                 decoration: const InputDecoration(labelText: 'Qué se vende'),
                 items: kEventProducts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                onChanged: (v) => setState(() => _product = v),
+                onChanged: finished ? null : (v) => setState(() => _product = v),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _priceController,
+                enabled: !finished,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Precio del ticket (ARS)'),
               ),
               const SizedBox(height: 12),
               InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _eventDate ?? DateTime.now(),
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime.now().add(const Duration(days: 730)),
-                  );
-                  if (picked != null) setState(() => _eventDate = picked);
-                },
+                onTap: finished
+                    ? null
+                    : () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _eventDate ?? DateTime.now(),
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(const Duration(days: 730)),
+                        );
+                        if (picked != null) setState(() => _eventDate = picked);
+                      },
                 child: InputDecorator(
                   decoration: const InputDecoration(labelText: 'Fecha'),
                   child: Text(
@@ -115,13 +120,15 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0),
-                        );
-                        if (picked != null) setState(() => _pickupFrom = picked);
-                      },
+                      onTap: finished
+                          ? null
+                          : () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0),
+                              );
+                              if (picked != null) setState(() => _pickupFrom = picked);
+                            },
                       child: InputDecorator(
                         decoration: const InputDecoration(labelText: 'Retiro desde'),
                         child: Text((_pickupFrom ?? const TimeOfDay(hour: 12, minute: 0)).format(context)),
@@ -131,13 +138,15 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: InkWell(
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: _pickupTo ?? const TimeOfDay(hour: 15, minute: 0),
-                        );
-                        if (picked != null) setState(() => _pickupTo = picked);
-                      },
+                      onTap: finished
+                          ? null
+                          : () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _pickupTo ?? const TimeOfDay(hour: 15, minute: 0),
+                              );
+                              if (picked != null) setState(() => _pickupTo = picked);
+                            },
                       child: InputDecorator(
                         decoration: const InputDecoration(labelText: 'Retiro hasta'),
                         child: Text((_pickupTo ?? const TimeOfDay(hour: 15, minute: 0)).format(context)),
@@ -147,9 +156,18 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 ],
               ),
               const SizedBox(height: 12),
-              TextField(controller: _placeController, decoration: const InputDecoration(labelText: 'Lugar de retiro')),
+              TextField(
+                controller: _placeController,
+                enabled: !finished,
+                decoration: const InputDecoration(labelText: 'Lugar de retiro'),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: _notesController, maxLines: 3, decoration: const InputDecoration(labelText: 'Notas')),
+              TextField(
+                controller: _notesController,
+                enabled: !finished,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Notas'),
+              ),
               const SizedBox(height: 8),
               Text(
                 'Tickets: ${event.ticketCount} · Vendedores: ${event.sellersCount} · Validadores: ${event.validatorsCount}',
@@ -159,7 +177,10 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
           ),
         ),
         const SizedBox(height: 16),
-        ElevatedButton(onPressed: _save, child: const Text('Guardar cambios')),
+        ElevatedButton(
+          onPressed: finished ? null : _save,
+          child: const Text('Guardar cambios'),
+        ),
       ],
     );
   }

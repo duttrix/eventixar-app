@@ -3,6 +3,7 @@ enum TicketStatus {
   unassigned,
   withSeller,
   collected,
+  settled,
   returned,
   delivered,
 }
@@ -16,6 +17,8 @@ extension TicketStatusX on TicketStatus {
         return 'En poder del vendedor';
       case TicketStatus.collected:
         return 'Cobrado';
+      case TicketStatus.settled:
+        return 'Rendido';
       case TicketStatus.returned:
         return 'Devuelto';
       case TicketStatus.delivered:
@@ -32,6 +35,8 @@ class Ticket {
     this.status = TicketStatus.unassigned,
     this.sellerId,
     this.validatorId,
+    this.collectorId,
+    this.buyerName = '',
   });
 
   final String id;
@@ -42,6 +47,12 @@ class Ticket {
 
   /// Validator who marked the ticket as delivered (if any).
   String? validatorId;
+
+  /// Collector who received the money from the seller (rendición).
+  String? collectorId;
+
+  /// Who the ticket was sold / given to (filled when sharing / collecting).
+  String buyerName;
 
   /// Public deeplink the buyer opens to see this ticket.
   String get shareUrl => 'https://app.eventixar.com/ticket/$id';
