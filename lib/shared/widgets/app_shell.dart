@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/mock/providers.dart';
 
 class ShellNavItem {
   const ShellNavItem({
@@ -19,27 +16,37 @@ class ShellNavItem {
   final VoidCallback onTap;
 }
 
-/// Shared scaffold + drawer for organizer home and event workspace.
-class AppShell extends ConsumerWidget {
+/// Shared scaffold + drawer for the event workspace (tabs).
+/// Logout vive en home: acá solo se vuelve con “Mis eventos”.
+class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
     required this.title,
     this.subtitle,
-    required this.navItems,
+    this.header,
+    this.navItems,
     required this.body,
     this.onHome,
     this.floatingActionButton,
   });
 
+  /// Section label in the AppBar (e.g. current tab). Kept short on purpose.
   final String title;
   final String? subtitle;
-  final List<ShellNavItem> navItems;
+
+  /// Optional banner under the AppBar (e.g. long event name).
+  final Widget? header;
+
+  final List<ShellNavItem>? navItems;
   final Widget body;
   final VoidCallback? onHome;
   final Widget? floatingActionButton;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final items = navItems ?? const <ShellNavItem>[];
+    final hasDrawer = items.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -49,72 +56,81 @@ class AppShell extends ConsumerWidget {
             if (subtitle != null)
               Text(
                 subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: AppColors.textMuted,
                 ),
               ),
-            Text(title),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
         actions: [
           if (onHome != null)
             Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(right: 8),
               child: TextButton.icon(
                 onPressed: onHome,
                 icon: const Icon(Icons.home_outlined, size: 18),
                 label: const Text('Mis eventos'),
               ),
             ),
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
         ],
       ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              const _DrawerHeader(),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+      drawer: hasDrawer
+          ? Drawer(
+              child: SafeArea(
+                child: Column(
                   children: [
-                    for (final item in navItems)
-                      ListTile(
-                        leading: Icon(
-                          item.icon,
-                          color: item.selected ? AppColors.accent : AppColors.textSecondary,
-                        ),
-                        title: Text(
-                          item.label,
-                          style: TextStyle(
-                            color: item.selected ? AppColors.accent : AppColors.text,
-                            fontWeight: item.selected ? FontWeight.w700 : FontWeight.w500,
-                          ),
-                        ),
-                        selected: item.selected,
-                        selectedTileColor: AppColors.accentBg,
-                        onTap: () {
-                          Navigator.pop(context);
-                          item.onTap();
-                        },
+                    const _DrawerHeader(),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        children: [
+                          for (final item in items)
+                            ListTile(
+                              leading: Icon(
+                                item.icon,
+                                color: item.selected ? AppColors.accent : AppColors.textSecondary,
+                              ),
+                              title: Text(
+                                item.label,
+                                style: TextStyle(
+                                  color: item.selected ? AppColors.accent : AppColors.text,
+                                  fontWeight: item.selected ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                              selected: item.selected,
+                              selectedTileColor: AppColors.accentBg,
+                              onTap: () {
+                                Navigator.pop(context);
+                                item.onTap();
+                              },
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-      body: body,
+            )
+          : null,
+      body: header == null
+          ? body
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                header!,
+                const Divider(height: 1, thickness: 1),
+                Expanded(child: body),
+              ],
+            ),
       floatingActionButton: floatingActionButton,
     );
   }

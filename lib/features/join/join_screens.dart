@@ -348,7 +348,10 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
       setState(() => _message = 'El ticket no figura como cobrado. Revisá con el organizador.');
       return;
     }
-    ref.read(repositoryProvider).markDelivered(ticket.id);
+    ref.read(repositoryProvider).markDelivered(
+          ticket.id,
+          validatorId: ref.read(repositoryProvider).collaboratorByToken(widget.token)?.id,
+        );
     setState(() {
       _message = 'Ticket #${ticket.number} validado.';
       _lastTicket = ref.read(repositoryProvider).findTicketByNumber(ticket.eventId, ticket.number);

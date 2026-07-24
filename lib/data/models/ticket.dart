@@ -31,6 +31,7 @@ class Ticket {
     required this.number,
     this.status = TicketStatus.unassigned,
     this.sellerId,
+    this.validatorId,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class Ticket {
   final int number;
   TicketStatus status;
   String? sellerId;
+
+  /// Validator who marked the ticket as delivered (if any).
+  String? validatorId;
 
   /// Public deeplink the buyer opens to see this ticket.
   String get shareUrl => 'https://app.eventixar.com/ticket/$id';

@@ -64,6 +64,9 @@ class MockRepository extends ChangeNotifier {
   List<Ticket> ticketsForSeller(String sellerId) =>
       tickets.where((t) => t.sellerId == sellerId).toList();
 
+  List<Ticket> ticketsValidatedBy(String validatorId) =>
+      tickets.where((t) => t.validatorId == validatorId).toList();
+
   Ticket? ticketById(String id) {
     for (final t in tickets) {
       if (t.id == id) return t;
@@ -151,6 +154,20 @@ class MockRepository extends ChangeNotifier {
       ..paid = true
       ..status = EventStatus.active;
     notifyListeners();
+  }
+
+  /// Closes the event after settlements (last step). Soft lock in UI.
+  void finishEvent(String eventId) {
+    final event = eventById(eventId);
+    event.status = EventStatus.finished;
+    notifyListeners();
+  }
+
+  /// True if any assigned ticket is still with a seller (not collected/returned/delivered).
+  bool hasPendingSettlementTickets(String eventId) {
+    return tickets.any(
+      (t) => t.eventId == eventId && t.status == TicketStatus.withSeller,
+    );
   }
 
   void updateEvent(
@@ -265,8 +282,15 @@ class MockRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  void markDelivered(String ticketId) {
-    updateTicketStatus(ticketId, TicketStatus.delivered);
+  void markDelivered(String ticketId, {String? validatorId}) {
+    final ticket = tickets.firstWhere((t) => t.id == ticketId);
+    if (ticket.status != TicketStatus.delivered) {
+      _shiftAggregate(ticket.eventId, ticket.status, -1);
+      _shiftAggregate(ticket.eventId, TicketStatus.delivered, 1);
+      ticket.status = TicketStatus.delivered;
+    }
+    if (validatorId != null) ticket.validatorId = validatorId;
+    notifyListeners();
   }
 
   /// Mock QR lookup: finds a ticket by number within an event.
@@ -346,7 +370,75 @@ class MockRepository extends ChangeNotifier {
       paid: true,
     );
 
-    events.addAll([active, awaiting, past]);
+    final pastLocro = Event(
+      id: 'ev4',
+      ownerEmail: 'organizador@demo.com',
+      name: 'Locro solidario',
+      product: 'Locro',
+      ticketPrice: 2500,
+      ticketCount: 90,
+      eventDate: now.subtract(const Duration(days: 120)),
+      pickupFrom: const TimeOfDay(hour: 11, minute: 0),
+      pickupTo: const TimeOfDay(hour: 14, minute: 0),
+      pickupPlace: 'Sede del club',
+      sellersCount: 3,
+      validatorsCount: 2,
+      status: EventStatus.finished,
+      paid: true,
+    );
+
+    final pastBingo = Event(
+      id: 'ev5',
+      ownerEmail: 'organizador@demo.com',
+      name: 'Bingo de fin de año',
+      product: 'Otro',
+      ticketPrice: 1000,
+      ticketCount: 150,
+      eventDate: now.subtract(const Duration(days: 200)),
+      pickupFrom: const TimeOfDay(hour: 18, minute: 0),
+      pickupTo: const TimeOfDay(hour: 22, minute: 0),
+      pickupPlace: 'Salón principal',
+      sellersCount: 4,
+      validatorsCount: 2,
+      status: EventStatus.finished,
+      paid: true,
+    );
+
+    final pastEmpanadas = Event(
+      id: 'ev6',
+      ownerEmail: 'organizador@demo.com',
+      name: 'Empanadas 2024',
+      product: 'Empanadas',
+      ticketPrice: 1600,
+      ticketCount: 200,
+      eventDate: now.subtract(const Duration(days: 280)),
+      pickupFrom: const TimeOfDay(hour: 12, minute: 0),
+      pickupTo: const TimeOfDay(hour: 15, minute: 0),
+      pickupPlace: 'Patio escolar',
+      sellersCount: 5,
+      validatorsCount: 3,
+      status: EventStatus.finished,
+      paid: true,
+    );
+
+    final pastPaella = Event(
+      id: 'ev7',
+      ownerEmail: 'organizador@demo.com',
+      name: 'Paella del club',
+      product: 'Paella',
+      ticketPrice: 3500,
+      ticketCount: 60,
+      eventDate: now.subtract(const Duration(days: 360)),
+      pickupFrom: const TimeOfDay(hour: 13, minute: 0),
+      pickupTo: const TimeOfDay(hour: 16, minute: 0),
+      pickupPlace: 'Quincho',
+      sellersCount: 2,
+      validatorsCount: 1,
+      status: EventStatus.finished,
+      paid: true,
+    );
+
+    events.addAll([active, awaiting, past, pastLocro, pastBingo, pastEmpanadas, pastPaella]);
 
     ticketAggregate['ev1'] = {
       TicketStatus.unassigned: 80,
@@ -365,6 +457,15 @@ class MockRepository extends ChangeNotifier {
       TicketStatus.returned: 5,
       TicketStatus.delivered: 95,
     };
+    for (final id in ['ev4', 'ev5', 'ev6', 'ev7']) {
+      ticketAggregate[id] = {
+        TicketStatus.unassigned: 0,
+        TicketStatus.withSeller: 0,
+        TicketStatus.collected: 0,
+        TicketStatus.returned: 0,
+        TicketStatus.delivered: 0,
+      };
+    }
 
     final ana = Collaborator(
       id: 'sel1',
@@ -411,13 +512,27 @@ class MockRepository extends ChangeNotifier {
     collaborators.addAll([ana, diego, carlos]);
 
     for (var n = 1; n <= 30; n++) {
-      final status = n <= 18
-          ? TicketStatus.collected
-          : n <= 26
-              ? TicketStatus.withSeller
-              : TicketStatus.returned;
+      final TicketStatus status;
+      String? validatorId;
+      if (n <= 10) {
+        status = TicketStatus.delivered;
+        validatorId = 'val1';
+      } else if (n <= 18) {
+        status = TicketStatus.collected;
+      } else if (n <= 26) {
+        status = TicketStatus.withSeller;
+      } else {
+        status = TicketStatus.returned;
+      }
       tickets.add(
-        Ticket(id: 'tkt_s1_$n', eventId: 'ev1', number: n, status: status, sellerId: 'sel1'),
+        Ticket(
+          id: 'tkt_s1_$n',
+          eventId: 'ev1',
+          number: n,
+          status: status,
+          sellerId: 'sel1',
+          validatorId: validatorId,
+        ),
       );
     }
     for (var n = 31; n <= 70; n++) {

@@ -7,7 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/mock/providers.dart';
 import '../../shared/widgets/access_share.dart';
 
-/// Organizer roster of sellers for an event + access sharing.
+/// Organizer roster of sellers. Share access only from seller detail.
 class SellersTab extends ConsumerWidget {
   const SellersTab({super.key, required this.eventId});
 
@@ -16,13 +16,12 @@ class SellersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(eventId);
     final sellers = repo.sellersForEvent(eventId);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(context, ref, event.name),
+        onPressed: () => _showAddDialog(context, ref),
         icon: const Icon(Icons.person_add_alt_1_outlined),
         label: const Text('Agregar'),
       ),
@@ -30,7 +29,7 @@ class SellersTab extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           Text(
-            'Asigná rangos de tickets y compartí el acceso. El vendedor abre el link y ve sus tickets: no necesita registrarse.',
+            'Entrá a cada vendedor para asignar rangos y compartir el acceso.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
@@ -44,7 +43,7 @@ class SellersTab extends ConsumerWidget {
                   onTap: () => context.push('/event/$eventId/sellers/${seller.id}'),
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -57,18 +56,17 @@ class SellersTab extends ConsumerWidget {
                                   Text(seller.name, style: Theme.of(context).textTheme.titleMedium),
                                   const SizedBox(height: 2),
                                   Text(
-                                    seller.ranges.isEmpty
-                                        ? 'Sin rangos · ${seller.phone}'
-                                        : 'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
+                                    [
+                                      if (seller.ranges.isEmpty)
+                                        'Sin rangos'
+                                      else
+                                        'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
+                                      if (seller.notes.isNotEmpty) seller.notes,
+                                    ].join(' · '),
                                     style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                                   ),
                                 ],
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Compartir acceso',
-                              icon: const Icon(Icons.ios_share),
-                              onPressed: () => AccessShare.copy(context, seller, eventName: event.name),
                             ),
                             const Icon(Icons.chevron_right, color: AppColors.textMuted),
                           ],
@@ -87,30 +85,42 @@ class SellersTab extends ConsumerWidget {
     );
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref, String eventName) {
+  void _showAddDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    final notesController = TextEditingController();
 
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Nuevo vendedor'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notas',
+                  hintText: 'Ej. Vende en el barrio Alberdi',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Después vas a poder asignar rangos y compartir el acceso desde su ficha.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
@@ -124,14 +134,15 @@ class SellersTab extends ConsumerWidget {
                       role: CollaboratorRole.seller,
                       name: name,
                       phone: phoneController.text.trim(),
+                      notes: notesController.text.trim(),
                     );
                 Navigator.pop(dialogContext);
-                AccessShare.copy(context, seller, eventName: eventName);
+                context.push('/event/$eventId/sellers/${seller.id}');
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
               }
             },
-            child: const Text('Crear y compartir acceso'),
+            child: const Text('Crear'),
           ),
         ],
       ),

@@ -44,7 +44,12 @@ class ValidatorsTab extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 10),
                 child: ListTile(
                   title: Text(v.name),
-                  subtitle: Text(v.phone.isEmpty ? 'Sin celular' : v.phone),
+                  subtitle: Text(
+                    [
+                      v.phone.isEmpty ? 'Sin celular' : v.phone,
+                      if (v.notes.isNotEmpty) v.notes,
+                    ].join(' · '),
+                  ),
                   onTap: () => _showEditor(context, ref, eventName: event.name, existing: v),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -77,29 +82,41 @@ class ValidatorsTab extends ConsumerWidget {
     final isEdit = existing != null;
     final nameController = TextEditingController(text: existing?.name ?? '');
     final phoneController = TextEditingController(text: existing?.phone ?? '');
+    final notesController = TextEditingController(text: existing?.notes ?? '');
 
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(isEdit ? 'Editar validador' : 'Nuevo validador'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
-            ),
-            if (!isEdit) ...[
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
               const SizedBox(height: 12),
-              const Text(
-                'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notas',
+                  hintText: 'Ej. Retiro en puerta lateral',
+                ),
+              ),
+              if (!isEdit) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
@@ -108,10 +125,11 @@ class ValidatorsTab extends ConsumerWidget {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
               final phone = phoneController.text.trim();
+              final notes = notesController.text.trim();
               final repo = ref.read(repositoryProvider);
 
               if (isEdit) {
-                repo.updateCollaborator(existing.id, name: name, phone: phone);
+                repo.updateCollaborator(existing.id, name: name, phone: phone, notes: notes);
                 Navigator.pop(dialogContext);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Validador actualizado.')),
@@ -124,6 +142,7 @@ class ValidatorsTab extends ConsumerWidget {
                 role: CollaboratorRole.validator,
                 name: name,
                 phone: phone,
+                notes: notes,
               );
               Navigator.pop(dialogContext);
               AccessShare.copy(context, v, eventName: eventName);

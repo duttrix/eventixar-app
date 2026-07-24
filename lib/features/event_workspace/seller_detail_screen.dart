@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/mock/providers.dart';
 import '../../shared/widgets/access_share.dart';
@@ -35,15 +36,28 @@ class SellerDetailScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           SectionCard(
-            title: 'Compartir acceso',
+            title: 'Acceso',
+            trailing: IconButton(
+              tooltip: 'Editar',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _showEditDialog(context, ref, seller),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Celular: ${seller.phone}'),
-                if (seller.notes.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(seller.notes, style: const TextStyle(color: AppColors.textSecondary)),
-                ],
+                Text(seller.name, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text('Celular: ${seller.phone.isEmpty ? 'Sin celular' : seller.phone}'),
+                const SizedBox(height: 4),
+                Text(
+                  seller.notes.isEmpty ? 'Notas: sin cargar' : 'Notas: ${seller.notes}',
+                  style: TextStyle(
+                    color: seller.notes.isEmpty ? AppColors.textMuted : AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 const Text(
                   'El vendedor abre el link y ve sus tickets. No necesita registrarse.',
@@ -126,6 +140,62 @@ class SellerDetailScreen extends ConsumerWidget {
                 ),
               ),
           ],
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, WidgetRef ref, Collaborator seller) {
+    final nameController = TextEditingController(text: seller.name);
+    final phoneController = TextEditingController(text: seller.phone);
+    final notesController = TextEditingController(text: seller.notes);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar vendedor'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notas',
+                  hintText: 'Ej. Vende en el barrio Alberdi',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              ref.read(repositoryProvider).updateCollaborator(
+                    seller.id,
+                    name: name,
+                    phone: phoneController.text.trim(),
+                    notes: notesController.text.trim(),
+                  );
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Vendedor actualizado.')),
+              );
+            },
+            child: const Text('Guardar'),
+          ),
         ],
       ),
     );

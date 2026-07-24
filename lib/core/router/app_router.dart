@@ -6,6 +6,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
 import '../../features/event_workspace/settlement_detail_screen.dart';
 import '../../features/event_workspace/seller_detail_screen.dart';
+import '../../features/event_workspace/ticket_design_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/join/join_screens.dart';
 import '../../features/onboarding/create_event_screen.dart';
@@ -67,6 +68,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             EventWorkspaceScreen(eventId: state.pathParameters['eventId']!),
         routes: [
+          GoRoute(
+            path: 'ticket-design',
+            builder: (context, state) =>
+                TicketDesignScreen(eventId: state.pathParameters['eventId']!),
+          ),
           GoRoute(
             path: 'sellers/:sellerId',
             builder: (context, state) => SellerDetailScreen(

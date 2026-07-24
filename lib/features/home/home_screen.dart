@@ -6,16 +6,29 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/mock/providers.dart';
-import '../../shared/widgets/app_shell.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-/// Organizer home: past events + create new. Nothing else.
-class HomeScreen extends ConsumerWidget {
+/// Organizer home: activos arriba, pasados con buscador. Sin menú lateral.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _pastSearchController = TextEditingController();
+  String _pastQuery = '';
+
+  @override
+  void dispose() {
+    _pastSearchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final repo = ref.watch(repositoryProvider);
     final session = ref.watch(sessionProvider);
     final email = session.userEmail;
@@ -28,19 +41,36 @@ class HomeScreen extends ConsumerWidget {
     final all = repo.eventsForOwner(email);
     final upcoming = all.where((e) => !e.isPast).toList();
     final past = all.where((e) => e.isPast).toList();
+    final filteredPast = _filterPast(past);
 
-    return AppShell(
-      title: 'Mis eventos',
-      subtitle: user?.name ?? email,
-      navItems: [
-        ShellNavItem(icon: Icons.home_outlined, label: 'Mis eventos', selected: true, onTap: () {}),
-        ShellNavItem(
-          icon: Icons.add_circle_outline,
-          label: 'Crear evento',
-          selected: false,
-          onTap: () => context.push('/create-event'),
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              user?.name ?? email,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const Text('Mis eventos'),
+          ],
         ),
-      ],
+        actions: [
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: () {
+              ref.read(sessionProvider.notifier).logout();
+              context.go('/login');
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -76,10 +106,34 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           Text('Eventos pasados', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
+          if (past.isNotEmpty) ...[
+            TextField(
+              controller: _pastSearchController,
+              onChanged: (value) => setState(() => _pastQuery = value.trim()),
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre…',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _pastQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Limpiar',
+                        onPressed: () {
+                          _pastSearchController.clear();
+                          setState(() => _pastQuery = '');
+                        },
+                        icon: const Icon(Icons.clear, size: 18),
+                      ),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (past.isEmpty)
             const _EmptyHint(text: 'Acá van a aparecer tus eventos finalizados.')
+          else if (filteredPast.isEmpty)
+            const _EmptyHint(text: 'Ningún evento pasado coincide.')
           else
-            for (final event in past)
+            for (final event in filteredPast)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _EventCard(
@@ -93,6 +147,18 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  List<Event> _filterPast(List<Event> past) {
+    if (_pastQuery.isEmpty) return past;
+    final q = _pastQuery.toLowerCase();
+    return past
+        .where(
+          (e) =>
+              e.name.toLowerCase().contains(q) ||
+              e.product.toLowerCase().contains(q),
+        )
+        .toList();
   }
 }
 

@@ -14,7 +14,34 @@ Eventixar sirve para organizar un evento con tickets (ej. pollo a beneficio, rif
 3. Comparte un **link** a cada vendedor y a cada validador.
 4. El **vendedor** abre el link, ve sus tickets, imprime o marca cobros.
 5. El **validador** abre su link y lee el ticket/tarjeta: en el retiro del producto o en la entrada del evento.
-6. El organizador ve el resumen, rendiciones y reportes.
+6. El organizador ve el resumen y las rendiciones.
+
+### Formato de los tickets (imagen vs PDF)
+
+Decisión de producto:
+
+| Acción | Formato | Por qué |
+|--------|---------|---------|
+| **Compartir un ticket** (vendedor → comprador, WhatsApp, etc.) | **Imagen** (PNG/JPG) | Se ve al instante en el teléfono, se reenvía fácil, no hace falta abrir un visor. Un ticket es una “tarjeta”. |
+| **Imprimir lote** (varios o todos los del vendedor) | **PDF** | Varias páginas o grilla en A4, listo para imprimir o guardar. |
+
+- Default del botón **Compartir** del ticket individual → imagen.
+- Default de **Imprimir lote** → PDF.
+- Un PDF individual puede existir más adelante como opción secundaria (“Descargar PDF”), no como default del share.
+
+En esta demo ambos flujos están **simulados** (mensaje / share sheet con link); la app todavía no genera el archivo real.
+
+### Diseño del ticket (personalización)
+
+El diseño **no** se edita en la lista de Tickets: desde **Vista previa** tocás el ticket (chip **Editar** flotante) y abrís una **pantalla aparte**.
+
+En esa pantalla (demo) podés probar:
+- Plantillas (Clásico / Festivo / Oscuro / Institucional)
+- Color principal y acento
+- Fondo (sólido / gradiente / imagen ejemplo)
+- Tipografía (sistema / destacada / compacta)
+
+Los cambios son solo locales a la pantalla (no se guardan todavía). Más adelante: logo, fondo propio y diseño aplicado a todos los tickets del evento.
 
 ---
 
@@ -169,12 +196,11 @@ Entrá a **Pollo a beneficio** (o al evento que acabás de crear/pagar).
 
 | Menú | Para qué sirve |
 |------|----------------|
-| **Resumen** | Números: emitidos, asignados, sin asignar, cobrados, en poder, validados + recaudación estimada |
-| **Tickets** | Desglose por estado + botón de PDF simulado |
+| **Resumen** | Recaudación, tickets por estado y desempeño por vendedor |
+| **Tickets** | Desglose + PDF + diseño del ticket |
 | **Vendedores** | Alta de vendedores, ver rangos y estados, compartir acceso |
 | **Validadores** | Alta de validadores, compartir acceso |
-| **Rendiciones** | Cuadre por vendedor (cobrado / en poder / devuelto) |
-| **Reportes** | Recaudación y desempeño por vendedor |
+| **Rendiciones** | Cuadre por vendedor + **Finalizar evento** (último paso) |
 | **Datos del evento** | Editar nombre, producto, precio, fecha, retiro, notas |
 
 Botón **Mis eventos** (arriba) vuelve al Home.
@@ -239,14 +265,17 @@ Simulación rápida: Login → **Simular deeplink validador** (Carlos).
 
 ---
 
-### 5.8 Rendiciones (organizador ↔ vendedor)
-1. Menú **Rendiciones**.
-2. Elegí un vendedor que ya tenga tickets.
-3. Podés:
-   - Marcar **Todos como cobrado**
-   - O cambiar estado ticket por ticket: En poder / Cobrado / Devuelto
+### 5.8 Rendiciones (cierre del evento)
 
-Sirve para el cuadre de plata y tickets físicos.
+Es el **último paso** operativo.
+
+1. Menú **Rendiciones**.
+2. Ves una card por vendedor (asignados / cobrados / en poder / devueltos) con estado **Pendiente** o **Lista**.
+3. Entrá a un vendedor para cuadrar ticket a ticket (o **Todos como cobrado**) y **Guardar rendición**. Eso **no** cierra el evento.
+4. Cuando corresponda, tocá **Finalizar evento** (abajo):
+   - Diálogo de confirmación contundente.
+   - Si todavía hay tickets en poder, avisa y permite **Finalizar igual**.
+5. El evento pasa a **Finalizado** (banner *solo consulta*). Las rendiciones quedan en lectura; el hard-lock total de toda la app queda para después (es cuestionable).
 
 ---
 
@@ -256,20 +285,17 @@ Sirve para el cuadre de plata y tickets físicos.
 2. Entrá al portal de **Ana Gómez** del evento **Pollo a beneficio**.
 3. Vas a ver:
    - Rangos asignados (ej. `1–30`)
-   - Botón **Imprimir** (simulado: muestra un mensaje)
-   - Botón **Mi link**
+   - Botón **Imprimir lote** (simulado → en producto real será **PDF**)
    - Lista de tickets con estado
-4. En cada ticket, menú ⋮:
-   - **En mi poder**
-   - **Marcar cobrado**
-   - **Devuelto**
+4. En cada ticket pendiente: botón **Cobrar** a la derecha.
+5. Cuando está cobrado: aparece **Compartir** (simulado → en producto real será **imagen** del ticket + share sheet nativo).
 
 **Qué simular**
-- Ana “vende” un ticket → **Marcar cobrado**
-- Le sobró uno → **Devuelto**
-- Quiere la hoja → **Imprimir**
+- Ana “vende” un ticket → **Cobrar**
+- Quiere enviárselo al comprador → **Compartir** (imagen)
+- Quiere la hoja de varios → **Imprimir lote** (PDF)
 
-Salí con **Salir** (arriba) para volver al login.
+Salí con el ícono de **cerrar sesión** (arriba) para volver al login.
 
 ---
 
@@ -326,16 +352,17 @@ Validado
 7. **Cerrar sesión**.
 8. **Simular deeplink vendedor** → marcar un ticket como cobrado.
 9. **Salir** → **Simular deeplink validador** → buscar ese número y marcar validado.
-10. Volver como organizador → Resumen / Reportes para ver el impacto.
+10. Volver como organizador → **Resumen** para ver el impacto.
 
 ---
 
 ## 10. Limitaciones de esta demo (importante)
 
 - No hay pago real ni Mercado Pago.
-- No hay WhatsApp real: **Compartir acceso** copia un mensaje + link al portapapeles.
+- No hay WhatsApp real: **Compartir acceso** (vendedor/validador) usa el share sheet / portapapeles.
+- **Compartir ticket** individual todavía no genera la **imagen** real: hoy comparte texto + link (el formato objetivo es imagen).
+- **Imprimir lote** todavía no genera el **PDF** real: el botón es simulado.
 - No hay cámara QR real: el validador busca por número.
-- No hay PDF real de impresión: el botón **Imprimir** es simulado.
 - Google / Apple login son mock.
 - Los datos viven en memoria del dispositivo: reiniciar la app puede volver al seed inicial.
 - Los deeplinks `https://app.eventixar.com/...` no abren una web real; en la demo se simulan con los botones del login.
@@ -376,7 +403,7 @@ ORGANIZADOR
 VENDEDOR (link)          VALIDADOR (link)
   imprimir / cobrar         leer ticket / validar
        ↓                         ↓
-ORGANIZADOR ve resumen, rendiciones y reportes
+ORGANIZADOR ve resumen y rendiciones
 ```
 
 ---

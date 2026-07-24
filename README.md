@@ -4,6 +4,13 @@ App Flutter del circuito simplificado: **organizador crea y paga un evento; vend
 
 Ver el documento de producto: [CIRCUITO.md](./CIRCUITO.md).
 
+## Formato de tickets
+
+- **Compartir un ticket** → imagen (WhatsApp / share nativo)
+- **Imprimir lote** → PDF
+
+Detalle y justificación en [CIRCUITO.md](./CIRCUITO.md) (sección *Formato de los tickets*).
+
 ## Correr
 
 ```bash

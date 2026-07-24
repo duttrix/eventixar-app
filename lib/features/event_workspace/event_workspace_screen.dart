@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_colors.dart';
+import '../../data/models/event.dart';
 import '../../data/mock/providers.dart';
 import '../../shared/widgets/app_shell.dart';
+import '../../shared/widgets/status_badge.dart';
 import 'event_data_tab.dart';
 import 'validators_tab.dart';
 import 'settlements_tab.dart';
-import 'reports_tab.dart';
 import 'summary_tab.dart';
 import 'tickets_tab.dart';
 import 'sellers_tab.dart';
@@ -18,7 +20,6 @@ enum EventTab {
   sellers,
   validators,
   settlements,
-  reports,
   eventData,
 }
 
@@ -52,16 +53,45 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
         body = ValidatorsTab(eventId: widget.eventId);
       case EventTab.settlements:
         body = SettlementsTab(eventId: widget.eventId);
-      case EventTab.reports:
-        body = ReportsTab(eventId: widget.eventId);
       case EventTab.eventData:
         body = EventDataTab(eventId: widget.eventId);
     }
 
+    final (statusLabel, statusTone) = switch (event.status) {
+      EventStatus.finished => ('Finalizado', BadgeTone.neutral),
+      EventStatus.awaitingPayment => ('Pendiente de pago', BadgeTone.warn),
+      EventStatus.active => ('Habilitado', BadgeTone.success),
+    };
+
     return AppShell(
-      title: event.name,
-      subtitle: event.paid ? 'Evento habilitado' : 'Pendiente de pago',
+      // AppBar: sección corta. El nombre largo va en el header de abajo.
+      title: _labelFor(_selected),
       onHome: () => context.go('/home'),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _EventHeader(
+            name: event.name,
+            statusLabel: statusLabel,
+            statusTone: statusTone,
+          ),
+          if (event.status == EventStatus.finished)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              color: AppColors.successBg,
+              child: const Text(
+                'Evento finalizado · solo consulta',
+                style: TextStyle(
+                  color: AppColors.successText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
+      ),
       navItems: [
         for (final tab in EventTab.values)
           ShellNavItem(
@@ -77,12 +107,11 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
 
   IconData _iconFor(EventTab tab) {
     return switch (tab) {
-      EventTab.summary => Icons.dashboard_outlined,
+      EventTab.summary => Icons.bar_chart_outlined,
       EventTab.tickets => Icons.confirmation_number_outlined,
       EventTab.sellers => Icons.groups_outlined,
       EventTab.validators => Icons.qr_code_scanner_outlined,
       EventTab.settlements => Icons.fact_check_outlined,
-      EventTab.reports => Icons.bar_chart_outlined,
       EventTab.eventData => Icons.event_note_outlined,
     };
   }
@@ -94,8 +123,49 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.sellers => 'Vendedores',
       EventTab.validators => 'Validadores',
       EventTab.settlements => 'Rendiciones',
-      EventTab.reports => 'Reportes',
       EventTab.eventData => 'Datos del evento',
     };
+  }
+}
+
+/// Full-width event name under the AppBar so long titles don't fight the actions.
+class _EventHeader extends StatelessWidget {
+  const _EventHeader({
+    required this.name,
+    required this.statusLabel,
+    required this.statusTone,
+  });
+
+  final String name;
+  final String statusLabel;
+  final BadgeTone statusTone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.card,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            StatusBadge(label: statusLabel, tone: statusTone),
+          ],
+        ),
+      ),
+    );
   }
 }
