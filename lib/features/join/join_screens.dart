@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/models/coupon.dart';
+import '../../data/models/event.dart';
+import '../../data/models/ticket.dart';
 import '../../data/mock/providers.dart';
+import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
+import '../../shared/widgets/ticket_share.dart';
 
-/// Entry via deeplink. Routes seller → coupon portal, deliverer → QR portal.
+/// Entry via deeplink. Routes seller → ticket portal, validator → scan portal.
 class JoinScreen extends ConsumerStatefulWidget {
   const JoinScreen({super.key, required this.token});
 
@@ -31,7 +33,7 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
       if (collab.role == CollaboratorRole.seller) {
         context.go('/seller/${widget.token}');
       } else {
-        context.go('/deliverer/${widget.token}');
+        context.go('/validator/${widget.token}');
       }
     });
   }
@@ -49,7 +51,7 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
   }
 }
 
-/// Seller portal: digital coupons ready to print or hand out one by one.
+/// Seller portal: digital tickets ready to print, sell and share one by one.
 class SellerPortalScreen extends ConsumerWidget {
   const SellerPortalScreen({super.key, required this.token});
 
@@ -63,18 +65,19 @@ class SellerPortalScreen extends ConsumerWidget {
       return const Scaffold(body: Center(child: Text('Vendedor no encontrado.')));
     }
     final event = repo.eventById(seller.eventId);
-    final coupons = repo.couponsForSeller(seller.id)..sort((a, b) => a.number.compareTo(b.number));
+    final tickets = repo.ticketsForSeller(seller.id)..sort((a, b) => a.number.compareTo(b.number));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(seller.name),
         actions: [
-          TextButton(
+          IconButton(
+            tooltip: 'Cerrar sesión',
             onPressed: () {
               ref.read(sessionProvider.notifier).logout();
               context.go('/login');
             },
-            child: const Text('Salir'),
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
@@ -86,7 +89,7 @@ class SellerPortalScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Tus cupones para vender', style: Theme.of(context).textTheme.titleMedium),
+                Text('Tus tickets para vender', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 6),
                 Text(
                   seller.ranges.isEmpty
@@ -94,84 +97,52 @@ class SellerPortalScreen extends ConsumerWidget {
                       : 'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Tocá Cobrar a la derecha. Cuando esté cobrado, aparece Compartir.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
+                if (tickets.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  TicketStatusSummary(tickets: tickets),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: coupons.isEmpty
-                      ? null
-                      : () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('PDF de cupones listo para imprimir (simulado).')),
-                          );
-                        },
-                  icon: const Icon(Icons.print_outlined),
-                  label: const Text('Imprimir'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: seller.shareUrl));
+          OutlinedButton.icon(
+            onPressed: tickets.isEmpty
+                ? null
+                : () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Link copiado.')),
+                      const SnackBar(content: Text('PDF de tickets listo para imprimir (simulado).')),
                     );
                   },
-                  icon: const Icon(Icons.link),
-                  label: const Text('Mi link'),
-                ),
-              ),
-            ],
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Imprimir lote'),
           ),
           const SizedBox(height: 20),
-          Text('Cupones (${coupons.length})', style: Theme.of(context).textTheme.titleMedium),
+          Text('Tickets (${tickets.length})', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
-          if (coupons.isEmpty)
-            const Text('Cuando el organizador te asigne un rango, van a aparecer acá.', style: TextStyle(color: AppColors.textMuted))
+          if (tickets.isEmpty)
+            const Text(
+              'Cuando el organizador te asigne un rango, van a aparecer acá.',
+              style: TextStyle(color: AppColors.textMuted),
+            )
           else
-            for (final coupon in coupons)
+            for (final ticket in tickets)
               Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SectionCard(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Cupón #${coupon.number}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                            Text('\$${event.couponPrice.toStringAsFixed(0)} · ${event.product}',
-                                style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      StatusBadge(
-                        label: coupon.status.label,
-                        tone: switch (coupon.status) {
-                          CouponStatus.collected => BadgeTone.success,
-                          CouponStatus.returned => BadgeTone.danger,
-                          CouponStatus.delivered => BadgeTone.info,
-                          _ => BadgeTone.warn,
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      PopupMenuButton<CouponStatus>(
-                        onSelected: (status) =>
-                            ref.read(repositoryProvider).updateCouponStatus(coupon.id, status),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: CouponStatus.withSeller, child: Text('En mi poder')),
-                          PopupMenuItem(value: CouponStatus.collected, child: Text('Marcar cobrado')),
-                          PopupMenuItem(value: CouponStatus.returned, child: Text('Devuelto')),
-                        ],
-                        child: const Icon(Icons.more_vert, color: AppColors.textMuted),
-                      ),
-                    ],
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _SellerTicketCard(
+                  ticket: ticket,
+                  event: event,
+                  onShare: () => TicketShare.share(
+                    ticket: ticket,
+                    event: event,
+                    sellerName: seller.name,
                   ),
+                  onMarkCollected: () =>
+                      ref.read(repositoryProvider).updateTicketStatus(ticket.id, TicketStatus.collected),
                 ),
               ),
         ],
@@ -180,20 +151,159 @@ class SellerPortalScreen extends ConsumerWidget {
   }
 }
 
-/// Deliverer portal: scan / look up coupons and mark as delivered.
-class DelivererPortalScreen extends ConsumerStatefulWidget {
-  const DelivererPortalScreen({super.key, required this.token});
+class _SellerTicketCard extends StatelessWidget {
+  const _SellerTicketCard({
+    required this.ticket,
+    required this.event,
+    required this.onShare,
+    required this.onMarkCollected,
+  });
+
+  final Ticket ticket;
+  final Event event;
+  final VoidCallback onShare;
+  final VoidCallback onMarkCollected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPending = ticket.status == TicketStatus.withSeller;
+    final isCollected = ticket.status == TicketStatus.collected;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: ticketStatusBg(ticket.status),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.confirmation_number_outlined, color: AppColors.accent, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ticket #${ticket.number}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+                if (!isPending) ...[
+                  const SizedBox(height: 6),
+                  StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (isPending)
+            FilledButton(
+              onPressed: onMarkCollected,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                minimumSize: const Size(0, 40),
+              ),
+              child: const Text('Cobrar'),
+            )
+          else if (isCollected)
+            FilledButton.tonalIcon(
+              onPressed: onShare,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                minimumSize: const Size(0, 40),
+              ),
+              icon: const Icon(Icons.ios_share, size: 18),
+              label: const Text('Compartir'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Buyer-facing public ticket page (opened from share link). No login required.
+class PublicTicketScreen extends ConsumerWidget {
+  const PublicTicketScreen({super.key, required this.ticketId});
+
+  final String ticketId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(repositoryProvider);
+    final ticket = repo.ticketById(ticketId);
+    if (ticket == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Ticket')),
+        body: const Center(child: Text('Este ticket no existe o el link no es válido.')),
+      );
+    }
+    final event = repo.eventById(ticket.eventId);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Tu ticket')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TicketSharePreview(ticket: ticket, event: event),
+          const SizedBox(height: 16),
+          SectionCard(
+            title: 'Datos',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Evento: ${event.name}'),
+                const SizedBox(height: 4),
+                Text('Producto: ${event.product}'),
+                const SizedBox(height: 4),
+                Text('Lugar: ${event.pickupPlace}'),
+                const SizedBox(height: 4),
+                Text(
+                  'Horario: ${event.pickupFrom.format(context)} – ${event.pickupTo.format(context)}',
+                ),
+                const SizedBox(height: 10),
+                StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Mostrá este ticket (o el QR) en el retiro o en la entrada. No necesitás crear una cuenta.',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Validator portal: scan / look up tickets and mark as delivered (pickup or entrance).
+class ValidatorPortalScreen extends ConsumerStatefulWidget {
+  const ValidatorPortalScreen({super.key, required this.token});
 
   final String token;
 
   @override
-  ConsumerState<DelivererPortalScreen> createState() => _DelivererPortalScreenState();
+  ConsumerState<ValidatorPortalScreen> createState() => _ValidatorPortalScreenState();
 }
 
-class _DelivererPortalScreenState extends ConsumerState<DelivererPortalScreen> {
+class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
   final _numberController = TextEditingController();
   String? _message;
-  Coupon? _lastCoupon;
+  Ticket? _lastTicket;
 
   @override
   void dispose() {
@@ -203,67 +313,68 @@ class _DelivererPortalScreenState extends ConsumerState<DelivererPortalScreen> {
 
   void _lookup() {
     final repo = ref.read(repositoryProvider);
-    final deliverer = repo.collaboratorByToken(widget.token);
-    if (deliverer == null) return;
+    final validator = repo.collaboratorByToken(widget.token);
+    if (validator == null) return;
     final number = int.tryParse(_numberController.text.trim());
     if (number == null) {
       setState(() {
-        _message = 'Ingresá un número de cupón válido.';
-        _lastCoupon = null;
+        _message = 'Ingresá un número de ticket válido.';
+        _lastTicket = null;
       });
       return;
     }
-    final coupon = repo.findCouponByNumber(deliverer.eventId, number);
-    if (coupon == null) {
+    final ticket = repo.findTicketByNumber(validator.eventId, number);
+    if (ticket == null) {
       setState(() {
-        _message = 'Cupón #$number no encontrado en este evento.';
-        _lastCoupon = null;
+        _message = 'Ticket #$number no encontrado en este evento.';
+        _lastTicket = null;
       });
       return;
     }
     setState(() {
-      _lastCoupon = coupon;
+      _lastTicket = ticket;
       _message = null;
     });
   }
 
   void _deliver() {
-    final coupon = _lastCoupon;
-    if (coupon == null) return;
-    if (coupon.status == CouponStatus.delivered) {
-      setState(() => _message = 'Este cupón ya fue entregado.');
+    final ticket = _lastTicket;
+    if (ticket == null) return;
+    if (ticket.status == TicketStatus.delivered) {
+      setState(() => _message = 'Este ticket ya fue validado.');
       return;
     }
-    if (coupon.status != CouponStatus.collected) {
-      setState(() => _message = 'El cupón no figura como cobrado. Revisá con el organizador.');
+    if (ticket.status != TicketStatus.collected) {
+      setState(() => _message = 'El ticket no figura como cobrado. Revisá con el organizador.');
       return;
     }
-    ref.read(repositoryProvider).markDelivered(coupon.id);
+    ref.read(repositoryProvider).markDelivered(ticket.id);
     setState(() {
-      _message = 'Cupón #${coupon.number} entregado.';
-      _lastCoupon = ref.read(repositoryProvider).findCouponByNumber(coupon.eventId, coupon.number);
+      _message = 'Ticket #${ticket.number} validado.';
+      _lastTicket = ref.read(repositoryProvider).findTicketByNumber(ticket.eventId, ticket.number);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final repo = ref.watch(repositoryProvider);
-    final deliverer = repo.collaboratorByToken(widget.token);
-    if (deliverer == null || deliverer.role != CollaboratorRole.deliverer) {
-      return const Scaffold(body: Center(child: Text('Entregador no encontrado.')));
+    final validator = repo.collaboratorByToken(widget.token);
+    if (validator == null || validator.role != CollaboratorRole.validator) {
+      return const Scaffold(body: Center(child: Text('Validador no encontrado.')));
     }
-    final event = repo.eventById(deliverer.eventId);
+    final event = repo.eventById(validator.eventId);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(deliverer.name),
+        title: Text(validator.name),
         actions: [
-          TextButton(
+          IconButton(
+            tooltip: 'Cerrar sesión',
             onPressed: () {
               ref.read(sessionProvider.notifier).logout();
               context.go('/login');
             },
-            child: const Text('Salir'),
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
@@ -275,18 +386,26 @@ class _DelivererPortalScreenState extends ConsumerState<DelivererPortalScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Retiro · ${event.pickupPlace}', style: const TextStyle(color: AppColors.textSecondary)),
+                Text(
+                  'Validación · ${event.pickupPlace}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '${event.pickupFrom.format(context)} – ${event.pickupTo.format(context)}',
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Usá este acceso en el retiro del producto o en la entrada del evento.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           SectionCard(
-            title: 'Lectura de cupón',
+            title: 'Lectura de ticket',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -304,7 +423,7 @@ class _DelivererPortalScreenState extends ConsumerState<DelivererPortalScreen> {
                   controller: _numberController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Número de cupón',
+                    labelText: 'Número de ticket',
                     hintText: 'Ej. 18',
                   ),
                 ),
@@ -313,19 +432,19 @@ class _DelivererPortalScreenState extends ConsumerState<DelivererPortalScreen> {
               ],
             ),
           ),
-          if (_lastCoupon != null) ...[
+          if (_lastTicket != null) ...[
             const SizedBox(height: 16),
             SectionCard(
-              title: 'Cupón #${_lastCoupon!.number}',
+              title: 'Ticket #${_lastTicket!.number}',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  StatusBadge(label: _lastCoupon!.status.label),
+                  StatusBadge(label: _lastTicket!.status.label, tone: ticketStatusTone(_lastTicket!.status)),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: _lastCoupon!.status == CouponStatus.delivered ? null : _deliver,
+                    onPressed: _lastTicket!.status == TicketStatus.delivered ? null : _deliver,
                     child: Text(
-                      _lastCoupon!.status == CouponStatus.delivered ? 'Ya entregado' : 'Marcar entregado',
+                      _lastTicket!.status == TicketStatus.delivered ? 'Ya validado' : 'Marcar validado',
                     ),
                   ),
                 ],

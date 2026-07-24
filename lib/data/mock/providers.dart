@@ -20,7 +20,7 @@ class SessionState {
   final String? userEmail;
   final String? currentEventId;
 
-  /// When set, the user entered via a seller/deliverer deeplink.
+  /// When set, the user entered via a seller/validator deeplink.
   final String? collaboratorToken;
 
   /// Dev-only role preview for the organizer workspace.
@@ -90,7 +90,7 @@ final effectiveRoleProvider = Provider<Role>((ref) {
   if (token != null) {
     final collab = ref.watch(repositoryProvider).collaboratorByToken(token);
     if (collab != null) {
-      return collab.role == CollaboratorRole.seller ? Role.seller : Role.deliverer;
+      return collab.role == CollaboratorRole.seller ? Role.seller : Role.validator;
     }
   }
   return Role.organizer;

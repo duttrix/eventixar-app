@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/models/ticket.dart';
 import '../../data/mock/providers.dart';
+import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/status_badge.dart';
 
-/// Seller detail: assign coupon ranges + share deeplink.
-class VendedorDetalleScreen extends ConsumerWidget {
-  const VendedorDetalleScreen({super.key, required this.eventId, required this.sellerId});
+/// Seller detail: assign ticket ranges + share access + status breakdown.
+class SellerDetailScreen extends ConsumerWidget {
+  const SellerDetailScreen({super.key, required this.eventId, required this.sellerId});
 
   final String eventId;
   final String sellerId;
@@ -18,6 +20,8 @@ class VendedorDetalleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repositoryProvider);
     final seller = repo.collaboratorById(sellerId);
+    final event = repo.eventById(eventId);
+    final tickets = repo.ticketsForSeller(sellerId)..sort((a, b) => a.number.compareTo(b.number));
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return Scaffold(
@@ -31,7 +35,7 @@ class VendedorDetalleScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           SectionCard(
-            title: 'Datos y acceso',
+            title: 'Compartir acceso',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -40,30 +44,35 @@ class VendedorDetalleScreen extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(seller.notes, style: const TextStyle(color: AppColors.textSecondary)),
                 ],
+                const SizedBox(height: 10),
+                const Text(
+                  'El vendedor abre el link y ve sus tickets. No necesita registrarse.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
                 const SizedBox(height: 12),
                 SelectableText(seller.shareUrl, style: const TextStyle(fontSize: 13, color: AppColors.accent)),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: seller.shareUrl));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Deeplink copiado. Envíalo por WhatsApp.')),
-                    );
-                  },
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: () => AccessShare.copy(context, seller, eventName: event.name),
                   icon: const Icon(Icons.ios_share),
-                  label: const Text('Copiar deeplink'),
+                  label: const Text('Compartir acceso (WhatsApp)'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           SectionCard(
-            title: 'Rangos de cupones',
+            title: 'Estado de sus tickets',
+            child: TicketStatusSummary(tickets: tickets),
+          ),
+          const SizedBox(height: 16),
+          SectionCard(
+            title: 'Rangos asignados',
             child: seller.ranges.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'Asigná un rango (ej. 1 a 50). El vendedor los ve al instante en su link.',
+                      'Asigná un rango (ej. 1 a 50). El vendedor los ve al instante en su acceso.',
                       style: TextStyle(color: AppColors.textMuted),
                     ),
                   )
@@ -86,6 +95,37 @@ class VendedorDetalleScreen extends ConsumerWidget {
                     ),
                   ),
           ),
+          if (tickets.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Detalle ticket por ticket', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            for (final ticket in tickets)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: ticketStatusBg(ticket.status),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Ticket #${ticket.number}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      StatusBadge(
+                        label: ticket.status.label,
+                        tone: ticketStatusTone(ticket.status),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -93,14 +133,14 @@ class VendedorDetalleScreen extends ConsumerWidget {
 
   void _showAddAssignmentDialog(BuildContext context, WidgetRef ref) {
     final repo = ref.read(repositoryProvider);
-    final nextNumber = repo.nextAvailableCouponNumber(eventId);
+    final nextNumber = repo.nextAvailableTicketNumber(eventId);
     final fromController = TextEditingController(text: '$nextNumber');
     final toController = TextEditingController();
 
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Asignar cupones'),
+        title: const Text('Asignar tickets'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -127,7 +167,7 @@ class VendedorDetalleScreen extends ConsumerWidget {
               final from = int.tryParse(fromController.text.trim());
               final to = int.tryParse(toController.text.trim());
               if (from == null || to == null || to < from) return;
-              ref.read(repositoryProvider).assignCouponRange(sellerId: sellerId, from: from, to: to);
+              ref.read(repositoryProvider).assignTicketRange(sellerId: sellerId, from: from, to: to);
               Navigator.pop(dialogContext);
             },
             child: const Text('Asignar'),

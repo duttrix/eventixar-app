@@ -1,11 +1,11 @@
 /// Role of a collaborator invited to an event via deeplink (no account required up front).
-enum CollaboratorRole { seller, deliverer }
+enum CollaboratorRole { seller, validator }
 
 extension CollaboratorRoleX on CollaboratorRole {
-  String get label => this == CollaboratorRole.seller ? 'Vendedor' : 'Entregador';
+  String get label => this == CollaboratorRole.seller ? 'Vendedor' : 'Validador';
 }
 
-/// A seller or deliverer slot on an event, accessed through a shareable deeplink token.
+/// A seller or validator slot on an event, accessed through a shareable deeplink token.
 class Collaborator {
   Collaborator({
     required this.id,
@@ -15,7 +15,7 @@ class Collaborator {
     required this.phone,
     required this.token,
     this.notes = '',
-    List<CouponRange>? ranges,
+    List<TicketRange>? ranges,
   }) : ranges = ranges ?? [];
 
   final String id;
@@ -28,17 +28,17 @@ class Collaborator {
   /// Opaque token used in deeplinks: eventixar://join/{token}
   final String token;
 
-  /// Coupon number ranges assigned to this seller (empty for deliverers).
-  final List<CouponRange> ranges;
+  /// Ticket number ranges assigned to this seller (empty for validators).
+  final List<TicketRange> ranges;
 
   String get deeplink => 'eventixar://join/$token';
 
   String get shareUrl => 'https://app.eventixar.com/join/$token';
 }
 
-/// Inclusive coupon number range given to a seller.
-class CouponRange {
-  CouponRange({
+/// Inclusive ticket number range given to a seller.
+class TicketRange {
+  TicketRange({
     required this.id,
     required this.from,
     required this.to,

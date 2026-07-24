@@ -30,7 +30,7 @@ class LoginScreen extends ConsumerWidget {
                   const _Logo(),
                   const SizedBox(height: 28),
                   const Text(
-                    'Iniciá sesión para crear tu evento y gestionar cupones.',
+                    'Iniciá sesión para crear tu evento y gestionar tickets.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSecondary, height: 1.4),
                   ),
@@ -100,8 +100,8 @@ class LoginScreen extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: TextButton(
-                            onPressed: () => context.go('/join/deliverer-carlos-demo'),
-                            child: const Text('Simular deeplink entregador'),
+                            onPressed: () => context.go('/join/validator-carlos-demo'),
+                            child: const Text('Simular deeplink validador'),
                           ),
                         ),
                       ],
@@ -140,7 +140,7 @@ class _Logo extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Cupones para tu evento',
+          'Tickets para tu evento',
           style: TextStyle(fontSize: 13, color: AppColors.textMuted),
         ),
       ],

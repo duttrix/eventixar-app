@@ -8,7 +8,7 @@ void main() {
   runApp(const ProviderScope(child: EventixarApp()));
 }
 
-/// Root widget for Eventixar (internal system name: "Sistema de Cupones").
+/// Root widget for Eventixar (internal system name: "Sistema de Tickets").
 ///
 /// This build is a fully mocked UI scaffold: navigation, screens and sample
 /// data are all wired up, but there is no real backend/auth yet — see

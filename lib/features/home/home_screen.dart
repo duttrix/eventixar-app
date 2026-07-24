@@ -124,7 +124,7 @@ class _EventCard extends StatelessWidget {
                   Text(event.name, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    '$dateLabel · ${event.couponCount} cupones · ${event.sellersCount} vend. · ${event.deliverersCount} ent.',
+                    '$dateLabel · ${event.ticketCount} tickets · ${event.sellersCount} vend. · ${event.validatorsCount} val.',
                     style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
                 ],

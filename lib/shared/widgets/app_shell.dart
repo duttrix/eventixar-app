@@ -141,7 +141,7 @@ class _DrawerHeader extends StatelessWidget {
           ),
           SizedBox(height: 2),
           Text(
-            'Cupones para tu evento',
+            'Tickets para tu evento',
             style: TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
         ],

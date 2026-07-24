@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 
 enum BadgeTone { success, danger, warn, info, neutral }
 
-/// Small colored pill used to show a status (event state, coupon state,
+/// Small colored pill used to show a status (event state, ticket state,
 /// membership state, etc.), matching the reference mockups.
 class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.label, this.tone = BadgeTone.neutral});

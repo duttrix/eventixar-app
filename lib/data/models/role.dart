@@ -2,7 +2,7 @@
 enum Role {
   organizer,
   seller,
-  deliverer;
+  validator;
 
   String get label {
     switch (this) {
@@ -10,8 +10,8 @@ enum Role {
         return 'Organizador';
       case Role.seller:
         return 'Vendedor';
-      case Role.deliverer:
-        return 'Entregador';
+      case Role.validator:
+        return 'Validador';
     }
   }
 }

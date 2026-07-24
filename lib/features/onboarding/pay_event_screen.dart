@@ -76,7 +76,7 @@ class PayEventScreen extends ConsumerWidget {
                 builder: (dialogContext) => AlertDialog(
                   title: const Text('Evento habilitado'),
                   content: const Text(
-                    'El pago fue aceptado (simulado). Ya podés asignar cupones a vendedores y compartir los deeplinks.',
+                    'El pago fue aceptado (simulado). Ya podés asignar tickets a vendedores y compartirles el acceso.',
                   ),
                   actions: [
                     FilledButton(

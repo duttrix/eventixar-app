@@ -29,7 +29,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   TimeOfDay _pickupFrom = const TimeOfDay(hour: 12, minute: 0);
   TimeOfDay _pickupTo = const TimeOfDay(hour: 15, minute: 0);
   int _sellersCount = 2;
-  int _deliverersCount = 1;
+  int _validatorsCount = 1;
 
   @override
   void dispose() {
@@ -42,9 +42,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   EventQuote get _quote => EventQuote.calculate(
-        couponCount: int.tryParse(_countController.text) ?? 0,
-        sellersCount: _sellersCount,
-        deliverersCount: _deliverersCount,
+        ticketCount: int.tryParse(_countController.text) ?? 0,
       );
 
   bool get _step0Valid =>
@@ -55,7 +53,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void _next() {
     if (_step == 0 && !_step0Valid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completá nombre, fecha y cantidad de cupones.')),
+        const SnackBar(content: Text('Completá nombre, fecha y cantidad de tickets.')),
       );
       return;
     }
@@ -78,14 +76,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ownerEmail: email,
           name: _nameController.text.trim(),
           product: _product,
-          couponPrice: double.tryParse(_priceController.text) ?? 0,
-          couponCount: int.tryParse(_countController.text) ?? 0,
+          ticketPrice: double.tryParse(_priceController.text) ?? 0,
+          ticketCount: int.tryParse(_countController.text) ?? 0,
           eventDate: _eventDate!,
           pickupFrom: _pickupFrom,
           pickupTo: _pickupTo,
           pickupPlace: _placeController.text.trim(),
           sellersCount: _sellersCount,
-          deliverersCount: _deliverersCount,
+          validatorsCount: _validatorsCount,
           notes: _notesController.text.trim(),
         );
 
@@ -164,7 +162,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 child: TextField(
                   controller: _priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Precio cupón (ARS)'),
+                  decoration: const InputDecoration(labelText: 'Precio del ticket (ARS)'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -172,7 +170,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 child: TextField(
                   controller: _countController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cantidad de cupones'),
+                  decoration: const InputDecoration(labelText: 'Cantidad de tickets'),
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -254,7 +252,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Cada vendedor recibe un link con sus cupones digitales para imprimir o entregar uno por uno.',
+                'Cada vendedor recibe un link con sus tickets digitales para imprimir o entregar uno por uno.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),
@@ -276,24 +274,24 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ),
         const SizedBox(height: 16),
         SectionCard(
-          title: '¿Cuántos entregadores?',
+          title: '¿Cuántos validadores?',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Quienes reciben/entregan en el retiro escanean el QR del cupón. También entran con un link.',
+                'Quienes validan el ticket o la tarjeta: en el retiro del producto o en la entrada del evento. También entran con un link.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
                   IconButton(
-                    onPressed: _deliverersCount > 0 ? () => setState(() => _deliverersCount--) : null,
+                    onPressed: _validatorsCount > 0 ? () => setState(() => _validatorsCount--) : null,
                     icon: const Icon(Icons.remove_circle_outline),
                   ),
-                  Text('$_deliverersCount', style: Theme.of(context).textTheme.headlineSmall),
+                  Text('$_validatorsCount', style: Theme.of(context).textTheme.headlineSmall),
                   IconButton(
-                    onPressed: () => setState(() => _deliverersCount++),
+                    onPressed: () => setState(() => _validatorsCount++),
                     icon: const Icon(Icons.add_circle_outline),
                   ),
                 ],
@@ -326,7 +324,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ],
           const SizedBox(height: 12),
           const Text(
-            'Al confirmar el pago, el evento queda habilitado y podés asignar cupones y compartir los links.',
+            'Al confirmar el pago, el evento queda habilitado y podés asignar tickets y compartir los links.',
             style: TextStyle(color: AppColors.textMuted, fontSize: 13),
           ),
         ],

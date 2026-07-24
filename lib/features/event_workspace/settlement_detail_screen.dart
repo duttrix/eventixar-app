@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/models/coupon.dart';
+import '../../data/models/ticket.dart';
 import '../../data/mock/providers.dart';
 
 /// Rendición (accountability) screen for a single seller: mark each
-/// individual coupon as Cobrado / En poder / Devuelto.
-class RendicionDetalleScreen extends ConsumerWidget {
-  const RendicionDetalleScreen({super.key, required this.eventId, required this.sellerId});
+/// individual ticket as Cobrado / En poder / Devuelto.
+class SettlementDetailScreen extends ConsumerWidget {
+  const SettlementDetailScreen({super.key, required this.eventId, required this.sellerId});
 
   final String eventId;
   final String sellerId;
@@ -17,7 +17,7 @@ class RendicionDetalleScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(repositoryProvider);
     final seller = repo.collaboratorById(sellerId);
-    final coupons = repo.couponsForSeller(sellerId)..sort((a, b) => a.number.compareTo(b.number));
+    final tickets = repo.ticketsForSeller(sellerId)..sort((a, b) => a.number.compareTo(b.number));
 
     return Scaffold(
       appBar: AppBar(title: Text('Rendición · ${seller.name}')),
@@ -40,41 +40,41 @@ class RendicionDetalleScreen extends ConsumerWidget {
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-              itemCount: coupons.length,
+              itemCount: tickets.length,
               separatorBuilder: (context, index) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                final coupon = coupons[index];
+                final ticket = tickets[index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(
                     children: [
                       SizedBox(
                         width: 64,
-                        child: Text('#${coupon.number}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        child: Text('#${ticket.number}', style: const TextStyle(fontWeight: FontWeight.w600)),
                       ),
                       Expanded(
-                        child: SegmentedButton<CouponStatus>(
+                        child: SegmentedButton<TicketStatus>(
                           segments: const [
                             ButtonSegment(
-                              value: CouponStatus.collected,
+                              value: TicketStatus.collected,
                               label: Text('Cobrado'),
                               icon: Text('✅'),
                             ),
                             ButtonSegment(
-                              value: CouponStatus.withSeller,
+                              value: TicketStatus.withSeller,
                               label: Text('En poder'),
                               icon: Text('🔄'),
                             ),
                             ButtonSegment(
-                              value: CouponStatus.returned,
+                              value: TicketStatus.returned,
                               label: Text('Devuelto'),
                               icon: Text('↩️'),
                             ),
                           ],
-                          selected: {coupon.status},
+                          selected: {ticket.status},
                           showSelectedIcon: false,
                           onSelectionChanged: (selection) {
-                            ref.read(repositoryProvider).updateCouponStatus(coupon.id, selection.first);
+                            ref.read(repositoryProvider).updateTicketStatus(ticket.id, selection.first);
                           },
                         ),
                       ),

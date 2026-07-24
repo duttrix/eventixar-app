@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../data/mock/providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
-import '../../features/event_workspace/rendicion_detalle_screen.dart';
-import '../../features/event_workspace/vendedor_detalle_screen.dart';
+import '../../features/event_workspace/settlement_detail_screen.dart';
+import '../../features/event_workspace/seller_detail_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/join/join_screens.dart';
 import '../../features/onboarding/create_event_screen.dart';
@@ -20,7 +20,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isLogin = location == '/login';
       final isJoin = location.startsWith('/join/') ||
           location.startsWith('/seller/') ||
-          location.startsWith('/deliverer/');
+          location.startsWith('/validator/') ||
+          location.startsWith('/ticket/');
 
       if (!session.isLoggedIn && !isLogin && !isJoin) {
         return '/login';
@@ -52,9 +53,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             SellerPortalScreen(token: state.pathParameters['token']!),
       ),
       GoRoute(
-        path: '/deliverer/:token',
+        path: '/validator/:token',
         builder: (context, state) =>
-            DelivererPortalScreen(token: state.pathParameters['token']!),
+            ValidatorPortalScreen(token: state.pathParameters['token']!),
+      ),
+      GoRoute(
+        path: '/ticket/:ticketId',
+        builder: (context, state) =>
+            PublicTicketScreen(ticketId: state.pathParameters['ticketId']!),
       ),
       GoRoute(
         path: '/event/:eventId',
@@ -62,17 +68,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             EventWorkspaceScreen(eventId: state.pathParameters['eventId']!),
         routes: [
           GoRoute(
-            path: 'vendedores/:vendedorId',
-            builder: (context, state) => VendedorDetalleScreen(
+            path: 'sellers/:sellerId',
+            builder: (context, state) => SellerDetailScreen(
               eventId: state.pathParameters['eventId']!,
-              sellerId: state.pathParameters['vendedorId']!,
+              sellerId: state.pathParameters['sellerId']!,
             ),
           ),
           GoRoute(
-            path: 'rendiciones/:vendedorId',
-            builder: (context, state) => RendicionDetalleScreen(
+            path: 'settlements/:sellerId',
+            builder: (context, state) => SettlementDetailScreen(
               eventId: state.pathParameters['eventId']!,
-              sellerId: state.pathParameters['vendedorId']!,
+              sellerId: state.pathParameters['sellerId']!,
             ),
           ),
         ],

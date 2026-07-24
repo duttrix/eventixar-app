@@ -6,16 +6,16 @@ import '../../data/mock/providers.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Edit basic event data (organizer only).
-class DatosEventoTab extends ConsumerStatefulWidget {
-  const DatosEventoTab({super.key, required this.eventId});
+class EventDataTab extends ConsumerStatefulWidget {
+  const EventDataTab({super.key, required this.eventId});
 
   final String eventId;
 
   @override
-  ConsumerState<DatosEventoTab> createState() => _DatosEventoTabState();
+  ConsumerState<EventDataTab> createState() => _EventDataTabState();
 }
 
-class _DatosEventoTabState extends ConsumerState<DatosEventoTab> {
+class _EventDataTabState extends ConsumerState<EventDataTab> {
   late final TextEditingController _nameController;
   late final TextEditingController _priceController;
   late final TextEditingController _placeController;
@@ -41,7 +41,7 @@ class _DatosEventoTabState extends ConsumerState<DatosEventoTab> {
           widget.eventId,
           name: _nameController.text.trim(),
           product: _product ?? kEventProducts.first,
-          couponPrice: double.tryParse(_priceController.text) ?? 0,
+          ticketPrice: double.tryParse(_priceController.text) ?? 0,
           eventDate: _eventDate ?? DateTime.now(),
           pickupFrom: _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0),
           pickupTo: _pickupTo ?? const TimeOfDay(hour: 15, minute: 0),
@@ -58,7 +58,7 @@ class _DatosEventoTabState extends ConsumerState<DatosEventoTab> {
     final event = ref.watch(repositoryProvider).eventById(widget.eventId);
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
-      _priceController = TextEditingController(text: event.couponPrice.toStringAsFixed(0));
+      _priceController = TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
       _product = event.product;
@@ -88,7 +88,7 @@ class _DatosEventoTabState extends ConsumerState<DatosEventoTab> {
               TextField(
                 controller: _priceController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Precio cupón (ARS)'),
+                decoration: const InputDecoration(labelText: 'Precio del ticket (ARS)'),
               ),
               const SizedBox(height: 12),
               InkWell(
@@ -152,7 +152,7 @@ class _DatosEventoTabState extends ConsumerState<DatosEventoTab> {
               TextField(controller: _notesController, maxLines: 3, decoration: const InputDecoration(labelText: 'Notas')),
               const SizedBox(height: 8),
               Text(
-                'Cupones: ${event.couponCount} · Vendedores: ${event.sellersCount} · Entregadores: ${event.deliverersCount}',
+                'Tickets: ${event.ticketCount} · Vendedores: ${event.sellersCount} · Validadores: ${event.validatorsCount}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

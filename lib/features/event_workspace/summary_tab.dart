@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/models/coupon.dart';
+import '../../data/models/ticket.dart';
 import '../../data/mock/providers.dart';
 import '../../shared/widgets/stat_card.dart';
 
 /// Overview visible to every role: 6 stat tiles plus an estimated revenue
-/// note, all computed from the event's mock aggregate coupon counts.
-class ResumenTab extends ConsumerWidget {
-  const ResumenTab({super.key, required this.eventId});
+/// note, all computed from the event's mock aggregate ticket counts.
+class SummaryTab extends ConsumerWidget {
+  const SummaryTab({super.key, required this.eventId});
 
   final String eventId;
 
@@ -21,15 +21,15 @@ class ResumenTab extends ConsumerWidget {
     final aggregate = repo.aggregateForEvent(eventId);
     final currency = NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
 
-    final issued = repo.totalCouponsForEvent(eventId);
+    final issued = repo.totalTicketsForEvent(eventId);
     final assigned = aggregate.entries
-        .where((e) => e.key != CouponStatus.unassigned)
+        .where((e) => e.key != TicketStatus.unassigned)
         .fold(0, (sum, e) => sum + e.value);
-    final unassigned = aggregate[CouponStatus.unassigned] ?? 0;
-    final collected = aggregate[CouponStatus.collected] ?? 0;
-    final withSeller = aggregate[CouponStatus.withSeller] ?? 0;
-    final delivered = aggregate[CouponStatus.delivered] ?? 0;
-    final estimatedRevenue = collected * event.couponPrice;
+    final unassigned = aggregate[TicketStatus.unassigned] ?? 0;
+    final collected = aggregate[TicketStatus.collected] ?? 0;
+    final withSeller = aggregate[TicketStatus.withSeller] ?? 0;
+    final delivered = aggregate[TicketStatus.delivered] ?? 0;
+    final estimatedRevenue = collected * event.ticketPrice;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -42,12 +42,12 @@ class ResumenTab extends ConsumerWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 1.5,
           children: [
-            StatCard(label: 'Cupones emitidos', value: '$issued'),
+            StatCard(label: 'Tickets emitidos', value: '$issued'),
             StatCard(label: 'Asignados a vendedores', value: '$assigned'),
             StatCard(label: 'Sin asignar', value: '$unassigned'),
             StatCard(label: 'Cobrados', value: '$collected', accentColor: AppColors.successText),
             StatCard(label: 'En poder del vendedor', value: '$withSeller', accentColor: AppColors.warnText),
-            StatCard(label: 'Entregados en retiro', value: '$delivered', accentColor: AppColors.accentText),
+            StatCard(label: 'Validados', value: '$delivered', accentColor: AppColors.accentText),
           ],
         ),
         const SizedBox(height: 16),
@@ -63,7 +63,7 @@ class ResumenTab extends ConsumerWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Recaudación estimada (según cupones cobrados): ${currency.format(estimatedRevenue)}',
+                  'Recaudación estimada (según tickets cobrados): ${currency.format(estimatedRevenue)}',
                   style: const TextStyle(color: AppColors.accentText, fontWeight: FontWeight.w600),
                 ),
               ),

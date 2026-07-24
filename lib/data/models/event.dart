@@ -12,7 +12,7 @@ enum EventStatus {
   finished,
 }
 
-/// Suggested price quote computed from coupons + team size.
+/// Suggested price quote computed from ticket volume only.
 class EventQuote {
   const EventQuote({
     required this.amount,
@@ -36,51 +36,35 @@ class EventQuote {
     return buf.toString();
   }
 
-  /// Mock pricing: base by coupon volume + slots for sellers/deliverers.
-  static EventQuote calculate({
-    required int couponCount,
-    required int sellersCount,
-    required int deliverersCount,
-  }) {
-    final breakdown = <String>[];
-    int base;
-    String plan;
+  /// Mock pricing by ticket volume. Team size (sellers/validators) does not affect price.
+  static EventQuote calculate({required int ticketCount}) {
+    final int base;
+    final String plan;
 
-    if (couponCount <= 50) {
+    if (ticketCount <= 50) {
       base = 0;
-      plan = 'Free (hasta 50 cupones)';
-    } else if (couponCount <= 100) {
+      plan = 'Free (hasta 50 tickets)';
+    } else if (ticketCount <= 100) {
       base = 15000;
-      plan = 'Base hasta 100 cupones';
-    } else if (couponCount <= 200) {
+      plan = 'Hasta 100 tickets';
+    } else if (ticketCount <= 200) {
       base = 20000;
-      plan = 'Base hasta 200 cupones';
-    } else if (couponCount <= 300) {
+      plan = 'Hasta 200 tickets';
+    } else if (ticketCount <= 300) {
       base = 35000;
-      plan = 'Base hasta 300 cupones';
+      plan = 'Hasta 300 tickets';
     } else {
-      base = 35000 + ((couponCount - 300) * 80);
-      plan = 'Base a medida ($couponCount cupones)';
-    }
-    breakdown.add('$plan → \$${_format(base)}');
-
-    final sellersExtra = sellersCount * 2500;
-    if (sellersCount > 0) {
-      breakdown.add('$sellersCount vendedor(es) × \$2.500 → \$${_format(sellersExtra)}');
+      base = 35000 + ((ticketCount - 300) * 80);
+      plan = 'A medida ($ticketCount tickets)';
     }
 
-    final deliverersExtra = deliverersCount * 2000;
-    if (deliverersCount > 0) {
-      breakdown.add(
-        '$deliverersCount entregador(es) × \$2.000 → \$${_format(deliverersExtra)}',
-      );
-    }
-
-    final total = base + sellersExtra + deliverersExtra;
     return EventQuote(
-      amount: total,
-      label: total == 0 ? 'Gratis' : 'Cotización del evento',
-      breakdown: breakdown,
+      amount: base,
+      label: base == 0 ? 'Gratis' : 'Cotización del evento',
+      breakdown: [
+        '$plan → \$${_format(base)}',
+        'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.',
+      ],
     );
   }
 }
@@ -99,14 +83,14 @@ class Event {
     required this.ownerEmail,
     required this.name,
     required this.product,
-    required this.couponPrice,
-    required this.couponCount,
+    required this.ticketPrice,
+    required this.ticketCount,
     required this.eventDate,
     required this.pickupFrom,
     required this.pickupTo,
     required this.pickupPlace,
     required this.sellersCount,
-    required this.deliverersCount,
+    required this.validatorsCount,
     this.notes = '',
     this.status = EventStatus.awaitingPayment,
     this.paid = false,
@@ -116,28 +100,24 @@ class Event {
   final String ownerEmail;
   String name;
   String product;
-  double couponPrice;
-  int couponCount;
+  double ticketPrice;
+  int ticketCount;
   DateTime eventDate;
   TimeOfDay pickupFrom;
   TimeOfDay pickupTo;
   String pickupPlace;
   String notes;
 
-  /// Max seller slots purchased with the event.
+  /// Suggested max sellers when creating the event (not a hard limit).
   int sellersCount;
 
-  /// Max deliverer slots purchased with the event.
-  int deliverersCount;
+  /// Suggested max validators for this event (pickup desk or event entrance).
+  int validatorsCount;
 
   EventStatus status;
   bool paid;
 
-  EventQuote get quote => EventQuote.calculate(
-        couponCount: couponCount,
-        sellersCount: sellersCount,
-        deliverersCount: deliverersCount,
-      );
+  EventQuote get quote => EventQuote.calculate(ticketCount: ticketCount);
 
   bool get isPast {
     final today = DateTime.now();

@@ -7,13 +7,13 @@ La app **no tiene backend real**: todo es simulado en memoria. Si cerrás la app
 
 ## 1. Qué es Eventixar (en esta demo)
 
-Eventixar sirve para organizar un evento con cupones (ej. pollo a beneficio, rifa, kermesse):
+Eventixar sirve para organizar un evento con tickets (ej. pollo a beneficio, rifa, kermesse):
 
-1. Un **organizador** crea el evento y paga según cupones + cupos de equipo.
-2. Asigna **rangos de cupones** a cada vendedor (pueden ser cantidades distintas).
-3. Comparte un **link** a cada vendedor y a cada entregador.
-4. El **vendedor** abre el link, ve sus cupones, imprime o marca cobros.
-5. El **entregador** abre su link y, el día del retiro, lee el cupón y marca la entrega.
+1. Un **organizador** crea el evento y paga según tickets + cupos de equipo.
+2. Asigna **rangos de tickets** a cada vendedor (pueden ser cantidades distintas).
+3. Comparte un **link** a cada vendedor y a cada validador.
+4. El **vendedor** abre el link, ve sus tickets, imprime o marca cobros.
+5. El **validador** abre su link y lee el ticket/tarjeta: en el retiro del producto o en la entrada del evento.
 6. El organizador ve el resumen, rendiciones y reportes.
 
 ---
@@ -24,7 +24,7 @@ Eventixar sirve para organizar un evento con cupones (ej. pollo a beneficio, rif
 |-----|-------------------|------------------------|
 | **Organizador** | Sí (login) | Botón **Entrar como organizador** |
 | **Vendedor** | No | Botón **Simular deeplink vendedor** |
-| **Entregador** | No | Botón **Simular deeplink entregador** |
+| **Validador** | No | Botón **Simular deeplink validador** |
 
 También podés usar **Continuar con Google** o **Continuar con Apple**: en la demo hacen lo mismo que entrar como organizador.
 
@@ -34,8 +34,8 @@ También podés usar **Continuar con Google** o **Continuar con Apple**: en la d
 
 Al abrir el APK ves:
 
-- Título: **Eventixar** / *Cupones para tu evento*
-- Texto: *Iniciá sesión para crear tu evento y gestionar cupones.*
+- Título: **Eventixar** / *Tickets para tu evento*
+- Texto: *Iniciá sesión para crear tu evento y gestionar tickets.*
 - Botones Google / Apple (mock)
 - Caja **Modo demo · accesos rápidos** con 3 opciones:
 
@@ -43,9 +43,9 @@ Al abrir el APK ves:
 |-------|----------|
 | **Entrar como organizador** | Entra a **Mis eventos** como María Organizadora |
 | **Simular deeplink vendedor** | Entra al portal de **Ana Gómez** (vendedor del evento demo) |
-| **Simular deeplink entregador** | Entra al portal de **Carlos Ruiz** (entregador del evento demo) |
+| **Simular deeplink validador** | Entra al portal de **Carlos Ruiz** (validador del evento demo) |
 
-Para volver al login: ícono de **cerrar sesión** (arriba a la derecha) o **Salir** en los portales de vendedor/entregador.
+Para volver al login: ícono de **cerrar sesión** (arriba a la derecha) o **Salir** en los portales de vendedor/validador.
 
 ---
 
@@ -55,11 +55,11 @@ Al entrar como organizador vas a ver 3 eventos de ejemplo:
 
 ### 4.1 Pollo a beneficio — **Activo**
 - Producto: Pollo asado
-- Precio cupón: $2000
-- Cupones: 200
-- Cupos: 3 vendedores · 2 entregadores
+- Precio del ticket: $2000
+- Tickets: 200
+- Cupos: 3 vendedores · 2 validadores
 - Lugar de retiro: Sede del club, Av. San Martín 450
-- **Ya tiene equipo y cupones asignados** (ideal para probar sin crear nada)
+- **Ya tiene equipo y tickets asignados** (ideal para probar sin crear nada)
 
 **Vendedores precargados**
 
@@ -68,13 +68,13 @@ Al entrar como organizador vas a ver 3 eventos de ejemplo:
 | Ana Gómez | 1–30 | `seller-ana-demo` |
 | Diego Torres | 31–70 | `seller-diego-demo` |
 
-**Entregador precargado**
+**Validador precargado**
 
 | Nombre | Token / link demo |
 |--------|-------------------|
-| Carlos Ruiz | `deliverer-carlos-demo` |
+| Carlos Ruiz | `validator-carlos-demo` |
 
-Estado aproximado de cupones de Ana (1–30):
+Estado aproximado de tickets de Ana (1–30):
 - 1–18 → **Cobrado**
 - 19–26 → **En poder del vendedor**
 - 27–30 → **Devuelto**
@@ -103,7 +103,7 @@ Vas a ver:
 - Sección **Activos y por pagar**
 - Sección **Eventos pasados**
 
-En cada tarjeta aparece: fecha · cantidad de cupones · vendedores · entregadores · estado (Activo / Pendiente de pago / Finalizado).
+En cada tarjeta aparece: fecha · cantidad de tickets · vendedores · validadores · estado (Activo / Pendiente de pago / Finalizado).
 
 Menú lateral (☰):
 - Mis eventos
@@ -119,8 +119,8 @@ Arriba a la derecha: cerrar sesión.
 2. Completá el paso **Datos**:
    - Nombre del evento (obligatorio)
    - Qué se vende (Locro / Empanadas / Pollo asado / Paella / Otro)
-   - Precio cupón (ARS)
-   - Cantidad de cupones (obligatorio, > 0)
+   - Precio del ticket (ARS)
+   - Cantidad de tickets (obligatorio, > 0)
    - Fecha del evento (obligatorio)
    - Retiro desde / hasta
    - Lugar de retiro
@@ -128,29 +128,26 @@ Arriba a la derecha: cerrar sesión.
 3. Tocá **Continuar**.
 4. Paso **Equipo**:
    - ¿Cuántos vendedores? (+ / −)
-   - ¿Cuántos entregadores? (+ / −)
+   - ¿Cuántos validadores? (+ / −)
    - Pueden ser 0.
 5. Tocá **Continuar**.
 6. Paso **Cotización**:
-   - Ves el monto total y el desglose (base por cupones + cupos).
+   - Ves el monto total y el desglose (base por tickets).
 7. Tocá **Ir a pagar y habilitar**.
 
 #### Cotización (fórmula de la demo)
 
-| Cupones | Base |
-|---------|------|
+| Tickets | Precio |
+|---------|--------|
 | ≤ 50 | $0 (Free) |
 | ≤ 100 | $15.000 |
 | ≤ 200 | $20.000 |
 | ≤ 300 | $35.000 |
-| > 300 | $35.000 + $80 × (cupones − 300) |
+| > 300 | $35.000 + $80 × (tickets − 300) |
 
-Además:
-- **+$2.500** por cada vendedor
-- **+$2.000** por cada entregador
+**Importante:** el precio se calcula **solo por cantidad de tickets**. La cantidad de vendedores o validadores **no** suma al costo.
 
-**Ejemplo:** 100 cupones + 2 vendedores + 1 entregador  
-→ $15.000 + $5.000 + $2.000 = **$22.000**
+**Ejemplo:** 100 tickets → **$15.000** (da igual si hay 2 o 500 vendedores).
 
 ---
 
@@ -172,31 +169,31 @@ Entrá a **Pollo a beneficio** (o al evento que acabás de crear/pagar).
 
 | Menú | Para qué sirve |
 |------|----------------|
-| **Resumen** | Números: emitidos, asignados, sin asignar, cobrados, en poder, entregados + recaudación estimada |
-| **Cupones** | Desglose por estado + botón de PDF simulado |
-| **Vendedores** | Alta de vendedores, ver rangos, copiar link |
-| **Entregadores** | Alta de entregadores, copiar link |
+| **Resumen** | Números: emitidos, asignados, sin asignar, cobrados, en poder, validados + recaudación estimada |
+| **Tickets** | Desglose por estado + botón de PDF simulado |
+| **Vendedores** | Alta de vendedores, ver rangos y estados, compartir acceso |
+| **Validadores** | Alta de validadores, compartir acceso |
 | **Rendiciones** | Cuadre por vendedor (cobrado / en poder / devuelto) |
 | **Reportes** | Recaudación y desempeño por vendedor |
 | **Datos del evento** | Editar nombre, producto, precio, fecha, retiro, notas |
 
 Botón **Mis eventos** (arriba) vuelve al Home.
 
-> La lectura QR del retiro **no** está acá. La hace el **entregador** con su link.
+> La lectura QR del retiro **no** está acá. La hace el **validador** con su link.
 
 ---
 
-### 5.6 Asignar cupones a vendedores (repartición)
+### 5.6 Asignar tickets a vendedores (repartición)
 
 La repartición es por **rangos numéricos** (`desde` – `hasta`).  
-Un vendedor puede tener **más cupones que otro**. Un vendedor puede recibir **varios rangos** a lo largo del tiempo (si quiere vender más).
+Un vendedor puede tener **más tickets que otro**. Un vendedor puede recibir **varios rangos** a lo largo del tiempo (si quiere vender más).
 
 #### Alta de un vendedor
 1. Menú **Vendedores**.
 2. Tocá **Agregar (X/Y)** (Y = cupos comprados al crear el evento).
 3. Completá Nombre y Celular (WhatsApp).
-4. Tocá **Crear y copiar link**.
-5. El link queda en el portapapeles (en producción se mandaría por WhatsApp).
+4. Tocá **Crear y compartir acceso**.
+5. Se copia un mensaje listo para WhatsApp (el vendedor abre el link **sin registrarse**).
 
 Si ya usaste todos los cupos de vendedores, el botón se deshabilita.
 
@@ -209,39 +206,47 @@ Si ya usaste todos los cupos de vendedores, el botón se deshabilita.
 4. Tocá **Asignar**.
 
 **Ejemplos válidos**
-- Ana: `1` a `40` (40 cupones)
-- Diego: `41` a `60` (20 cupones) → Diego tiene menos
+- Ana: `1` a `40` (40 tickets)
+- Diego: `41` a `60` (20 tickets) → Diego tiene menos
 - Más tarde Ana pide más → nueva asignación `61` a `90`
 
-#### Compartir el link del vendedor
-En la ficha del vendedor:
-- Ves la URL tipo `https://app.eventixar.com/join/{token}`
-- Tocá **Copiar deeplink**
-- En la lista también hay ícono de **link** para copiar rápido
+#### Ver estados de tickets (ej. Ana)
+En la lista de vendedores y en la ficha del vendedor vas a ver chips de resumen, por ejemplo:
+- **En poder del vendedor: 8**
+- **Cobrado: 18**
+- **Devuelto: 4**
 
-En esta demo el deeplink real se simula desde el Login con **Simular deeplink vendedor** (Ana).  
-Si creás un vendedor nuevo, el token es generado; para probarlo en la misma sesión podés copiar el link, pero el acceso rápido del login sigue apuntando a Ana.
+Y debajo, cada ticket con color según estado (cobrado = verde, en poder = ámbar, devuelto = rojo).
+
+#### Compartir el acceso del vendedor
+En la ficha del vendedor:
+- Texto claro: *abre el link sin registrarse*
+- Botón **Compartir acceso (WhatsApp)** (copia mensaje + link)
+- En la lista también hay ícono de compartir
+
+En esta demo el acceso de Ana se simula desde el Login con **Simular deeplink vendedor**.
+Si creás un vendedor nuevo, el token es generado; el acceso rápido del login sigue apuntando a Ana.
 
 ---
 
-### 5.7 Alta y link de entregadores
-1. Menú **Entregadores**.
+### 5.7 Alta y link de validadores
+1. Menú **Validadores**.
 2. Tocá **Agregar (X/Y)**.
-3. Nombre + celular → **Crear y copiar link**.
-4. El entregador **no** recibe cupones numerados: solo el link para leer/entregar el día del retiro.
+3. Nombre + celular → **Crear y compartir acceso**.
+4. El validador **no** recibe tickets numerados: solo el acceso para validar (retiro o entrada).
 
-Simulación rápida: Login → **Simular deeplink entregador** (Carlos).
+Simulación rápida: Login → **Simular deeplink validador** (Carlos).
 
 ---
 
 ### 5.8 Rendiciones (organizador ↔ vendedor)
 1. Menú **Rendiciones**.
-2. Elegí un vendedor que ya tenga cupones.
+2. Elegí un vendedor que ya tenga tickets.
 3. Podés:
    - Marcar **Todos como cobrado**
-   - O cambiar estado cupón por cupón: En poder / Cobrado / Devuelto
+   - O cambiar estado ticket por ticket: En poder / Cobrado / Devuelto
 
-Sirve para el cuadre de plata y cupones físicos.
+Sirve para el cuadre de plata y tickets físicos.
 
 ---
 
@@ -253,14 +258,14 @@ Sirve para el cuadre de plata y cupones físicos.
    - Rangos asignados (ej. `1–30`)
    - Botón **Imprimir** (simulado: muestra un mensaje)
    - Botón **Mi link**
-   - Lista de cupones con estado
-4. En cada cupón, menú ⋮:
+   - Lista de tickets con estado
+4. En cada ticket, menú ⋮:
    - **En mi poder**
    - **Marcar cobrado**
    - **Devuelto**
 
 **Qué simular**
-- Ana “vende” un cupón → **Marcar cobrado**
+- Ana “vende” un ticket → **Marcar cobrado**
 - Le sobró uno → **Devuelto**
 - Quiere la hoja → **Imprimir**
 
@@ -268,27 +273,27 @@ Salí con **Salir** (arriba) para volver al login.
 
 ---
 
-## 7. Recorrido del ENTREGADOR (simulación)
+## 7. Recorrido del VALIDADOR (simulación)
 
-1. En Login tocá **Simular deeplink entregador**.
+1. En Login tocá **Simular deeplink validador**.
 2. Entrá al portal de **Carlos Ruiz**.
 3. Ves lugar y horario de retiro del evento.
 4. Opciones:
    - **Escanear QR (simulado)** → avisa que uses el número manual
-   - Campo **Número de cupón** + **Buscar**
+   - Campo **Número de ticket** + **Buscar**
 5. Resultados típicos:
-   - Si el cupón está **Cobrado** → podés **Marcar entregado**
+   - Si el ticket está **Cobrado** → podés **Marcar validado**
    - Si no está cobrado → avisa que no figura como cobrado
-   - Si ya estaba entregado → no se vuelve a entregar
+   - Si ya estaba validado → no se vuelve a validar
 
 **Números útiles para probar (seed de Ana)**
-- Cupón **18** → cobrado → debería permitir entregar
-- Cupón **20** → en poder del vendedor → no debería entregar sin estar cobrado
-- Cupón **999** → no existe
+- Ticket **18** → cobrado → debería permitir validar
+- Ticket **20** → en poder del vendedor → no debería validar sin estar cobrado
+- Ticket **999** → no existe
 
 ---
 
-## 8. Estados de un cupón (ciclo de vida)
+## 8. Estados de un ticket (ciclo de vida)
 
 ```
 Sin asignar
@@ -296,8 +301,8 @@ Sin asignar
 En poder del vendedor
     ↓  (vendedor marca cobro)          ↘ Devuelto (vuelve / no se vendió)
 Cobrado
-    ↓  (entregador marca entrega en el retiro)
-Entregado
+    ↓  (validador marca validado en retiro o entrada)
+Validado
 ```
 
 | Estado | Quién lo pone | Significado |
@@ -306,7 +311,7 @@ Entregado
 | En poder del vendedor | Al asignar rango | El vendedor lo tiene para vender |
 | Cobrado | Vendedor (o rendición) | Ya se cobró al comprador |
 | Devuelto | Vendedor / rendición | No se vendió / se devolvió |
-| Entregado | Entregador | Se entregó el producto en el retiro |
+| Validado | Validador | Ciclo cerrado: producto entregado o acceso concedido |
 
 ---
 
@@ -316,11 +321,11 @@ Entregado
 2. **Organizador** → mostrar Home con Activo / Pendiente / Pasado.
 3. Abrir **Pollo a beneficio** → Resumen.
 4. **Vendedores** → Ana y Diego, rangos distintos.
-5. Entrar a Ana → mostrar **Copiar deeplink** y **Asignar rango** (dar más cupones).
-6. **Entregadores** → Carlos + copiar link.
+5. Entrar a Ana → ver chips de estado (cobrado / en poder / devuelto) y **Compartir acceso**.
+6. **Validadores** → Carlos + compartir acceso.
 7. **Cerrar sesión**.
-8. **Simular deeplink vendedor** → marcar un cupón como cobrado.
-9. **Salir** → **Simular deeplink entregador** → buscar ese número y marcar entregado.
+8. **Simular deeplink vendedor** → marcar un ticket como cobrado.
+9. **Salir** → **Simular deeplink validador** → buscar ese número y marcar validado.
 10. Volver como organizador → Resumen / Reportes para ver el impacto.
 
 ---
@@ -328,8 +333,8 @@ Entregado
 ## 10. Limitaciones de esta demo (importante)
 
 - No hay pago real ni Mercado Pago.
-- No hay WhatsApp real: el “compartir” **copia el link** al portapapeles.
-- No hay cámara QR real: el entregador busca por número.
+- No hay WhatsApp real: **Compartir acceso** copia un mensaje + link al portapapeles.
+- No hay cámara QR real: el validador busca por número.
 - No hay PDF real de impresión: el botón **Imprimir** es simulado.
 - Google / Apple login son mock.
 - Los datos viven en memoria del dispositivo: reiniciar la app puede volver al seed inicial.
@@ -339,17 +344,17 @@ Entregado
 
 ## 11. Preguntas frecuentes
 
-**¿Un vendedor puede tener más cupones que otro?**  
+**¿Un vendedor puede tener más tickets que otro?**  
 Sí. Asignás rangos distintos (ej. 1–100 vs 101–120).
 
 **¿Qué pasa si un vendedor quiere vender más?**  
 El organizador entra a su ficha y asigna **otro rango** con números libres.
 
 **¿Se pueden repartir de a poco?**  
-Sí. No hace falta asignar todos los cupones el día 1.
+Sí. No hace falta asignar todos los tickets el día 1.
 
-**¿El organizador entrega en el retiro?**  
-No en este circuito. Alta el entregador, le pasa el link, y esa persona hace la lectura.
+**¿El organizador valida en el retiro/entrada?**  
+No en este circuito. Alta el validador, le pasa el acceso, y esa persona hace la lectura.
 
 **¿Puedo crear vendedores de más?**  
 No: el máximo es el que compraste al crear el evento (cupos).
@@ -365,11 +370,11 @@ Está **Pendiente de pago**. Primero confirmá el pago simulado.
 ORGANIZADOR
   crear evento → cotizar → pagar
        ↓
-  repartir rangos a vendedores → copiar links
-  dar de alta entregadores → copiar links
+  repartir rangos a vendedores → compartir acceso
+  dar de alta validadores → compartir acceso
        ↓
-VENDEDOR (link)          ENTREGADOR (link)
-  imprimir / cobrar         leer cupón / entregar
+VENDEDOR (link)          VALIDADOR (link)
+  imprimir / cobrar         leer ticket / validar
        ↓                         ↓
 ORGANIZADOR ve resumen, rendiciones y reportes
 ```
