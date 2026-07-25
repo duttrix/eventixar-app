@@ -125,20 +125,24 @@ class SellersTab extends ConsumerWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
               try {
-                final seller = ref.read(repositoryProvider).addCollaborator(
-                      eventId: eventId,
-                      role: CollaboratorRole.seller,
-                      name: name,
-                      phone: phoneController.text.trim(),
-                      notes: notesController.text.trim(),
-                    );
+                final seller = await inviteCollaborator(
+                  ref,
+                  eventId: eventId,
+                  role: CollaboratorRole.seller,
+                  name: name,
+                  phone: phoneController.text.trim(),
+                  notes: notesController.text.trim(),
+                );
+                if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
+                if (!context.mounted) return;
                 context.push('/event/$eventId/sellers/${seller.id}');
               } catch (e) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
               }
             },

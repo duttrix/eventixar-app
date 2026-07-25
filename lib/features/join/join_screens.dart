@@ -23,12 +23,26 @@ class JoinScreen extends ConsumerStatefulWidget {
 }
 
 class _JoinScreenState extends ConsumerState<JoinScreen> {
+  bool _resolving = true;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final collab = ref.read(repositoryProvider).collaboratorByToken(widget.token);
-      if (collab == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resolve());
+  }
+
+  Future<void> _resolve() async {
+    try {
+      final collab = await resolveCollaboratorToken(ref, widget.token);
+      if (!mounted) return;
+      if (collab == null) {
+        setState(() {
+          _resolving = false;
+          _error = 'Este deeplink no existe o ya no es válido.';
+        });
+        return;
+      }
       ref.read(sessionProvider.notifier).enterAsCollaborator(widget.token);
       final path = switch (collab.role) {
         CollaboratorRole.seller => '/seller/${widget.token}',
@@ -36,19 +50,30 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
         CollaboratorRole.collector => '/collector/${widget.token}',
       };
       context.go(path);
-    });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _resolving = false;
+        _error = 'No se pudo validar el link: $e';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final collab = ref.watch(repositoryProvider).collaboratorByToken(widget.token);
-    if (collab == null) {
+    if (_error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Link inválido')),
-        body: const Center(child: Text('Este deeplink no existe o ya no es válido.')),
+        body: Center(child: Text(_error!)),
       );
     }
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return Scaffold(
+      body: Center(
+        child: _resolving
+            ? const CircularProgressIndicator()
+            : const Text('Redirigiendo…'),
+      ),
+    );
   }
 }
 

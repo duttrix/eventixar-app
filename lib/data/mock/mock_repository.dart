@@ -141,6 +141,7 @@ class MockRepository extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   Event createEvent({
+    required String ownerId,
     required String ownerEmail,
     required String name,
     required String product,
@@ -152,10 +153,12 @@ class MockRepository extends ChangeNotifier {
     required String pickupPlace,
     required int sellersCount,
     required int validatorsCount,
+    int collectorsCount = 0,
     String notes = '',
   }) {
     final event = Event(
       id: _nextId('ev_'),
+      ownerId: ownerId,
       ownerEmail: ownerEmail,
       name: name,
       product: product,
@@ -167,6 +170,7 @@ class MockRepository extends ChangeNotifier {
       pickupPlace: pickupPlace,
       sellersCount: sellersCount,
       validatorsCount: validatorsCount,
+      collectorsCount: collectorsCount,
       notes: notes,
       status: EventStatus.awaitingPayment,
       paid: false,
@@ -184,7 +188,8 @@ class MockRepository extends ChangeNotifier {
     final event = eventById(eventId);
     event
       ..paid = true
-      ..status = EventStatus.active;
+      ..status = EventStatus.active
+      ..ticketsGenerated = true;
     notifyListeners();
   }
 
@@ -226,6 +231,59 @@ class MockRepository extends ChangeNotifier {
       ..pickupPlace = pickupPlace
       ..notes = notes;
     notifyListeners();
+  }
+
+  /// Upserts a remote (Firestore) event into the in-memory cache for workspace UI.
+  void upsertEvent(Event event) {
+    final index = events.indexWhere((e) => e.id == event.id);
+    if (index >= 0) {
+      events[index] = event;
+    } else {
+      events.add(event);
+    }
+    ticketAggregate.putIfAbsent(
+      event.id,
+      () => {for (final s in TicketStatus.values) s: 0},
+    );
+    notifyListeners();
+  }
+
+  /// Replaces local tickets for an event (used after Firestore sync).
+  void replaceTicketsForEvent(String eventId, List<Ticket> remoteTickets) {
+    tickets.removeWhere((t) => t.eventId == eventId);
+    tickets.addAll(remoteTickets);
+    final counts = {for (final s in TicketStatus.values) s: 0};
+    for (final t in remoteTickets) {
+      counts[t.status] = (counts[t.status] ?? 0) + 1;
+    }
+    ticketAggregate[eventId] = counts;
+    notifyListeners();
+  }
+
+  void upsertCollaborator(Collaborator collaborator) {
+    final index = collaborators.indexWhere((c) => c.id == collaborator.id);
+    if (index >= 0) {
+      collaborators[index] = collaborator;
+    } else {
+      collaborators.add(collaborator);
+    }
+    notifyListeners();
+  }
+
+  void replaceCollaboratorsForEvent(
+    String eventId,
+    List<Collaborator> remote,
+  ) {
+    collaborators.removeWhere((c) => c.eventId == eventId);
+    collaborators.addAll(remote);
+    notifyListeners();
+  }
+
+  Event? tryEventById(String id) {
+    for (final e in events) {
+      if (e.id == id) return e;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------
@@ -401,6 +459,7 @@ class MockRepository extends ChangeNotifier {
 
     final active = Event(
       id: 'ev1',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Pollo a beneficio',
       product: 'Pollo asado',
@@ -415,10 +474,12 @@ class MockRepository extends ChangeNotifier {
       notes: 'Retirar por la puerta lateral.',
       status: EventStatus.active,
       paid: true,
+      ticketsGenerated: true,
     );
 
     final awaiting = Event(
       id: 'ev2',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Rifa Anual',
       product: 'Locro',
@@ -436,6 +497,7 @@ class MockRepository extends ChangeNotifier {
 
     final past = Event(
       id: 'ev3',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Kermesse 2025',
       product: 'Empanadas',
@@ -453,6 +515,7 @@ class MockRepository extends ChangeNotifier {
 
     final pastLocro = Event(
       id: 'ev4',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Locro solidario',
       product: 'Locro',
@@ -470,6 +533,7 @@ class MockRepository extends ChangeNotifier {
 
     final pastBingo = Event(
       id: 'ev5',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Bingo de fin de año',
       product: 'Otro',
@@ -487,6 +551,7 @@ class MockRepository extends ChangeNotifier {
 
     final pastEmpanadas = Event(
       id: 'ev6',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Empanadas 2024',
       product: 'Empanadas',
@@ -504,6 +569,7 @@ class MockRepository extends ChangeNotifier {
 
     final pastPaella = Event(
       id: 'ev7',
+      ownerId: 'demo-organizer',
       ownerEmail: 'organizador@demo.com',
       name: 'Paella del club',
       product: 'Paella',

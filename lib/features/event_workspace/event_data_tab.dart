@@ -36,21 +36,54 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     super.dispose();
   }
 
-  void _save() {
-    ref.read(repositoryProvider).updateEvent(
-          widget.eventId,
-          name: _nameController.text.trim(),
-          product: _product ?? kEventProducts.first,
-          ticketPrice: double.tryParse(_priceController.text) ?? 0,
-          eventDate: _eventDate ?? DateTime.now(),
-          pickupFrom: _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0),
-          pickupTo: _pickupTo ?? const TimeOfDay(hour: 15, minute: 0),
-          pickupPlace: _placeController.text.trim(),
-          notes: _notesController.text.trim(),
-        );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cambios guardados.')),
-    );
+  Future<void> _save() async {
+    final session = ref.read(sessionProvider);
+    final name = _nameController.text.trim();
+    final product = _product ?? kEventProducts.first;
+    final ticketPrice = double.tryParse(_priceController.text) ?? 0;
+    final eventDate = _eventDate ?? DateTime.now();
+    final pickupFrom = _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0);
+    final pickupTo = _pickupTo ?? const TimeOfDay(hour: 15, minute: 0);
+    final pickupPlace = _placeController.text.trim();
+    final notes = _notesController.text.trim();
+
+    try {
+      if (session.usesFirestore) {
+        final updated = await ref.read(eventRepositoryProvider).updateEvent(
+              widget.eventId,
+              name: name,
+              product: product,
+              ticketPrice: ticketPrice,
+              eventDate: eventDate,
+              pickupFrom: pickupFrom,
+              pickupTo: pickupTo,
+              pickupPlace: pickupPlace,
+              notes: notes,
+            );
+        ref.read(repositoryProvider).upsertEvent(updated);
+      } else {
+        ref.read(repositoryProvider).updateEvent(
+              widget.eventId,
+              name: name,
+              product: product,
+              ticketPrice: ticketPrice,
+              eventDate: eventDate,
+              pickupFrom: pickupFrom,
+              pickupTo: pickupTo,
+              pickupPlace: pickupPlace,
+              notes: notes,
+            );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cambios guardados.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar: $e')),
+      );
+    }
   }
 
   @override

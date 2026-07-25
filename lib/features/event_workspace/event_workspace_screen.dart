@@ -30,7 +30,8 @@ class EventWorkspaceScreen extends ConsumerStatefulWidget {
   final String eventId;
 
   @override
-  ConsumerState<EventWorkspaceScreen> createState() => _EventWorkspaceScreenState();
+  ConsumerState<EventWorkspaceScreen> createState() =>
+      _EventWorkspaceScreenState();
 }
 
 class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
@@ -38,24 +39,35 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionProvider);
+    if (session.usesFirestore) {
+      final async = ref.watch(ensureLocalEventProvider(widget.eventId));
+      return async.when(
+        loading: () => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => Scaffold(
+          appBar: AppBar(title: const Text('Evento')),
+          body: Center(child: Text('No se pudo cargar el evento: $e')),
+        ),
+        data: (_) => _buildWorkspace(context),
+      );
+    }
+    return _buildWorkspace(context);
+  }
+
+  Widget _buildWorkspace(BuildContext context) {
     final repo = ref.watch(repositoryProvider);
     final event = repo.eventById(widget.eventId);
 
-    Widget body;
-    switch (_selected) {
-      case EventTab.summary:
-        body = SummaryTab(eventId: widget.eventId);
-      case EventTab.tickets:
-        body = TicketsTab(eventId: widget.eventId);
-      case EventTab.sellers:
-        body = SellersTab(eventId: widget.eventId);
-      case EventTab.validators:
-        body = ValidatorsTab(eventId: widget.eventId);
-      case EventTab.collectors:
-        body = CollectorsTab(eventId: widget.eventId);
-      case EventTab.eventData:
-        body = EventDataTab(eventId: widget.eventId);
-    }
+    final Widget body = switch (_selected) {
+      EventTab.summary => SummaryTab(eventId: widget.eventId),
+      EventTab.tickets => TicketsTab(eventId: widget.eventId),
+      EventTab.sellers => SellersTab(eventId: widget.eventId),
+      EventTab.validators => ValidatorsTab(eventId: widget.eventId),
+      EventTab.collectors => CollectorsTab(eventId: widget.eventId),
+      EventTab.eventData => EventDataTab(eventId: widget.eventId),
+    };
 
     final (statusLabel, statusTone) = switch (event.status) {
       EventStatus.finished => ('Finalizado', BadgeTone.neutral),
@@ -64,7 +76,6 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     };
 
     return AppShell(
-      // AppBar: sección corta. El nombre largo va en el header de abajo.
       title: _labelFor(_selected),
       onHome: () => context.go('/home'),
       header: Column(

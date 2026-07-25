@@ -121,31 +121,47 @@ class ValidatorsTab extends ConsumerWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
               final phone = phoneController.text.trim();
               final notes = notesController.text.trim();
-              final repo = ref.read(repositoryProvider);
 
-              if (isEdit) {
-                repo.updateCollaborator(existing.id, name: name, phone: phone, notes: notes);
-                Navigator.pop(dialogContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Validador actualizado.')),
+              try {
+                if (isEdit) {
+                  await saveCollaborator(
+                    ref,
+                    eventId: eventId,
+                    collaboratorId: existing.id,
+                    name: name,
+                    phone: phone,
+                    notes: notes,
+                  );
+                  if (!dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Validador actualizado.')),
+                  );
+                  return;
+                }
+
+                final v = await inviteCollaborator(
+                  ref,
+                  eventId: eventId,
+                  role: CollaboratorRole.validator,
+                  name: name,
+                  phone: phone,
+                  notes: notes,
                 );
-                return;
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                if (!context.mounted) return;
+                AccessShare.copy(context, v, eventName: eventName);
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
               }
-
-              final v = repo.addCollaborator(
-                eventId: eventId,
-                role: CollaboratorRole.validator,
-                name: name,
-                phone: phone,
-                notes: notes,
-              );
-              Navigator.pop(dialogContext);
-              AccessShare.copy(context, v, eventName: eventName);
             },
             child: Text(isEdit ? 'Guardar' : 'Crear y compartir acceso'),
           ),

@@ -29,7 +29,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
     final session = ref.watch(sessionProvider);
     final email = session.userEmail;
 
@@ -37,40 +36,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return const Scaffold(body: Center(child: Text('Sesión no iniciada.')));
     }
 
+    if (session.usesFirestore) {
+      final asyncEvents = ref.watch(organizerEventsProvider);
+      return asyncEvents.when(
+        loading: () => Scaffold(
+          appBar: _appBar(context, email, displayName: null),
+          body: const Center(child: CircularProgressIndicator()),
+        ),
+        error: (e, _) => Scaffold(
+          appBar: _appBar(context, email, displayName: null),
+          body: Center(child: Text('Error al cargar eventos: $e')),
+        ),
+        data: (events) {
+          return _buildScaffold(
+            context,
+            email: email,
+            displayName:
+                ref.read(repositoryProvider).userByEmail(email)?.displayName,
+            all: events,
+          );
+        },
+      );
+    }
+
+    final repo = ref.watch(repositoryProvider);
     final user = repo.userByEmail(email);
     final all = repo.eventsForOwner(email);
+    return _buildScaffold(
+      context,
+      email: email,
+      displayName: user?.displayName,
+      all: all,
+    );
+  }
+
+  PreferredSizeWidget _appBar(
+    BuildContext context,
+    String email, {
+    required String? displayName,
+  }) {
+    return AppBar(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            displayName ?? email,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const Text('Mis eventos'),
+        ],
+      ),
+      actions: [
+        IconButton(
+          tooltip: 'Cerrar sesión',
+          onPressed: () async {
+            await ref.read(sessionProvider.notifier).logout();
+            if (context.mounted) context.go('/login');
+          },
+          icon: const Icon(Icons.logout),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context, {
+    required String email,
+    required String? displayName,
+    required List<Event> all,
+  }) {
     final upcoming = all.where((e) => !e.isPast).toList();
     final past = all.where((e) => e.isPast).toList();
     final filteredPast = _filterPast(past);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              user?.displayName ?? email,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textMuted,
-              ),
-            ),
-            const Text('Mis eventos'),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: () async {
-              await ref.read(sessionProvider.notifier).logout();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
+      appBar: _appBar(context, email, displayName: displayName),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -83,7 +128,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          Text('Activos y por pagar', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Activos y por pagar',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 10),
           if (upcoming.isEmpty)
             const _EmptyHint(text: 'Todavía no tenés eventos. Creá el primero.')
@@ -104,7 +152,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
           const SizedBox(height: 24),
-          Text('Eventos pasados', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Eventos pasados',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 10),
           if (past.isNotEmpty) ...[
             TextField(
@@ -187,11 +238,17 @@ class _EventCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event.name, style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    event.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     '$dateLabel · ${event.ticketCount} tickets · ${event.sellersCount} vend. · ${event.validatorsCount} val.',
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),

@@ -17,6 +17,7 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   int _step = 0;
+  bool _submitting = false;
 
   final _nameController = TextEditingController();
   final _priceController = TextEditingController(text: '2000');
@@ -30,6 +31,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   TimeOfDay _pickupTo = const TimeOfDay(hour: 15, minute: 0);
   int _sellersCount = 2;
   int _validatorsCount = 1;
+  int _collectorsCount = 0;
 
   @override
   void dispose() {
@@ -53,7 +55,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void _next() {
     if (_step == 0 && !_step0Valid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completá nombre, fecha y cantidad de tickets.')),
+        const SnackBar(
+          content: Text('Completá nombre, fecha y cantidad de tickets.'),
+        ),
       );
       return;
     }
@@ -68,26 +72,61 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     setState(() => _step--);
   }
 
-  void _submitAndPay() {
-    final email = ref.read(sessionProvider).userEmail;
-    if (email == null || _eventDate == null) return;
+  Future<void> _submitAndPay() async {
+    final session = ref.read(sessionProvider);
+    final email = session.userEmail;
+    if (email == null || _eventDate == null || _submitting) return;
 
-    final event = ref.read(repositoryProvider).createEvent(
-          ownerEmail: email,
-          name: _nameController.text.trim(),
-          product: _product,
-          ticketPrice: double.tryParse(_priceController.text) ?? 0,
-          ticketCount: int.tryParse(_countController.text) ?? 0,
-          eventDate: _eventDate!,
-          pickupFrom: _pickupFrom,
-          pickupTo: _pickupTo,
-          pickupPlace: _placeController.text.trim(),
-          sellersCount: _sellersCount,
-          validatorsCount: _validatorsCount,
-          notes: _notesController.text.trim(),
-        );
+    setState(() => _submitting = true);
+    try {
+      final Event event;
+      if (session.usesFirestore && session.userUid != null) {
+        event = await ref.read(eventRepositoryProvider).createEvent(
+              ownerId: session.userUid!,
+              ownerEmail: email,
+              name: _nameController.text.trim(),
+              product: _product,
+              ticketPrice: double.tryParse(_priceController.text) ?? 0,
+              ticketCount: int.tryParse(_countController.text) ?? 0,
+              eventDate: _eventDate!,
+              pickupFrom: _pickupFrom,
+              pickupTo: _pickupTo,
+              pickupPlace: _placeController.text.trim(),
+              sellersCount: _sellersCount,
+              validatorsCount: _validatorsCount,
+              collectorsCount: _collectorsCount,
+              notes: _notesController.text.trim(),
+            );
+        ref.read(repositoryProvider).upsertEvent(event);
+      } else {
+        event = ref.read(repositoryProvider).createEvent(
+              ownerId: session.userUid ?? 'demo-organizer',
+              ownerEmail: email,
+              name: _nameController.text.trim(),
+              product: _product,
+              ticketPrice: double.tryParse(_priceController.text) ?? 0,
+              ticketCount: int.tryParse(_countController.text) ?? 0,
+              eventDate: _eventDate!,
+              pickupFrom: _pickupFrom,
+              pickupTo: _pickupTo,
+              pickupPlace: _placeController.text.trim(),
+              sellersCount: _sellersCount,
+              validatorsCount: _validatorsCount,
+              collectorsCount: _collectorsCount,
+              notes: _notesController.text.trim(),
+            );
+      }
 
-    context.go('/create-event/pay/${event.id}');
+      if (!mounted) return;
+      context.go('/create-event/pay/${event.id}');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo crear el evento: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -95,7 +134,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_stepTitle),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: _back),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _submitting ? null : _back,
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -116,10 +158,16 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             )
           else
             ElevatedButton(
-              onPressed: _submitAndPay,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Ir a pagar y habilitar'),
+              onPressed: _submitting ? null : _submitAndPay,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: _submitting
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Ir a pagar y habilitar'),
               ),
             ),
           const SizedBox(height: 24),
@@ -152,7 +200,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           DropdownButtonFormField<String>(
             initialValue: _product,
             decoration: const InputDecoration(labelText: 'Qué se vende'),
-            items: kEventProducts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+            items: kEventProducts
+                .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                .toList(),
             onChanged: (value) => setState(() => _product = value ?? _product),
           ),
           const SizedBox(height: 12),
@@ -162,7 +212,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 child: TextField(
                   controller: _priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Precio del ticket (ARS)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Precio del ticket (ARS)',
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -170,7 +222,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 child: TextField(
                   controller: _countController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cantidad de tickets'),
+                  decoration: const InputDecoration(
+                    labelText: 'Cantidad de tickets',
+                  ),
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -203,7 +257,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               Expanded(
                 child: InkWell(
                   onTap: () async {
-                    final picked = await showTimePicker(context: context, initialTime: _pickupFrom);
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: _pickupFrom,
+                    );
                     if (picked != null) setState(() => _pickupFrom = picked);
                   },
                   child: InputDecorator(
@@ -216,7 +273,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               Expanded(
                 child: InkWell(
                   onTap: () async {
-                    final picked = await showTimePicker(context: context, initialTime: _pickupTo);
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: _pickupTo,
+                    );
                     if (picked != null) setState(() => _pickupTo = picked);
                   },
                   child: InputDecorator(
@@ -252,22 +312,13 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Cada vendedor recibe un link con sus tickets digitales para imprimir o entregar uno por uno.',
+                'Cupos sugeridos. Después vas a invitar a cada persona con un link (token).',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _sellersCount > 0 ? () => setState(() => _sellersCount--) : null,
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                  Text('$_sellersCount', style: Theme.of(context).textTheme.headlineSmall),
-                  IconButton(
-                    onPressed: () => setState(() => _sellersCount++),
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ],
+              _CountStepper(
+                value: _sellersCount,
+                onChanged: (v) => setState(() => _sellersCount = v),
               ),
             ],
           ),
@@ -279,22 +330,31 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Quienes validan el ticket o la tarjeta: en el retiro del producto o en la entrada del evento. También entran con un link.',
+                'Quienes validan el ticket en el retiro o en la entrada.',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _validatorsCount > 0 ? () => setState(() => _validatorsCount--) : null,
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                  Text('$_validatorsCount', style: Theme.of(context).textTheme.headlineSmall),
-                  IconButton(
-                    onPressed: () => setState(() => _validatorsCount++),
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ],
+              _CountStepper(
+                value: _validatorsCount,
+                onChanged: (v) => setState(() => _validatorsCount = v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: '¿Cuántos recaudadores?',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Opcional. Reciben las rendiciones de los vendedores.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              _CountStepper(
+                value: _collectorsCount,
+                onChanged: (v) => setState(() => _collectorsCount = v),
               ),
             ],
           ),
@@ -319,16 +379,44 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ),
           const SizedBox(height: 16),
           for (final line in quote.breakdown) ...[
-            Text(line, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            Text(
+              line,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
             const SizedBox(height: 6),
           ],
           const SizedBox(height: 12),
           const Text(
-            'Al confirmar el pago, el evento queda habilitado y podés asignar tickets y compartir los links.',
+            'Al confirmar el pago, el evento queda habilitado y se generan los tickets. '
+            'Los colaboradores se invitan después, cada uno con su link.',
             style: TextStyle(color: AppColors.textMuted, fontSize: 13),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CountStepper extends StatelessWidget {
+  const _CountStepper({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: value > 0 ? () => onChanged(value - 1) : null,
+          icon: const Icon(Icons.remove_circle_outline),
+        ),
+        Text('$value', style: Theme.of(context).textTheme.headlineSmall),
+        IconButton(
+          onPressed: () => onChanged(value + 1),
+          icon: const Icon(Icons.add_circle_outline),
+        ),
+      ],
     );
   }
 }
@@ -351,7 +439,10 @@ class _StepIndicator extends StatelessWidget {
                 radius: 14,
                 backgroundColor: i <= step ? AppColors.accent : AppColors.border,
                 foregroundColor: i <= step ? Colors.white : AppColors.textMuted,
-                child: Text('${i + 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                child: Text(
+                  '${i + 1}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
               ),
               const SizedBox(height: 4),
               Text(

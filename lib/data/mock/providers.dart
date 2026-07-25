@@ -5,10 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/google_auth_service.dart';
-import '../models/collaborator.dart';
-import '../models/role.dart';
-import '../models/user.dart';
+import '../firebase/collaborator_repository.dart';
+import '../firebase/event_repository.dart';
 import '../firebase/user_repository.dart';
+import '../models/collaborator.dart';
+import '../models/event.dart';
+import '../models/role.dart';
+import '../models/ticket.dart';
+import '../models/user.dart';
 import 'mock_repository.dart';
 
 final repositoryProvider = ChangeNotifierProvider<MockRepository>((ref) {
@@ -22,6 +26,147 @@ final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
 final userRepositoryProvider = Provider<UserRepository>((ref) {
   return UserRepository();
 });
+
+final eventRepositoryProvider = Provider<EventRepository>((ref) {
+  return EventRepository();
+});
+
+final collaboratorRepositoryProvider = Provider<CollaboratorRepository>((ref) {
+  return CollaboratorRepository();
+});
+
+/// Live events for the signed-in Firebase organizer.
+final organizerEventsProvider = StreamProvider<List<Event>>((ref) {
+  final session = ref.watch(sessionProvider);
+  if (!session.usesFirestore || session.userUid == null) {
+    return Stream.value(const <Event>[]);
+  }
+  return ref.watch(eventRepositoryProvider).watchForOwner(session.userUid!);
+});
+
+/// Ensures a Firestore event (+ tickets + collaborators) is mirrored into the
+/// mock cache for workspace screens that still read from [MockRepository].
+final ensureLocalEventProvider =
+    FutureProvider.family<Event, String>((ref, eventId) async {
+  final mock = ref.read(repositoryProvider);
+  final session = ref.read(sessionProvider);
+
+  // Demo / local-only events stay in the mock repo.
+  final local = mock.tryEventById(eventId);
+  if (local != null && !session.usesFirestore) {
+    return local;
+  }
+
+  // Prefer remote when signed in with Firebase.
+  if (session.usesFirestore) {
+    final remote = await ref.read(eventRepositoryProvider).getById(eventId);
+    if (remote != null) {
+      mock.upsertEvent(remote);
+      if (remote.ticketsGenerated) {
+        final tickets =
+            await ref.read(eventRepositoryProvider).listTickets(eventId);
+        mock.replaceTicketsForEvent(eventId, tickets);
+      } else {
+        mock.ticketAggregate[eventId] = {
+          for (final s in TicketStatus.values) s: 0,
+        }..[TicketStatus.unassigned] = remote.ticketCount;
+      }
+      final collabs =
+          await ref.read(collaboratorRepositoryProvider).listForEvent(eventId);
+      mock.replaceCollaboratorsForEvent(eventId, collabs);
+      return remote;
+    }
+  }
+
+  if (local != null) return local;
+  throw StateError('Evento $eventId no encontrado.');
+});
+
+/// Creates a collaborator in Firestore (Google session) or local mock (demo).
+Future<Collaborator> inviteCollaborator(
+  WidgetRef ref, {
+  required String eventId,
+  required CollaboratorRole role,
+  required String name,
+  required String phone,
+  String notes = '',
+}) async {
+  final session = ref.read(sessionProvider);
+  if (session.usesFirestore) {
+    final created = await ref.read(collaboratorRepositoryProvider).create(
+          eventId: eventId,
+          role: role,
+          name: name,
+          phone: phone,
+          notes: notes,
+        );
+    ref.read(repositoryProvider).upsertCollaborator(created);
+    return created;
+  }
+  return ref.read(repositoryProvider).addCollaborator(
+        eventId: eventId,
+        role: role,
+        name: name,
+        phone: phone,
+        notes: notes,
+      );
+}
+
+/// Updates collaborator profile in Firestore or local mock.
+Future<Collaborator> saveCollaborator(
+  WidgetRef ref, {
+  required String eventId,
+  required String collaboratorId,
+  required String name,
+  required String phone,
+  String notes = '',
+}) async {
+  final session = ref.read(sessionProvider);
+  if (session.usesFirestore) {
+    final updated = await ref.read(collaboratorRepositoryProvider).update(
+          eventId: eventId,
+          collaboratorId: collaboratorId,
+          name: name,
+          phone: phone,
+          notes: notes,
+        );
+    ref.read(repositoryProvider).upsertCollaborator(updated);
+    return updated;
+  }
+  ref.read(repositoryProvider).updateCollaborator(
+        collaboratorId,
+        name: name,
+        phone: phone,
+        notes: notes,
+      );
+  return ref.read(repositoryProvider).collaboratorById(collaboratorId);
+}
+
+/// Resolves a join token from local cache, then Firestore if needed.
+Future<Collaborator?> resolveCollaboratorToken(
+  WidgetRef ref,
+  String token,
+) async {
+  final mock = ref.read(repositoryProvider);
+  final local = mock.collaboratorByToken(token);
+  if (local != null) return local;
+
+  final remote =
+      await ref.read(collaboratorRepositoryProvider).findByToken(token);
+  if (remote == null) return null;
+
+  mock.upsertCollaborator(remote);
+  final event = await ref.read(eventRepositoryProvider).getById(remote.eventId);
+  if (event != null) {
+    mock.upsertEvent(event);
+    if (event.ticketsGenerated) {
+      final tickets =
+          await ref.read(eventRepositoryProvider).listTickets(remote.eventId);
+      mock.replaceTicketsForEvent(remote.eventId, tickets);
+    }
+  }
+  return remote;
+}
 
 /// Organizer Firebase session, or temporary deeplink collaborator access.
 class SessionState {
@@ -45,6 +190,10 @@ class SessionState {
 
   bool get isLoggedIn => userEmail != null || collaboratorToken != null;
   bool get isOrganizer => userEmail != null && collaboratorToken == null;
+
+  /// Real Google/Firebase organizer (not the local mock demo login).
+  bool get usesFirestore =>
+      userUid != null && userUid != 'demo-organizer' && collaboratorToken == null;
 
   SessionState copyWith({
     String? userEmail,

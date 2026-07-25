@@ -256,9 +256,27 @@ class SummaryTab extends ConsumerWidget {
     );
 
     if (confirmed != true || !context.mounted) return;
-    ref.read(repositoryProvider).finishEvent(eventId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Evento finalizado. Pasó a solo consulta.')),
-    );
+
+    final session = ref.read(sessionProvider);
+    try {
+      if (session.usesFirestore) {
+        final updated =
+            await ref.read(eventRepositoryProvider).finishEvent(eventId);
+        ref.read(repositoryProvider).upsertEvent(updated);
+      } else {
+        ref.read(repositoryProvider).finishEvent(eventId);
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Evento finalizado. Pasó a solo consulta.'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo finalizar: $e')),
+      );
+    }
   }
 }

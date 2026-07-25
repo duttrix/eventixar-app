@@ -25,6 +25,15 @@ extension TicketStatusX on TicketStatus {
         return 'Validado';
     }
   }
+
+  String get firestoreValue => name;
+
+  static TicketStatus fromFirestore(String? value) {
+    return TicketStatus.values.firstWhere(
+      (s) => s.name == value,
+      orElse: () => TicketStatus.unassigned,
+    );
+  }
 }
 
 class Ticket {
@@ -56,4 +65,32 @@ class Ticket {
 
   /// Public deeplink the buyer opens to see this ticket.
   String get shareUrl => 'https://app.eventixar.com/ticket/$id';
+
+  factory Ticket.fromFirestore({
+    required String id,
+    required String eventId,
+    required Map<String, dynamic> data,
+  }) {
+    return Ticket(
+      id: id,
+      eventId: eventId,
+      number: (data['number'] as num?)?.toInt() ?? 0,
+      status: TicketStatusX.fromFirestore(data['status'] as String?),
+      sellerId: data['sellerId'] as String?,
+      validatorId: data['validatorId'] as String?,
+      collectorId: data['collectorId'] as String?,
+      buyerName: (data['buyerName'] as String?) ?? '',
+    );
+  }
+
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'number': number,
+      'status': status.firestoreValue,
+      'sellerId': sellerId,
+      'validatorId': validatorId,
+      'collectorId': collectorId,
+      'buyerName': buyerName,
+    };
+  }
 }
