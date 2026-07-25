@@ -91,9 +91,9 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
             },
             icon: const Icon(Icons.logout),
           ),
@@ -646,9 +646,9 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
             },
             icon: const Icon(Icons.logout),
           ),
@@ -776,9 +776,9 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
             },
             icon: const Icon(Icons.logout),
           ),
@@ -852,9 +852,9 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
             },
             icon: const Icon(Icons.logout),
           ),

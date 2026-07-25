@@ -11,10 +11,20 @@ import '../../features/home/home_screen.dart';
 import '../../features/join/join_screens.dart';
 import '../../features/onboarding/create_event_screen.dart';
 import '../../features/onboarding/pay_event_screen.dart';
+import 'go_router_refresh_stream.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final refresh = GoRouterRefreshStream(
+    ref.watch(googleAuthServiceProvider).authStateChanges(),
+  );
+  ref.onDispose(refresh.dispose);
+
+  // Rebuild redirects when session (incl. collaborator) changes.
+  ref.listen(sessionProvider, (_, _) => refresh.refresh());
+
   return GoRouter(
     initialLocation: '/login',
+    refreshListenable: refresh,
     redirect: (context, state) {
       final session = ref.read(sessionProvider);
       final location = state.matchedLocation;

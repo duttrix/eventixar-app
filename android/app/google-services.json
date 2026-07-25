@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "165106453677",
+    "project_id": "eventixar",
+    "storage_bucket": "eventixar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:165106453677:android:1d9d738c4976815d970a24",
+        "android_client_info": {
+          "package_name": "com.eventixar.eventixar"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "165106453677-1pv115libl5nvjtkdjkpa4lermbn7gko.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAT3hnGsno6NXYBs8ZRrzOY35Z7i0oaciU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "165106453677-1pv115libl5nvjtkdjkpa4lermbn7gko.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

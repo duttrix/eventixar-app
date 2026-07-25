@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Organizer profile: only the signed-in user can read/write their own doc.
+    match /users/{userId} {
+      allow read, create, update: if request.auth != null
+        && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // Everything else denied until we wire the next collections.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

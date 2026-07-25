@@ -50,7 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              user?.name ?? email,
+              user?.displayName ?? email,
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -63,9 +63,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-              context.go('/login');
+            onPressed: () async {
+              await ref.read(sessionProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
             },
             icon: const Icon(Icons.logout),
           ),

@@ -6,17 +6,48 @@ import '../../core/theme/app_colors.dart';
 import '../../data/mock/providers.dart';
 import '../../shared/widgets/brand_icons.dart';
 
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
-  void _login(WidgetRef ref, BuildContext context, String email) {
-    ref.read(repositoryProvider).ensureUser(email);
-    ref.read(sessionProvider.notifier).login(email);
+  @override
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _signInWithGoogle() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final user = await ref.read(sessionProvider.notifier).signInWithGoogle();
+      if (!mounted) return;
+      if (user == null) {
+        setState(() => _busy = false);
+        return;
+      }
+      context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'No se pudo iniciar sesión con Google. Probá de nuevo.';
+      });
+      debugPrint('Google sign-in error: $e');
+    }
+  }
+
+  void _loginDemoOrganizer() {
+    ref.read(sessionProvider.notifier).login('organizador@demo.com');
     context.go('/home');
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -38,9 +69,15 @@ class LoginScreen extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () => _login(ref, context, 'organizador@demo.com'),
-                      icon: const GoogleLogo(size: 18),
-                      label: const Text('Continuar con Google'),
+                      onPressed: _busy ? null : _signInWithGoogle,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const GoogleLogo(size: 18),
+                      label: Text(_busy ? 'Conectando…' : 'Continuar con Google'),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.text,
@@ -52,15 +89,25 @@ class LoginScreen extends ConsumerWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => _login(ref, context, 'organizador@demo.com'),
+                      onPressed: null,
                       icon: const AppleLogo(size: 18),
-                      label: const Text('Continuar con Apple'),
+                      label: const Text('Continuar con Apple (próximamente)'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.black54,
+                        disabledForegroundColor: Colors.white70,
                       ),
                     ),
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.dangerText, fontSize: 13),
+                    ),
+                  ],
                   const SizedBox(height: 32),
                   Container(
                     width: double.infinity,
@@ -85,8 +132,8 @@ class LoginScreen extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton(
-                            onPressed: () => _login(ref, context, 'organizador@demo.com'),
-                            child: const Text('Entrar como organizador'),
+                            onPressed: _loginDemoOrganizer,
+                            child: const Text('Entrar como organizador (mock)'),
                           ),
                         ),
                         const SizedBox(height: 8),

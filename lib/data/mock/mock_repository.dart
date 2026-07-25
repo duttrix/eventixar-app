@@ -34,6 +34,13 @@ class MockRepository extends ChangeNotifier {
     return null;
   }
 
+  AppUser? userByUid(String uid) {
+    for (final u in users) {
+      if (u.uid == uid) return u;
+    }
+    return null;
+  }
+
   Event eventById(String id) => events.firstWhere((e) => e.id == id);
 
   List<Event> eventsForOwner(String email) =>
@@ -99,12 +106,30 @@ class MockRepository extends ChangeNotifier {
   // Auth
   // ---------------------------------------------------------------------
 
-  AppUser ensureUser(String email, {String? name}) {
-    final existing = userByEmail(email);
-    if (existing != null) return existing;
+  AppUser ensureUser(
+    String email, {
+    String? uid,
+    String? name,
+    String? displayName,
+    String? photoUrl,
+  }) {
+    final resolvedName = displayName ?? name;
+    final existing = (uid != null ? userByUid(uid) : null) ?? userByEmail(email);
+    if (existing != null) {
+      if (resolvedName != null && resolvedName.isNotEmpty) {
+        existing.displayName = resolvedName;
+      }
+      if (photoUrl != null) existing.photoUrl = photoUrl;
+      notifyListeners();
+      return existing;
+    }
     final user = AppUser(
+      uid: uid ?? 'local_${email.hashCode}',
       email: email,
-      name: name ?? email.split('@').first,
+      displayName: resolvedName?.isNotEmpty == true
+          ? resolvedName!
+          : email.split('@').first,
+      photoUrl: photoUrl,
     );
     users.add(user);
     notifyListeners();
@@ -364,7 +389,13 @@ class MockRepository extends ChangeNotifier {
   // ---------------------------------------------------------------------
 
   void _seed() {
-    users.add(AppUser(email: 'organizador@demo.com', name: 'María Organizadora'));
+    users.add(
+      AppUser(
+        uid: 'demo-organizer',
+        email: 'organizador@demo.com',
+        displayName: 'María Organizadora',
+      ),
+    );
 
     final now = DateTime.now();
 

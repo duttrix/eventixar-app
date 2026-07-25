@@ -1,36 +1,56 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/google_auth_service.dart';
 import '../models/collaborator.dart';
 import '../models/role.dart';
+import '../models/user.dart';
+import '../firebase/user_repository.dart';
 import 'mock_repository.dart';
 
 final repositoryProvider = ChangeNotifierProvider<MockRepository>((ref) {
   return MockRepository();
 });
 
-/// Mock session: organizer login, or temporary deeplink collaborator access.
+final googleAuthServiceProvider = Provider<GoogleAuthService>((ref) {
+  return GoogleAuthService();
+});
+
+final userRepositoryProvider = Provider<UserRepository>((ref) {
+  return UserRepository();
+});
+
+/// Organizer Firebase session, or temporary deeplink collaborator access.
 class SessionState {
   const SessionState({
     this.userEmail,
+    this.userUid,
     this.currentEventId,
     this.collaboratorToken,
     this.roleOverride,
   });
 
   final String? userEmail;
+  final String? userUid;
   final String? currentEventId;
 
-  /// When set, the user entered via a seller/validator deeplink.
+  /// When set, the user entered via a seller/validator/collector deeplink.
   final String? collaboratorToken;
 
   /// Dev-only role preview for the organizer workspace.
   final Role? roleOverride;
 
   bool get isLoggedIn => userEmail != null || collaboratorToken != null;
+  bool get isOrganizer => userEmail != null && collaboratorToken == null;
 
   SessionState copyWith({
     String? userEmail,
     bool clearUserEmail = false,
+    String? userUid,
+    bool clearUserUid = false,
     String? currentEventId,
     bool clearCurrentEventId = false,
     String? collaboratorToken,
@@ -40,6 +60,7 @@ class SessionState {
   }) {
     return SessionState(
       userEmail: clearUserEmail ? null : (userEmail ?? this.userEmail),
+      userUid: clearUserUid ? null : (userUid ?? this.userUid),
       currentEventId:
           clearCurrentEventId ? null : (currentEventId ?? this.currentEventId),
       collaboratorToken: clearCollaboratorToken
@@ -51,18 +72,88 @@ class SessionState {
 }
 
 class SessionController extends StateNotifier<SessionState> {
-  SessionController() : super(const SessionState());
+  SessionController(this._ref) : super(const SessionState()) {
+    _bindAuth();
+  }
 
+  final Ref _ref;
+  StreamSubscription<User?>? _authSub;
+
+  void _bindAuth() {
+    final auth = _ref.read(googleAuthServiceProvider);
+    final current = auth.currentUser;
+    if (current != null) {
+      unawaited(_applyFirebaseUser(current));
+    }
+    _authSub = auth.authStateChanges().listen((user) {
+      unawaited(_onAuthChanged(user));
+    });
+  }
+
+  Future<void> _onAuthChanged(User? user) async {
+    if (user != null) {
+      await _applyFirebaseUser(user);
+      return;
+    }
+    // Don't wipe collaborator deeplink sessions when Firebase has no user.
+    if (state.collaboratorToken != null) return;
+    if (state.userEmail != null || state.userUid != null) {
+      state = const SessionState();
+    }
+  }
+
+  Future<void> _applyFirebaseUser(User user) async {
+    final profile = AppUser.fromAuth(user);
+    _ref.read(repositoryProvider).ensureUser(
+          profile.email,
+          uid: profile.uid,
+          displayName: profile.displayName,
+          photoUrl: profile.photoUrl,
+        );
+    state = SessionState(
+      userEmail: profile.email,
+      userUid: profile.uid,
+      currentEventId: state.currentEventId,
+    );
+
+    try {
+      final saved = await _ref.read(userRepositoryProvider).upsertFromAuthUser(user);
+      _ref.read(repositoryProvider).ensureUser(
+            saved.email,
+            uid: saved.uid,
+            displayName: saved.displayName,
+            photoUrl: saved.photoUrl,
+          );
+    } catch (e, st) {
+      debugPrint('Firestore user upsert failed: $e\n$st');
+    }
+  }
+
+  /// Demo / mock organizer login (no Firebase). Prefer [signInWithGoogle].
   void login(String email) {
-    state = SessionState(userEmail: email);
+    _ref.read(repositoryProvider).ensureUser(
+          email,
+          uid: 'demo-organizer',
+          displayName: 'María Organizadora',
+        );
+    state = SessionState(userEmail: email, userUid: 'demo-organizer');
+  }
+
+  Future<User?> signInWithGoogle() {
+    return _ref.read(googleAuthServiceProvider).signInWithGoogle();
   }
 
   void enterAsCollaborator(String token) {
     state = SessionState(collaboratorToken: token);
   }
 
-  void logout() {
+  Future<void> logout() async {
+    final hadFirebaseUser = state.userUid != null ||
+        _ref.read(googleAuthServiceProvider).currentUser != null;
     state = const SessionState();
+    if (hadFirebaseUser) {
+      await _ref.read(googleAuthServiceProvider).signOut();
+    }
   }
 
   void setCurrentEvent(String? eventId) {
@@ -75,11 +166,17 @@ class SessionController extends StateNotifier<SessionState> {
   void setRoleOverride(Role role) {
     state = state.copyWith(roleOverride: role);
   }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 }
 
 final sessionProvider =
     StateNotifierProvider<SessionController, SessionState>((ref) {
-  return SessionController();
+  return SessionController(ref);
 });
 
 final effectiveRoleProvider = Provider<Role>((ref) {
