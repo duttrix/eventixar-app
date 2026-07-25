@@ -1,175 +1,169 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
+import '../../data/models/ticket_design.dart';
 import 'access_share.dart';
 import 'status_badge.dart';
 
-/// Share de un ticket individual.
-///
-/// Producto: el default es una **imagen** (PNG/JPG) del ticket vía share sheet.
-/// El **PDF** queda para imprimir lotes, no para este flujo.
-/// Demo actual: comparte texto + link (aún no genera la imagen).
+export '../../data/models/ticket_design.dart';
+
+/// Share de tickets como **imágenes PNG** (sin texto/links al comprador).
 class TicketShare {
   TicketShare._();
 
-  static String messageFor({
-    required Ticket ticket,
-    required Event event,
-    String? sellerName,
-  }) {
-    final from = sellerName == null ? '' : ' (de $sellerName)';
-    final para = ticket.buyerName.trim().isEmpty ? '' : 'Para: ${ticket.buyerName.trim()}\n';
-    return '¡Hola! Te comparto tu ticket #${ticket.number} de "${event.name}"$from.\n'
-        '$para'
-        '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)}\n'
-        'Abrí el link para verlo (no necesitás registrarte):\n'
-        '${ticket.shareUrl}';
+  /// Argentine / international phone → digits for `wa.me` (no `+`).
+  static String? normalizeWhatsAppPhone(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    if (digits.startsWith('00')) digits = digits.substring(2);
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    // Local mobile without country code (e.g. 11 2345-6789).
+    if (digits.length == 10) digits = '54$digits';
+    if (digits.length < 10) return null;
+    return digits;
   }
 
-  static Future<void> share({
+  /// Renders [TicketSharePreview] off-screen and returns a PNG.
+  static Future<Uint8List> renderPng(
+    BuildContext context, {
     required Ticket ticket,
     required Event event,
-    String? sellerName,
-  }) {
-    return Share.share(
-      messageFor(ticket: ticket, event: event, sellerName: sellerName),
-      subject: 'Ticket #${ticket.number} · ${event.name}',
+    TicketVisualStyle style = TicketVisualStyle.classic,
+  }) async {
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      throw StateError('No hay Overlay para renderizar el ticket.');
+    }
+    return renderPngWithOverlay(
+      overlay,
+      ticket: ticket,
+      event: event,
+      style: style,
     );
   }
 
-  /// Share several tickets as a list of links (demo / WhatsApp text).
-  static Future<void> shareMany({
+  static Future<Uint8List> renderPngWithOverlay(
+    OverlayState overlay, {
+    required Ticket ticket,
+    required Event event,
+    TicketVisualStyle style = TicketVisualStyle.classic,
+  }) async {
+    final key = GlobalKey();
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -5000,
+        top: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: SizedBox(
+            width: 360,
+            child: RepaintBoundary(
+              key: key,
+              child: TicketSharePreview(
+                ticket: ticket,
+                event: event,
+                style: style,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    await WidgetsBinding.instance.endOfFrame;
+    // One more frame so gradients / QR paint fully.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    await WidgetsBinding.instance.endOfFrame;
+
+    try {
+      final boundary =
+          key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw StateError('No se pudo capturar el ticket.');
+      }
+      final image = await boundary.toImage(pixelRatio: 3);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (bytes == null) throw StateError('No se pudo codificar el PNG.');
+      return bytes.buffer.asUint8List();
+    } finally {
+      entry.remove();
+    }
+  }
+
+  static Future<List<XFile>> buildImageFiles(
+    OverlayState overlay, {
     required List<Ticket> tickets,
     required Event event,
-    String? sellerName,
-    String? note,
-  }) {
-    if (tickets.isEmpty) return Future.value();
-    if (tickets.length == 1) {
-      final t = tickets.first;
-      final from = sellerName == null ? '' : ' (de $sellerName)';
-      final para = t.buyerName.trim().isEmpty ? '' : 'Para: ${t.buyerName.trim()}\n';
-      final noteLine = (note == null || note.trim().isEmpty) ? '' : '\nDetalle: ${note.trim()}\n';
-      return Share.share(
-        '¡Hola! Te comparto tu ticket #${t.number} de "${event.name}"$from.\n'
-        '$para'
-        '$noteLine'
-        '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)}\n'
-        'Abrí el link para verlo (no necesitás registrarte):\n'
-        '${t.shareUrl}',
-        subject: 'Ticket #${t.number} · ${event.name}',
+    TicketVisualStyle style = TicketVisualStyle.classic,
+  }) async {
+    final dir = await getTemporaryDirectory();
+    final files = <XFile>[];
+    for (final ticket in tickets) {
+      final png = await renderPngWithOverlay(
+        overlay,
+        ticket: ticket,
+        event: event,
+        style: style,
+      );
+      final path = '${dir.path}/ticket_${event.id}_${ticket.id}.png';
+      await File(path).writeAsBytes(png, flush: true);
+      files.add(
+        XFile(path, mimeType: 'image/png', name: 'ticket_${ticket.number}.png'),
       );
     }
-    final from = sellerName == null ? '' : ' (de $sellerName)';
-    final lines = tickets.map((t) {
-      final para = t.buyerName.trim().isEmpty ? '' : ' · ${t.buyerName.trim()}';
-      return '• Ticket #${t.number}$para: ${t.shareUrl}';
-    }).join('\n');
-    final noteLine = (note == null || note.trim().isEmpty) ? '' : '\n\nDetalle: ${note.trim()}';
-    return Share.share(
-      '¡Hola! Te comparto ${tickets.length} tickets de "${event.name}"$from.\n'
-      '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)} c/u\n\n'
-      '$lines$noteLine',
-      subject: '${tickets.length} tickets · ${event.name}',
+    return files;
+  }
+
+  /// Generates PNG(s) and opens the system share sheet (WhatsApp, etc.).
+  ///
+  /// No caption/text is attached: the buyer should receive only the images.
+  static Future<void> shareImages(
+    BuildContext context, {
+    required List<Ticket> tickets,
+    required Event event,
+    TicketVisualStyle style = TicketVisualStyle.classic,
+  }) async {
+    if (tickets.isEmpty) return;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      throw StateError('No hay Overlay para renderizar el ticket.');
+    }
+    final files = await buildImageFiles(
+      overlay,
+      tickets: tickets,
+      event: event,
+      style: style,
     );
+    await Share.shareXFiles(files);
   }
 }
 
-enum TicketBackgroundMode { solid, gradient, image }
-
-enum TicketTypographyStyle { system, featured, compact }
-
-/// Visual knobs for the ticket card (demo design editor).
-class TicketVisualStyle {
-  const TicketVisualStyle({
-    this.primary = const Color(0xFF1B3A5F),
-    this.accent = const Color(0xFF378ADD),
-    this.backgroundMode = TicketBackgroundMode.gradient,
-    this.typography = TicketTypographyStyle.system,
-  });
-
-  final Color primary;
-  final Color accent;
-  final TicketBackgroundMode backgroundMode;
-  final TicketTypographyStyle typography;
-
-  static const classic = TicketVisualStyle();
-
-  static const festive = TicketVisualStyle(
-    primary: Color(0xFF7A1F2B),
-    accent: Color(0xFFE8A838),
-    backgroundMode: TicketBackgroundMode.gradient,
-    typography: TicketTypographyStyle.featured,
-  );
-
-  static const dark = TicketVisualStyle(
-    primary: Color(0xFF111827),
-    accent: Color(0xFF6B7280),
-    backgroundMode: TicketBackgroundMode.solid,
-    typography: TicketTypographyStyle.compact,
-  );
-
-  static const institutional = TicketVisualStyle(
-    primary: Color(0xFF14532D),
-    accent: Color(0xFF86EFAC),
-    backgroundMode: TicketBackgroundMode.gradient,
-    typography: TicketTypographyStyle.system,
-  );
-
-  TicketVisualStyle copyWith({
-    Color? primary,
-    Color? accent,
-    TicketBackgroundMode? backgroundMode,
-    TicketTypographyStyle? typography,
-  }) {
-    return TicketVisualStyle(
-      primary: primary ?? this.primary,
-      accent: accent ?? this.accent,
-      backgroundMode: backgroundMode ?? this.backgroundMode,
-      typography: typography ?? this.typography,
-    );
-  }
-
-  FontWeight get titleWeight => switch (typography) {
-        TicketTypographyStyle.system => FontWeight.w800,
-        TicketTypographyStyle.featured => FontWeight.w900,
-        TicketTypographyStyle.compact => FontWeight.w700,
-      };
-
-  double get titleSize => switch (typography) {
-        TicketTypographyStyle.system => 18,
-        TicketTypographyStyle.featured => 20,
-        TicketTypographyStyle.compact => 16,
-      };
-
-  double get numberSize => switch (typography) {
-        TicketTypographyStyle.system => 28,
-        TicketTypographyStyle.featured => 32,
-        TicketTypographyStyle.compact => 24,
-      };
-
-  double get titleLetterSpacing => switch (typography) {
-        TicketTypographyStyle.system => 0,
-        TicketTypographyStyle.featured => 0.4,
-        TicketTypographyStyle.compact => -0.2,
-      };
-}
-
-/// Visual preview of the ticket (buyer view / mock image).
+/// Visual preview of the ticket (buyer view / shared image).
 class TicketSharePreview extends StatelessWidget {
   const TicketSharePreview({
     super.key,
     required this.ticket,
     required this.event,
     this.style = TicketVisualStyle.classic,
+    this.showQr = true,
   });
 
   final Ticket ticket;
   final Event event;
   final TicketVisualStyle style;
+  final bool showQr;
 
   @override
   Widget build(BuildContext context) {
@@ -208,6 +202,7 @@ class TicketSharePreview extends StatelessWidget {
       decoration: decoration,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -217,25 +212,35 @@ class TicketSharePreview extends StatelessWidget {
                   color: Colors.white70,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: style.typography == TicketTypographyStyle.compact ? 0.6 : 1.2,
+                  letterSpacing: style.typography == TicketTypographyStyle.compact
+                      ? 0.6
+                      : 1.2,
                 ),
               ),
               if (style.backgroundMode == TicketBackgroundMode.image) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
                     'FONDO EJEMPLO',
-                    style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
               const Spacer(),
-              StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
+              StatusBadge(
+                label: ticket.status.label,
+                tone: ticketStatusTone(ticket.status),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -262,7 +267,11 @@ class TicketSharePreview extends StatelessWidget {
                   children: [
                     const Text(
                       'TICKET',
-                      style: TextStyle(color: Colors.white54, fontSize: 10, letterSpacing: 1),
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                        letterSpacing: 1,
+                      ),
                     ),
                     Text(
                       '#${ticket.number}',
@@ -276,22 +285,40 @@ class TicketSharePreview extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Para: ${ticket.buyerName.trim()}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: style.accent, width: 2),
+              if (showQr)
+                Container(
+                  width: 72,
+                  height: 72,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: style.accent, width: 2),
+                  ),
+                  child: QrImageView(
+                    data: ticket.qrPayload,
+                    version: QrVersions.auto,
+                    backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: AppColors.text,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: AppColors.text,
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.qr_code_2, size: 56, color: AppColors.text),
-              ),
             ],
           ),
           const SizedBox(height: 12),

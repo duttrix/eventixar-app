@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/delete_collaborator_button.dart';
+import '../../shared/widgets/regenerate_access_button.dart';
 
 /// Organizer roster of validators + access sharing.
 ///
@@ -17,58 +19,93 @@ class ValidatorsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(eventId);
-    final validators = repo.validatorsForEvent(eventId);
+    final eventAsync = ref.watch(eventProvider(eventId));
+    final validatorsAsync = ref.watch(eventValidatorsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEditor(context, ref, eventName: event.name),
+        onPressed: eventAsync.hasValue
+            ? () => _showEditor(
+                  context,
+                  ref,
+                  eventName: eventAsync.requireValue.name,
+                )
+            : null,
         icon: const Icon(Icons.person_add_alt_1_outlined),
         label: const Text('Agregar'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-        children: [
-          Text(
-            'Cada validador recibe un acceso para leer el ticket o la tarjeta: en el retiro del producto o en la entrada del evento. Abre el link sin necesidad de cuenta.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          if (validators.isEmpty)
-            const Text('Todavía no hay validadores.', style: TextStyle(color: AppColors.textMuted))
-          else
-            for (final v in validators)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  title: Text(v.name),
-                  subtitle: Text(
-                    [
-                      v.phone.isEmpty ? 'Sin celular' : v.phone,
-                      if (v.notes.isNotEmpty) v.notes,
-                    ].join(' · '),
-                  ),
-                  onTap: () => _showEditor(context, ref, eventName: event.name, existing: v),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'Editar',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _showEditor(context, ref, eventName: event.name, existing: v),
-                      ),
-                      IconButton(
-                        tooltip: 'Compartir acceso',
-                        icon: const Icon(Icons.ios_share),
-                        onPressed: () => AccessShare.copy(context, v, eventName: event.name),
-                      ),
-                    ],
-                  ),
-                ),
+      body: validatorsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
+        data: (validators) {
+          final eventName = eventAsync.valueOrNull?.name ?? '';
+          final tokens =
+              ref.watch(eventAccessTokensProvider(eventId)).valueOrNull ??
+                  const <String, String>{};
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              Text(
+                'Cada validador recibe un acceso para leer el ticket o la tarjeta: en el retiro del producto o en la entrada del evento. Abre el link sin necesidad de cuenta.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
               ),
-        ],
+              const SizedBox(height: 16),
+              if (validators.isEmpty)
+                const Text(
+                  'Todavía no hay validadores.',
+                  style: TextStyle(color: AppColors.textMuted),
+                )
+              else
+                for (final validator in validators)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      title: Text(validator.name),
+                      subtitle: Text(
+                        [
+                          if (validator.phone.isNotEmpty) validator.phone,
+                          if (validator.notes.isNotEmpty) validator.notes,
+                        ].join(' · '),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Compartir acceso',
+                            onPressed: () => AccessShare.copy(
+                              context,
+                              validator,
+                              eventName: eventName,
+                              token: tokens[validator.id] ?? '',
+                            ),
+                            icon: const Icon(Icons.ios_share),
+                          ),
+                          RegenerateAccessButton(
+                            collaborator: validator,
+                            eventName: eventName,
+                            compact: true,
+                          ),
+                          DeleteCollaboratorButton(
+                            collaborator: validator,
+                            compact: true,
+                          ),
+                        ],
+                      ),
+                      onTap: () => _showEditor(
+                        context,
+                        ref,
+                        eventName: eventName,
+                        existing: validator,
+                      ),
+                    ),
+                  ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -157,7 +194,12 @@ class ValidatorsTab extends ConsumerWidget {
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
                 if (!context.mounted) return;
-                AccessShare.copy(context, v, eventName: eventName);
+                AccessShare.copy(
+                  context,
+                  v,
+                  eventName: eventName,
+                  token: v.token,
+                );
               } catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

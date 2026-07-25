@@ -5,10 +5,10 @@ enum CollaboratorRole { seller, validator, collector }
 
 extension CollaboratorRoleX on CollaboratorRole {
   String get label => switch (this) {
-        CollaboratorRole.seller => 'Vendedor',
-        CollaboratorRole.validator => 'Validador',
-        CollaboratorRole.collector => 'Recaudador',
-      };
+    CollaboratorRole.seller => 'Vendedor',
+    CollaboratorRole.validator => 'Validador',
+    CollaboratorRole.collector => 'Recaudador',
+  };
 
   String get firestoreValue => name;
 
@@ -20,6 +20,11 @@ extension CollaboratorRoleX on CollaboratorRole {
   }
 }
 
+String collaboratorShareUrl(String token) =>
+    'https://app.eventixar.com/join/$token';
+
+String collaboratorDeeplink(String token) => 'eventixar://join/$token';
+
 /// A seller, validator or collector slot on an event, accessed through a shareable deeplink token.
 class Collaborator {
   Collaborator({
@@ -28,7 +33,7 @@ class Collaborator {
     required this.role,
     required this.name,
     required this.phone,
-    required this.token,
+    this.token = '',
     this.notes = '',
     this.createdAt,
     this.updatedAt,
@@ -43,6 +48,10 @@ class Collaborator {
   String notes;
 
   /// Opaque token used in deeplinks: eventixar://join/{token}
+  ///
+  /// It is **not** stored on the collaborator document (portals can read those)
+  /// but in the organizer-only `access` subcollection, so it is empty unless
+  /// the repository explicitly loaded it.
   String token;
 
   DateTime? createdAt;
@@ -51,9 +60,9 @@ class Collaborator {
   /// Ticket number ranges assigned to this seller (empty for validators / collectors).
   final List<TicketRange> ranges;
 
-  String get deeplink => 'eventixar://join/$token';
+  String get deeplink => collaboratorDeeplink(token);
 
-  String get shareUrl => 'https://app.eventixar.com/join/$token';
+  String get shareUrl => collaboratorShareUrl(token);
 
   factory Collaborator.fromFirestore({
     required String id,
@@ -65,7 +74,9 @@ class Collaborator {
     if (rangesRaw is List) {
       for (final item in rangesRaw) {
         if (item is Map) {
-          ranges.add(TicketRange.fromFirestore(Map<String, dynamic>.from(item)));
+          ranges.add(
+            TicketRange.fromFirestore(Map<String, dynamic>.from(item)),
+          );
         }
       }
     }
@@ -77,7 +88,6 @@ class Collaborator {
       name: (data['name'] as String?) ?? '',
       phone: (data['phone'] as String?) ?? '',
       notes: (data['notes'] as String?) ?? '',
-      token: (data['token'] as String?) ?? '',
       createdAt: _readTimestamp(data['createdAt']),
       updatedAt: _readTimestamp(data['updatedAt']),
       ranges: ranges,
@@ -93,10 +103,9 @@ class Collaborator {
       'name': name,
       'phone': phone,
       'notes': notes,
-      'token': token,
       'ranges': ranges.map((r) => r.toFirestoreMap()).toList(),
-      if (createdAtValue != null) 'createdAt': createdAtValue,
-      if (updatedAtValue != null) 'updatedAt': updatedAtValue,
+      'createdAt': ?createdAtValue,
+      'updatedAt': ?updatedAtValue,
     };
   }
 
@@ -137,11 +146,6 @@ class TicketRange {
   }
 
   Map<String, dynamic> toFirestoreMap() {
-    return {
-      'id': id,
-      'from': from,
-      'to': to,
-      'date': Timestamp.fromDate(date),
-    };
+    return {'id': id, 'from': from, 'to': to, 'date': Timestamp.fromDate(date)};
   }
 }

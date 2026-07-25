@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'ticket_design.dart';
+
 /// Lifecycle of an event owned by a registered organizer.
 enum EventStatus {
   /// Created but payment not completed yet.
@@ -111,6 +113,7 @@ class Event {
     this.createdAt,
     this.updatedAt,
     this.ticketsGenerated = false,
+    this.ticketDesign = TicketVisualStyle.classic,
   });
 
   final String id;
@@ -148,6 +151,9 @@ class Event {
   /// True after ticket docs 1..ticketCount were created in Firestore.
   bool ticketsGenerated;
 
+  /// Visual style applied to shared ticket images for this event.
+  TicketVisualStyle ticketDesign;
+
   EventQuote get quote => EventQuote.calculate(ticketCount: ticketCount);
 
   bool get isPast {
@@ -167,8 +173,10 @@ class Event {
       ticketPrice: (data['ticketPrice'] as num?)?.toDouble() ?? 0,
       ticketCount: (data['ticketCount'] as num?)?.toInt() ?? 0,
       eventDate: _readDate(data['eventDate']) ?? DateTime.now(),
-      pickupFrom: _readTime(data['pickupFrom']) ?? const TimeOfDay(hour: 12, minute: 0),
-      pickupTo: _readTime(data['pickupTo']) ?? const TimeOfDay(hour: 15, minute: 0),
+      pickupFrom:
+          _readTime(data['pickupFrom']) ?? const TimeOfDay(hour: 12, minute: 0),
+      pickupTo:
+          _readTime(data['pickupTo']) ?? const TimeOfDay(hour: 15, minute: 0),
       pickupPlace: (data['pickupPlace'] as String?) ?? '',
       sellersCount: (data['sellersCount'] as num?)?.toInt() ?? 0,
       validatorsCount: (data['validatorsCount'] as num?)?.toInt() ?? 0,
@@ -179,6 +187,7 @@ class Event {
       createdAt: _readTimestamp(data['createdAt']),
       updatedAt: _readTimestamp(data['updatedAt']),
       ticketsGenerated: data['ticketsGenerated'] == true,
+      ticketDesign: TicketVisualStyle.fromFirestore(data['ticketDesign']),
     );
   }
 
@@ -206,15 +215,16 @@ class Event {
       'status': status.firestoreValue,
       'paid': paid,
       'ticketsGenerated': ticketsGenerated,
-      if (createdAtValue != null) 'createdAt': createdAtValue,
-      if (updatedAtValue != null) 'updatedAt': updatedAtValue,
+      'ticketDesign': ticketDesign.toFirestoreMap(),
+      'createdAt': ?createdAtValue,
+      'updatedAt': ?updatedAtValue,
     };
   }
 
   static Map<String, int> _timeToMap(TimeOfDay time) => {
-        'hour': time.hour,
-        'minute': time.minute,
-      };
+    'hour': time.hour,
+    'minute': time.minute,
+  };
 
   static TimeOfDay? _readTime(Object? value) {
     if (value is Map) {

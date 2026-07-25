@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/stat_card.dart';
 
@@ -17,17 +18,52 @@ class SummaryTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(eventId);
-    final aggregate = repo.aggregateForEvent(eventId);
-    final sellers = repo.sellersForEvent(eventId);
-    final validators = repo.validatorsForEvent(eventId);
-    final collectors = repo.collectorsForEvent(eventId);
-    final currency = NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
-    final finished = event.status == EventStatus.finished;
-    final hasPending = repo.hasPendingSettlementTickets(eventId);
+    final eventAsync = ref.watch(eventProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
+    final collabsAsync = ref.watch(eventCollaboratorsProvider(eventId));
 
-    final issued = repo.totalTicketsForEvent(eventId);
+    if (eventAsync.isLoading || ticketsAsync.isLoading || collabsAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (eventAsync.hasError) {
+      return Center(child: Text('No se pudo cargar: ${eventAsync.error}'));
+    }
+    if (ticketsAsync.hasError) {
+      return Center(child: Text('No se pudo cargar tickets: ${ticketsAsync.error}'));
+    }
+    if (collabsAsync.hasError) {
+      return Center(
+        child: Text('No se pudo cargar equipo: ${collabsAsync.error}'),
+      );
+    }
+
+    final event = eventAsync.requireValue;
+    final tickets = ticketsAsync.requireValue;
+    final collaborators = collabsAsync.requireValue;
+    final sellers =
+        collaborators.where((c) => c.role == CollaboratorRole.seller).toList();
+    final validators = collaborators
+        .where((c) => c.role == CollaboratorRole.validator)
+        .toList();
+    final collectors = collaborators
+        .where((c) => c.role == CollaboratorRole.collector)
+        .toList();
+
+    final aggregate = {for (final s in TicketStatus.values) s: 0};
+    for (final ticket in tickets) {
+      aggregate[ticket.status] = (aggregate[ticket.status] ?? 0) + 1;
+    }
+
+    final currency =
+        NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
+    final finished = event.status == EventStatus.finished;
+    final hasPending = tickets.any(
+      (t) =>
+          t.status == TicketStatus.withSeller ||
+          t.status == TicketStatus.collected,
+    );
+
+    final issued = tickets.isEmpty ? event.ticketCount : tickets.length;
     final assigned = aggregate.entries
         .where((e) => e.key != TicketStatus.unassigned)
         .fold(0, (sum, e) => sum + e.value);
@@ -35,7 +71,6 @@ class SummaryTab extends ConsumerWidget {
     final collected = aggregate[TicketStatus.collected] ?? 0;
     final settled = aggregate[TicketStatus.settled] ?? 0;
     final delivered = aggregate[TicketStatus.delivered] ?? 0;
-    final returned = aggregate[TicketStatus.returned] ?? 0;
     final soldCount = collected + settled + delivered;
     final estimatedRevenue = soldCount * event.ticketPrice;
 
@@ -70,7 +105,10 @@ class SummaryTab extends ConsumerWidget {
                     ),
                     Text(
                       'Según $soldCount tickets cobrados / rendidos / validados',
-                      style: const TextStyle(color: AppColors.accentText, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.accentText,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -90,10 +128,21 @@ class SummaryTab extends ConsumerWidget {
             StatCard(label: 'Emitidos', value: '$issued'),
             StatCard(label: 'Asignados', value: '$assigned'),
             StatCard(label: 'Sin asignar', value: '$unassigned'),
-            StatCard(label: 'Cobrados', value: '$collected', accentColor: AppColors.successText),
-            StatCard(label: 'Rendidos', value: '$settled', accentColor: AppColors.accentText),
-            StatCard(label: 'Validados', value: '$delivered', accentColor: AppColors.accentText),
-            StatCard(label: 'Devueltos', value: '$returned', accentColor: AppColors.dangerText),
+            StatCard(
+              label: 'Cobrados',
+              value: '$collected',
+              accentColor: AppColors.successText,
+            ),
+            StatCard(
+              label: 'Rendidos',
+              value: '$settled',
+              accentColor: AppColors.accentText,
+            ),
+            StatCard(
+              label: 'Validados',
+              value: '$delivered',
+              accentColor: AppColors.accentText,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -113,7 +162,7 @@ class SummaryTab extends ConsumerWidget {
                           children: [
                             Expanded(child: Text(seller.name)),
                             Text(
-                              '${repo.ticketsForSeller(seller.id).where((t) => t.status == TicketStatus.collected || t.status == TicketStatus.settled || t.status == TicketStatus.delivered).length} cobrados',
+                              '${tickets.where((t) => t.sellerId == seller.id && (t.status == TicketStatus.collected || t.status == TicketStatus.settled || t.status == TicketStatus.delivered)).length} cobrados',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w600,
@@ -142,7 +191,7 @@ class SummaryTab extends ConsumerWidget {
                           children: [
                             Expanded(child: Text(validator.name)),
                             Text(
-                              '${repo.ticketsValidatedBy(validator.id).length} validados',
+                              '${tickets.where((t) => t.validatorId == validator.id).length} validados',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w600,
@@ -167,7 +216,9 @@ class SummaryTab extends ConsumerWidget {
                     for (final collector in collectors)
                       Builder(
                         builder: (context) {
-                          final count = repo.ticketsSettledBy(collector.id).length;
+                          final count = tickets
+                              .where((t) => t.collectorId == collector.id)
+                              .length;
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
@@ -257,15 +308,8 @@ class SummaryTab extends ConsumerWidget {
 
     if (confirmed != true || !context.mounted) return;
 
-    final session = ref.read(sessionProvider);
     try {
-      if (session.usesFirestore) {
-        final updated =
-            await ref.read(eventRepositoryProvider).finishEvent(eventId);
-        ref.read(repositoryProvider).upsertEvent(updated);
-      } else {
-        ref.read(repositoryProvider).finishEvent(eventId);
-      }
+      await ref.read(eventRepositoryProvider).finishEvent(eventId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

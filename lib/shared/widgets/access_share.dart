@@ -10,17 +10,22 @@ import 'status_badge.dart';
 class AccessShare {
   AccessShare._();
 
-  static String messageFor(Collaborator person, {required String eventName}) {
+  static String messageFor(
+    Collaborator person, {
+    required String eventName,
+    required String token,
+  }) {
+    final url = collaboratorShareUrl(token);
     return switch (person.role) {
       CollaboratorRole.seller =>
         'Hola ${person.name}, te comparto tu acceso a los tickets de "$eventName". '
-            'Abrí el link y vas a ver tus tickets. No necesitás registrarte.\n\n${person.shareUrl}',
+            'Abrí el link y vas a ver tus tickets. No necesitás registrarte.\n\n$url',
       CollaboratorRole.validator =>
         'Hola ${person.name}, te comparto tu acceso de validador para "$eventName". '
-            'Abrí el link para leer tickets (retiro o entrada). No necesitás registrarte.\n\n${person.shareUrl}',
+            'Abrí el link para leer tickets (retiro o entrada). No necesitás registrarte.\n\n$url',
       CollaboratorRole.collector =>
         'Hola ${person.name}, te comparto tu acceso de recaudador para "$eventName". '
-            'Abrí el link para cobrar las rendiciones de los vendedores. No necesitás registrarte.\n\n${person.shareUrl}',
+            'Abrí el link para cobrar las rendiciones de los vendedores. No necesitás registrarte.\n\n$url',
     };
   }
 
@@ -28,8 +33,17 @@ class AccessShare {
     BuildContext context,
     Collaborator person, {
     required String eventName,
+    required String token,
   }) async {
-    final text = messageFor(person, eventName: eventName);
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Todavía no se pudo leer el link de acceso.'),
+        ),
+      );
+      return;
+    }
+    final text = messageFor(person, eventName: eventName, token: token);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

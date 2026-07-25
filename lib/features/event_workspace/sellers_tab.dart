@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/mock/providers.dart';
+import '../../data/models/ticket.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 
 /// Organizer roster of sellers. Share access only from seller detail.
@@ -15,8 +16,8 @@ class SellersTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final sellers = repo.sellersForEvent(eventId);
+    final sellersAsync = ref.watch(eventSellersProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -25,62 +26,100 @@ class SellersTab extends ConsumerWidget {
         icon: const Icon(Icons.person_add_alt_1_outlined),
         label: const Text('Agregar'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-        children: [
-          Text(
-            'Entrá a cada vendedor para asignar rangos y compartir el acceso.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          if (sellers.isEmpty)
-            const Text('Todavía no hay vendedores.', style: TextStyle(color: AppColors.textMuted))
-          else
-            for (final seller in sellers)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: InkWell(
-                  onTap: () => context.push('/event/$eventId/sellers/${seller.id}'),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+      body: sellersAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
+        data: (sellers) {
+          final tickets = ticketsAsync.valueOrNull ?? const <Ticket>[];
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              Text(
+                'Entrá a cada vendedor para asignar rangos y compartir el acceso.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              if (sellers.isEmpty)
+                const Text(
+                  'Todavía no hay vendedores.',
+                  style: TextStyle(color: AppColors.textMuted),
+                )
+              else
+                for (final seller in sellers)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () =>
+                          context.push('/event/$eventId/sellers/${seller.id}'),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(seller.name, style: Theme.of(context).textTheme.titleMedium),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    [
-                                      if (seller.ranges.isEmpty)
-                                        'Sin rangos'
-                                      else
-                                        'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
-                                      if (seller.notes.isNotEmpty) seller.notes,
-                                    ].join(' · '),
-                                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        seller.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        [
+                                          if (seller.ranges.isEmpty)
+                                            'Sin rangos'
+                                          else
+                                            'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
+                                          if (seller.notes.isNotEmpty)
+                                            seller.notes,
+                                        ].join(' · '),
+                                        style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: AppColors.textMuted,
+                                ),
+                              ],
                             ),
-                            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                            Builder(
+                              builder: (context) {
+                                final sellerTickets = tickets
+                                    .where((t) => t.sellerId == seller.id)
+                                    .toList();
+                                if (sellerTickets.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: TicketStatusSummary(
+                                    tickets: sellerTickets,
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
-                        if (repo.ticketsForSeller(seller.id).isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          TicketStatusSummary(tickets: repo.ticketsForSeller(seller.id)),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

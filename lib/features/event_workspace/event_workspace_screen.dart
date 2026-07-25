@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/app_shell.dart';
+import '../../shared/widgets/async_body.dart';
 import '../../shared/widgets/status_badge.dart';
 import 'event_data_tab.dart';
 import 'validators_tab.dart';
@@ -39,27 +40,13 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider);
-    if (session.usesFirestore) {
-      final async = ref.watch(ensureLocalEventProvider(widget.eventId));
-      return async.when(
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => Scaffold(
-          appBar: AppBar(title: const Text('Evento')),
-          body: Center(child: Text('No se pudo cargar el evento: $e')),
-        ),
-        data: (_) => _buildWorkspace(context),
-      );
-    }
-    return _buildWorkspace(context);
+    return AsyncBody(
+      value: ref.watch(eventProvider(widget.eventId)),
+      builder: (context, event) => _buildWorkspace(context, event),
+    );
   }
 
-  Widget _buildWorkspace(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(widget.eventId);
-
+  Widget _buildWorkspace(BuildContext context, Event event) {
     final Widget body = switch (_selected) {
       EventTab.summary => SummaryTab(eventId: widget.eventId),
       EventTab.tickets => TicketsTab(eventId: widget.eventId),

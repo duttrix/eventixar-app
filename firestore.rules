@@ -13,6 +13,26 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/events/$(eventId)).data.ownerId;
     }
 
+    // Ticket mutations allowed from collaborator portals (no Auth yet).
+    // Knowing the event id (via invite token) is the gate, so the rules also
+    // pin down which fields move and in which direction: assignment to a
+    // seller stays organizer-only and the life cycle can never run backwards.
+    function portalStatusTransition() {
+      return request.resource.data.status == resource.data.status
+        || (resource.data.status == 'withSeller'
+            && request.resource.data.status == 'collected')
+        || (resource.data.status == 'collected'
+            && request.resource.data.status in ['settled', 'delivered'])
+        || (resource.data.status == 'settled'
+            && request.resource.data.status == 'delivered');
+    }
+
+    function ticketPortalUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status', 'buyerName', 'validatorId', 'collectorId'])
+        && portalStatusTransition();
+    }
+
     // Organizer profile: only the signed-in user can read/write their own doc.
     match /users/{userId} {
       allow read, create, update: if isOwner(userId);
@@ -32,24 +52,33 @@ service cloud.firestore {
       allow delete: if false;
 
       match /tickets/{ticketId} {
-        allow create, update: if isSignedIn()
+        allow create: if isSignedIn()
           && eventOwnerId(eventId) == request.auth.uid;
-        // Temporary open read for portals; tighten when ticket ops land.
+        // Organizer full update, or portal update of operational fields only.
+        allow update: if (isSignedIn()
+            && eventOwnerId(eventId) == request.auth.uid)
+          || ticketPortalUpdate();
         allow get, list: if true;
         allow delete: if false;
       }
 
+      // Public profile of each collaborator. Holds no credentials: the invite
+      // token lives in /access, so portals can list peers safely.
       match /collaborators/{collaboratorId} {
-        allow create, update: if isSignedIn()
+        allow create, update, delete: if isSignedIn()
           && eventOwnerId(eventId) == request.auth.uid;
-        allow list: if isSignedIn()
+        allow get, list: if true;
+      }
+
+      // Invite tokens for the organizer's share links. Never public.
+      match /access/{collaboratorId} {
+        allow read, write: if isSignedIn()
           && eventOwnerId(eventId) == request.auth.uid;
-        allow get: if true;
-        allow delete: if false;
       }
     }
 
-    // Opaque invite tokens. Knowing the doc id is the credential.
+    // Opaque invite tokens. Knowing the doc id is the credential, so reads are
+    // per-document only: listing the collection would hand out every access.
     match /tokens/{token} {
       allow get: if true;
       allow list: if false;

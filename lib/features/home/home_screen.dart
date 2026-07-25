@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -30,44 +30,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
-    final email = session.userEmail;
+    final email = session.userEmail ?? '';
 
-    if (email == null) {
+    if (session.userUid == null) {
       return const Scaffold(body: Center(child: Text('Sesión no iniciada.')));
     }
 
-    if (session.usesFirestore) {
-      final asyncEvents = ref.watch(organizerEventsProvider);
-      return asyncEvents.when(
-        loading: () => Scaffold(
-          appBar: _appBar(context, email, displayName: null),
-          body: const Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => Scaffold(
-          appBar: _appBar(context, email, displayName: null),
-          body: Center(child: Text('Error al cargar eventos: $e')),
-        ),
-        data: (events) {
-          return _buildScaffold(
+    final displayName = session.displayName;
+    return ref.watch(organizerEventsProvider).when(
+          loading: () => Scaffold(
+            appBar: _appBar(context, email, displayName: displayName),
+            body: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Scaffold(
+            appBar: _appBar(context, email, displayName: displayName),
+            body: Center(child: Text('Error al cargar eventos: $e')),
+          ),
+          data: (events) => _buildScaffold(
             context,
             email: email,
-            displayName:
-                ref.read(repositoryProvider).userByEmail(email)?.displayName,
+            displayName: displayName,
             all: events,
-          );
-        },
-      );
-    }
-
-    final repo = ref.watch(repositoryProvider);
-    final user = repo.userByEmail(email);
-    final all = repo.eventsForOwner(email);
-    return _buildScaffold(
-      context,
-      email: email,
-      displayName: user?.displayName,
-      all: all,
-    );
+          ),
+        );
   }
 
   PreferredSizeWidget _appBar(

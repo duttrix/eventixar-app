@@ -3,35 +3,165 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
-import '../../data/mock/providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/delete_collaborator_button.dart';
+import '../../shared/widgets/regenerate_access_button.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-/// Seller detail: assign ticket ranges + share access + status breakdown.
-class SellerDetailScreen extends ConsumerWidget {
-  const SellerDetailScreen({super.key, required this.eventId, required this.sellerId});
+/// Seller detail: assign ranges, share access, return unsold tickets to the pool.
+class SellerDetailScreen extends ConsumerStatefulWidget {
+  const SellerDetailScreen({
+    super.key,
+    required this.eventId,
+    required this.sellerId,
+  });
 
   final String eventId;
   final String sellerId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final seller = repo.collaboratorById(sellerId);
-    final event = repo.eventById(eventId);
-    final tickets = repo.ticketsForSeller(sellerId)..sort((a, b) => a.number.compareTo(b.number));
+  ConsumerState<SellerDetailScreen> createState() => _SellerDetailScreenState();
+}
+
+class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
+  final Set<String> _returnIds = {};
+  bool _returning = false;
+
+  String get eventId => widget.eventId;
+  String get sellerId => widget.sellerId;
+
+  Future<void> _returnSelected(Event event) async {
+    final ids = _returnIds.toList(growable: false);
+    if (ids.isEmpty || _returning) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Devolver tickets'),
+        content: Text(
+          'Vas a liberar ${ids.length} ticket${ids.length == 1 ? '' : 's'} '
+          'sin vender. Vuelven a “Sin asignar” y los podés dar a otro vendedor.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Devolver'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _returning = true);
+    try {
+      await returnTicketsToPoolAction(
+        ref,
+        eventId: eventId,
+        ticketIds: ids,
+      );
+      if (!mounted) return;
+      setState(() => _returnIds.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${ids.length} ticket${ids.length == 1 ? '' : 's'} '
+            'vuelve${ids.length == 1 ? '' : 'n'} al pool sin asignar.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo devolver: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _returning = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventAsync = ref.watch(eventProvider(eventId));
+    final collabsAsync = ref.watch(eventCollaboratorsProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
+
+    if (eventAsync.isLoading ||
+        collabsAsync.isLoading ||
+        ticketsAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (eventAsync.hasError || collabsAsync.hasError || ticketsAsync.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Vendedor')),
+        body: Center(
+          child: Text(
+            '${eventAsync.error ?? collabsAsync.error ?? ticketsAsync.error}',
+          ),
+        ),
+      );
+    }
+
+    final event = eventAsync.requireValue;
+    final finished = event.status == EventStatus.finished;
+    final seller = collabsAsync.requireValue.firstWhere(
+      (c) => c.id == sellerId,
+      orElse: () => throw StateError('Vendedor no encontrado'),
+    );
+    final tickets = ticketsAsync.requireValue
+        .where((t) => t.sellerId == sellerId)
+        .toList()
+      ..sort((a, b) => a.number.compareTo(b.number));
+    final returnable = tickets
+        .where((t) => t.status == TicketStatus.withSeller)
+        .toList(growable: false);
     final dateFormat = DateFormat('dd/MM/yyyy');
+    final allTickets = ticketsAsync.requireValue;
+    final token =
+        ref.watch(eventAccessTokensProvider(eventId)).valueOrNull?[sellerId] ??
+            '';
+
+    final selectedReturnable = _returnIds
+        .where((id) => returnable.any((t) => t.id == id))
+        .toSet();
 
     return Scaffold(
       appBar: AppBar(title: Text(seller.name)),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddAssignmentDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Asignar rango'),
-      ),
+      floatingActionButton: finished
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddAssignmentDialog(context, allTickets),
+              icon: const Icon(Icons.add),
+              label: const Text('Asignar rango'),
+            ),
+      bottomNavigationBar: !finished && selectedReturnable.isNotEmpty
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton.icon(
+                  onPressed: _returning ? null : () => _returnSelected(event),
+                  icon: _returning
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.undo),
+                  label: Text(
+                    'Devolver al pool (${selectedReturnable.length})',
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
@@ -40,7 +170,7 @@ class SellerDetailScreen extends ConsumerWidget {
             trailing: IconButton(
               tooltip: 'Editar',
               icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, ref, seller),
+              onPressed: () => _showEditDialog(context, seller),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -50,12 +180,18 @@ class SellerDetailScreen extends ConsumerWidget {
               children: [
                 Text(seller.name, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
-                Text('Celular: ${seller.phone.isEmpty ? 'Sin celular' : seller.phone}'),
+                Text(
+                  'Celular: ${seller.phone.isEmpty ? 'Sin celular' : seller.phone}',
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  seller.notes.isEmpty ? 'Notas: sin cargar' : 'Notas: ${seller.notes}',
+                  seller.notes.isEmpty
+                      ? 'Notas: sin cargar'
+                      : 'Notas: ${seller.notes}',
                   style: TextStyle(
-                    color: seller.notes.isEmpty ? AppColors.textMuted : AppColors.textSecondary,
+                    color: seller.notes.isEmpty
+                        ? AppColors.textMuted
+                        : AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -64,12 +200,32 @@ class SellerDetailScreen extends ConsumerWidget {
                   style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
-                SelectableText(seller.shareUrl, style: const TextStyle(fontSize: 13, color: AppColors.accent)),
+                SelectableText(
+                  token.isEmpty
+                      ? 'Generando link…'
+                      : collaboratorShareUrl(token),
+                  style: const TextStyle(fontSize: 13, color: AppColors.accent),
+                ),
                 const SizedBox(height: 10),
                 FilledButton.icon(
-                  onPressed: () => AccessShare.copy(context, seller, eventName: event.name),
+                  onPressed: () => AccessShare.copy(
+                    context,
+                    seller,
+                    eventName: event.name,
+                    token: token,
+                  ),
                   icon: const Icon(Icons.ios_share),
                   label: const Text('Compartir acceso (WhatsApp)'),
+                ),
+                RegenerateAccessButton(
+                  collaborator: seller,
+                  eventName: event.name,
+                ),
+                DeleteCollaboratorButton(
+                  collaborator: seller,
+                  onDeleted: () {
+                    if (context.mounted) Navigator.of(context).maybePop();
+                  },
                 ),
               ],
             ),
@@ -100,67 +256,129 @@ class SellerDetailScreen extends ConsumerWidget {
                       ],
                       rows: [
                         for (final range in seller.ranges)
-                          DataRow(cells: [
-                            DataCell(Text(range.label)),
-                            DataCell(Text('${range.count}')),
-                            DataCell(Text(dateFormat.format(range.date))),
-                          ]),
+                          DataRow(
+                            cells: [
+                              DataCell(Text(range.label)),
+                              DataCell(Text('${range.count}')),
+                              DataCell(Text(dateFormat.format(range.date))),
+                            ],
+                          ),
                       ],
                     ),
                   ),
           ),
           if (tickets.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text('Detalle ticket por ticket', style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Detalle ticket por ticket',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (!finished && returnable.isNotEmpty) ...[
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _returnIds
+                        ..clear()
+                        ..addAll(returnable.map((t) => t.id));
+                    }),
+                    child: const Text('Todos en poder'),
+                  ),
+                  TextButton(
+                    onPressed: selectedReturnable.isEmpty
+                        ? null
+                        : () => setState(_returnIds.clear),
+                    child: const Text('Ninguno'),
+                  ),
+                ],
+              ],
+            ),
+            if (!finished && returnable.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'Seleccioná tickets “En poder del vendedor” para devolverlos al pool.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 10),
             for (final ticket in tickets)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: ticketStatusBg(ticket.status),
+                child: Material(
+                  color: ticketStatusBg(ticket.status),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Ticket #${ticket.number}',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            if (ticket.buyerName.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                'Para: ${ticket.buyerName}',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                            if (ticket.collectorId != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                'Recaudó: ${repo.collaboratorById(ticket.collectorId!).name}',
-                                style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ],
+                    onTap: finished || ticket.status != TicketStatus.withSeller
+                        ? null
+                        : () => setState(() {
+                              if (_returnIds.contains(ticket.id)) {
+                                _returnIds.remove(ticket.id);
+                              } else {
+                                _returnIds.add(ticket.id);
+                              }
+                            }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selectedReturnable.contains(ticket.id)
+                              ? AppColors.accent
+                              : AppColors.border,
+                          width: selectedReturnable.contains(ticket.id) ? 1.5 : 1,
                         ),
                       ),
-                      StatusBadge(
-                        label: ticket.status.label,
-                        tone: ticketStatusTone(ticket.status),
+                      child: Row(
+                        children: [
+                          if (!finished &&
+                              ticket.status == TicketStatus.withSeller)
+                            Checkbox(
+                              value: selectedReturnable.contains(ticket.id),
+                              onChanged: (_) => setState(() {
+                                if (_returnIds.contains(ticket.id)) {
+                                  _returnIds.remove(ticket.id);
+                                } else {
+                                  _returnIds.add(ticket.id);
+                                }
+                              }),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Ticket #${ticket.number}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (ticket.buyerName.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Para: ${ticket.buyerName}',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          StatusBadge(
+                            label: ticket.status.label,
+                            tone: ticketStatusTone(ticket.status),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -170,7 +388,7 @@ class SellerDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditDialog(BuildContext context, WidgetRef ref, Collaborator seller) {
+  void _showEditDialog(BuildContext context, Collaborator seller) {
     final nameController = TextEditingController(text: seller.name);
     final phoneController = TextEditingController(text: seller.phone);
     final notesController = TextEditingController(text: seller.notes);
@@ -183,12 +401,16 @@ class SellerDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
+                decoration:
+                    const InputDecoration(labelText: 'Celular (WhatsApp)'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -203,21 +425,35 @@ class SellerDetailScreen extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
-              ref.read(repositoryProvider).updateCollaborator(
-                    seller.id,
-                    name: name,
-                    phone: phoneController.text.trim(),
-                    notes: notesController.text.trim(),
-                  );
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Vendedor actualizado.')),
-              );
+              try {
+                await saveCollaborator(
+                  ref,
+                  eventId: eventId,
+                  collaboratorId: seller.id,
+                  name: name,
+                  phone: phoneController.text.trim(),
+                  notes: notesController.text.trim(),
+                );
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Vendedor actualizado.')),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$e')),
+                );
+              }
             },
             child: const Text('Guardar'),
           ),
@@ -226,9 +462,16 @@ class SellerDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddAssignmentDialog(BuildContext context, WidgetRef ref) {
-    final repo = ref.read(repositoryProvider);
-    final nextNumber = repo.nextAvailableTicketNumber(eventId);
+  void _showAddAssignmentDialog(
+    BuildContext context,
+    List<Ticket> allTickets,
+  ) {
+    final unassigned = allTickets
+        .where((t) => t.status == TicketStatus.unassigned)
+        .map((t) => t.number)
+        .toList()
+      ..sort();
+    final nextNumber = unassigned.isEmpty ? 1 : unassigned.first;
     final fromController = TextEditingController(text: '$nextNumber');
     final toController = TextEditingController();
 
@@ -239,6 +482,13 @@ class SellerDetailScreen extends ConsumerWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Text(
+              unassigned.isEmpty
+                  ? 'No hay tickets sin asignar.'
+                  : '${unassigned.length} disponibles · próximo: #$nextNumber',
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: fromController,
               keyboardType: TextInputType.number,
@@ -256,15 +506,47 @@ class SellerDetailScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-            onPressed: () {
-              final from = int.tryParse(fromController.text.trim());
-              final to = int.tryParse(toController.text.trim());
-              if (from == null || to == null || to < from) return;
-              ref.read(repositoryProvider).assignTicketRange(sellerId: sellerId, from: from, to: to);
-              Navigator.pop(dialogContext);
-            },
+            onPressed: unassigned.isEmpty
+                ? null
+                : () async {
+                    final from = int.tryParse(fromController.text.trim());
+                    final to = int.tryParse(toController.text.trim());
+                    if (from == null || to == null || to < from) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Rango inválido. Revisá "desde" y "hasta".',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      await assignTicketRangeAction(
+                        ref,
+                        eventId: eventId,
+                        sellerId: sellerId,
+                        from: from,
+                        to: to,
+                      );
+                      if (!dialogContext.mounted) return;
+                      Navigator.pop(dialogContext);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Asignados #$from a #$to.')),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$e')),
+                      );
+                    }
+                  },
             child: const Text('Asignar'),
           ),
         ],

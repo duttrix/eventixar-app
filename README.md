@@ -1,15 +1,16 @@
 # Eventixar (App)
 
-App Flutter del circuito simplificado: **organizador crea y paga un evento; vendedores y validadores entran por deeplink**. Gestión de **tickets** por rangos, cobros y validación.
+App Flutter: **organizador crea y habilita un evento; vendedores, validadores y recaudadores entran por deeplink**. Gestión de **tickets** por rangos, cobros, rendición y validación. Backend: **Firestore** + auth Google.
 
-Ver el documento de producto: [CIRCUITO.md](./CIRCUITO.md).
+Ver el documento de producto: [WORKFLOW.md](./WORKFLOW.md).
 
 ## Formato de tickets
 
-- **Compartir un ticket** → imagen (WhatsApp / share nativo)
+- **Compartir un ticket** → imagen PNG (WhatsApp)
 - **Imprimir lote** → PDF
+- **Diseño** → guardado en el evento
 
-Detalle y justificación en [CIRCUITO.md](./CIRCUITO.md) (sección *Formato de los tickets*).
+Detalle en [WORKFLOW.md](./WORKFLOW.md).
 
 ## Correr
 
@@ -18,9 +19,9 @@ flutter pub get
 flutter run
 ```
 
-## Demo
+## Flujo rápido
 
-- Login → **Entrar como organizador**
-- Crear evento (datos → equipo → cotización → pago simulado)
-- En el evento: alta de vendedores/validadores, asignar rangos de tickets, copiar links
-- Desde login también: simular deeplink vendedor / validador
+- Login → **Continuar con Google**
+- Crear evento → cotización → **Confirmar y habilitar** (pago real pendiente)
+- En el evento: alta de equipo, asignar rangos, compartir links
+- Colaboradores: abrir el link `/join/{token}` (sin cuenta)

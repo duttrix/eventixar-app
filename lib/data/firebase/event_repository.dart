@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../models/collaborator.dart';
 import '../models/event.dart';
 import '../models/ticket.dart';
+import '../models/ticket_design.dart';
 
 /// Firestore access for organizer events + ticket bootstrap.
 class EventRepository {
@@ -151,6 +153,229 @@ class EventRepository {
         .toList();
   }
 
+  Stream<List<Ticket>> watchTickets(String eventId) {
+    return _tickets(eventId).orderBy('number').snapshots().map(
+          (snap) => snap.docs
+              .map(
+                (doc) => Ticket.fromFirestore(
+                  id: doc.id,
+                  eventId: eventId,
+                  data: doc.data(),
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  Stream<Event?> watchById(String eventId) {
+    return _events.doc(eventId).snapshots().map((snap) {
+      final data = snap.data();
+      if (!snap.exists || data == null) return null;
+      return Event.fromFirestore(snap.id, data);
+    });
+  }
+
+  /// Assigns tickets [from]..[to] to [sellerId]: marks them `withSeller` and
+  /// records the range on the collaborator doc. Tickets must be `unassigned`.
+  Future<TicketRange> assignTicketRange({
+    required String eventId,
+    required String sellerId,
+    required int from,
+    required int to,
+  }) async {
+    if (to < from) {
+      throw ArgumentError('El rango es inválido (hasta < desde).');
+    }
+
+    final snap = await _tickets(eventId)
+        .where('number', isGreaterThanOrEqualTo: from)
+        .where('number', isLessThanOrEqualTo: to)
+        .get();
+
+    final expected = to - from + 1;
+    if (snap.docs.length != expected) {
+      throw StateError(
+        'Algunos tickets del rango no existen. Revisá la cantidad del evento.',
+      );
+    }
+
+    for (final doc in snap.docs) {
+      final status = doc.data()['status'];
+      if (status != TicketStatus.unassigned.firestoreValue) {
+        throw StateError(
+          'El ticket #${doc.data()['number']} ya está asignado.',
+        );
+      }
+    }
+
+    final range = TicketRange(
+      id: 'rng_${DateTime.now().millisecondsSinceEpoch}',
+      from: from,
+      to: to,
+      date: DateTime.now(),
+    );
+
+    // Chunk ticket updates to stay under Firestore's batch limit.
+    const chunk = 400;
+    for (var i = 0; i < snap.docs.length; i += chunk) {
+      final batch = _firestore.batch();
+      final slice = snap.docs.skip(i).take(chunk);
+      for (final doc in slice) {
+        batch.update(doc.reference, {
+          'status': TicketStatus.withSeller.firestoreValue,
+          'sellerId': sellerId,
+        });
+      }
+      await batch.commit();
+    }
+
+    await _events.doc(eventId).collection('collaborators').doc(sellerId).update({
+      'ranges': FieldValue.arrayUnion([range.toFirestoreMap()]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    return range;
+  }
+
+  Future<void> updateTicketBuyer({
+    required String eventId,
+    required String ticketId,
+    required String buyerName,
+  }) async {
+    await _tickets(eventId).doc(ticketId).update({
+      'buyerName': buyerName.trim(),
+    });
+  }
+
+  Future<void> updateTicketsBuyer({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required String buyerName,
+  }) async {
+    final name = buyerName.trim();
+    const chunk = 400;
+    final ids = ticketIds.toList(growable: false);
+    for (var i = 0; i < ids.length; i += chunk) {
+      final batch = _firestore.batch();
+      for (final id in ids.skip(i).take(chunk)) {
+        batch.update(_tickets(eventId).doc(id), {'buyerName': name});
+      }
+      await batch.commit();
+    }
+  }
+
+  /// Seller marks tickets as collected (`withSeller` → `collected`).
+  Future<void> markTicketsCollected({
+    required String eventId,
+    required Iterable<String> ticketIds,
+  }) async {
+    await _updateTicketStatuses(
+      eventId: eventId,
+      ticketIds: ticketIds,
+      expectedStatuses: {TicketStatus.withSeller},
+      newStatus: TicketStatus.collected,
+    );
+  }
+
+  /// Organizer returns unsold tickets to the free pool (`withSeller` →
+  /// `unassigned`, clears seller + buyer). Reassignment uses the same rules.
+  Future<void> returnTicketsToPool({
+    required String eventId,
+    required Iterable<String> ticketIds,
+  }) async {
+    await _updateTicketStatuses(
+      eventId: eventId,
+      ticketIds: ticketIds,
+      expectedStatuses: {TicketStatus.withSeller},
+      newStatus: TicketStatus.unassigned,
+      extraFields: {
+        'sellerId': null,
+        'buyerName': '',
+      },
+    );
+  }
+
+  /// Validator marks a ticket as delivered (`collected`/`settled` → `delivered`).
+  Future<void> markTicketDelivered({
+    required String eventId,
+    required String ticketId,
+    required String validatorId,
+  }) async {
+    final ref = _tickets(eventId).doc(ticketId);
+    final snap = await ref.get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Ticket no encontrado.');
+    }
+    final status = TicketStatusX.fromFirestore(data['status'] as String?);
+    if (status == TicketStatus.delivered) {
+      throw StateError('Este ticket ya fue validado.');
+    }
+    if (status != TicketStatus.collected && status != TicketStatus.settled) {
+      throw StateError(
+        'El ticket no figura como cobrado. Revisá con el organizador.',
+      );
+    }
+    await ref.update({
+      'status': TicketStatus.delivered.firestoreValue,
+      'validatorId': validatorId,
+    });
+  }
+
+  /// Collector settles tickets (`collected` → `settled`).
+  Future<void> markTicketsSettled({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required String collectorId,
+  }) async {
+    await _updateTicketStatuses(
+      eventId: eventId,
+      ticketIds: ticketIds,
+      expectedStatuses: {TicketStatus.collected},
+      newStatus: TicketStatus.settled,
+      extraFields: {'collectorId': collectorId},
+    );
+  }
+
+  Future<void> _updateTicketStatuses({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required Set<TicketStatus> expectedStatuses,
+    required TicketStatus newStatus,
+    Map<String, Object?> extraFields = const {},
+  }) async {
+    final ids = ticketIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    const chunk = 400;
+    for (var i = 0; i < ids.length; i += chunk) {
+      final slice = ids.skip(i).take(chunk).toList(growable: false);
+      final snaps = await Future.wait(
+        slice.map((id) => _tickets(eventId).doc(id).get()),
+      );
+
+      final batch = _firestore.batch();
+      for (var j = 0; j < slice.length; j++) {
+        final snap = snaps[j];
+        final data = snap.data();
+        if (!snap.exists || data == null) {
+          throw StateError('Ticket ${slice[j]} no encontrado.');
+        }
+        final status = TicketStatusX.fromFirestore(data['status'] as String?);
+        if (!expectedStatuses.contains(status)) {
+          throw StateError(
+            'Ticket #${data['number']} no está en el estado esperado.',
+          );
+        }
+        batch.update(snap.reference, {
+          'status': newStatus.firestoreValue,
+          ...extraFields,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   Future<Event> updateEvent(
     String eventId, {
     required String name,
@@ -174,6 +399,19 @@ class EventRepository {
       'pickupTo': {'hour': pickupTo.hour, 'minute': pickupTo.minute},
       'pickupPlace': pickupPlace,
       'notes': notes,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    final updated = await getById(eventId);
+    if (updated == null) throw StateError('Evento $eventId no encontrado.');
+    return updated;
+  }
+
+  Future<Event> updateTicketDesign(
+    String eventId,
+    TicketVisualStyle design,
+  ) async {
+    await _events.doc(eventId).update({
+      'ticketDesign': design.toFirestoreMap(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     final updated = await getById(eventId);

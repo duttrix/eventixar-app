@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Multi-step create-event flow: datos → equipo → cotización → pago.
@@ -74,48 +74,27 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   Future<void> _submitAndPay() async {
     final session = ref.read(sessionProvider);
-    final email = session.userEmail;
-    if (email == null || _eventDate == null || _submitting) return;
+    final uid = session.userUid;
+    if (uid == null || _eventDate == null || _submitting) return;
 
     setState(() => _submitting = true);
     try {
-      final Event event;
-      if (session.usesFirestore && session.userUid != null) {
-        event = await ref.read(eventRepositoryProvider).createEvent(
-              ownerId: session.userUid!,
-              ownerEmail: email,
-              name: _nameController.text.trim(),
-              product: _product,
-              ticketPrice: double.tryParse(_priceController.text) ?? 0,
-              ticketCount: int.tryParse(_countController.text) ?? 0,
-              eventDate: _eventDate!,
-              pickupFrom: _pickupFrom,
-              pickupTo: _pickupTo,
-              pickupPlace: _placeController.text.trim(),
-              sellersCount: _sellersCount,
-              validatorsCount: _validatorsCount,
-              collectorsCount: _collectorsCount,
-              notes: _notesController.text.trim(),
-            );
-        ref.read(repositoryProvider).upsertEvent(event);
-      } else {
-        event = ref.read(repositoryProvider).createEvent(
-              ownerId: session.userUid ?? 'demo-organizer',
-              ownerEmail: email,
-              name: _nameController.text.trim(),
-              product: _product,
-              ticketPrice: double.tryParse(_priceController.text) ?? 0,
-              ticketCount: int.tryParse(_countController.text) ?? 0,
-              eventDate: _eventDate!,
-              pickupFrom: _pickupFrom,
-              pickupTo: _pickupTo,
-              pickupPlace: _placeController.text.trim(),
-              sellersCount: _sellersCount,
-              validatorsCount: _validatorsCount,
-              collectorsCount: _collectorsCount,
-              notes: _notesController.text.trim(),
-            );
-      }
+      final event = await ref.read(eventRepositoryProvider).createEvent(
+            ownerId: uid,
+            ownerEmail: session.userEmail ?? '',
+            name: _nameController.text.trim(),
+            product: _product,
+            ticketPrice: double.tryParse(_priceController.text) ?? 0,
+            ticketCount: int.tryParse(_countController.text) ?? 0,
+            eventDate: _eventDate!,
+            pickupFrom: _pickupFrom,
+            pickupTo: _pickupTo,
+            pickupPlace: _placeController.text.trim(),
+            sellersCount: _sellersCount,
+            validatorsCount: _validatorsCount,
+            collectorsCount: _collectorsCount,
+            notes: _notesController.text.trim(),
+          );
 
       if (!mounted) return;
       context.go('/create-event/pay/${event.id}');

@@ -63,8 +63,10 @@ class Ticket {
   /// Who the ticket was sold / given to (filled when sharing / collecting).
   String buyerName;
 
-  /// Public deeplink the buyer opens to see this ticket.
-  String get shareUrl => 'https://app.eventixar.com/ticket/$id';
+  /// Payload encoded in the ticket QR for validators (not a buyer deeplink).
+  ///
+  /// Buyers receive the ticket as an image; this string is only for scanning.
+  String get qrPayload => 'evx:$eventId:$id';
 
   factory Ticket.fromFirestore({
     required String id,

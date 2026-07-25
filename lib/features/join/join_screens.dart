@@ -6,8 +6,10 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
+import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/qr_scan_screen.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 import '../../shared/widgets/ticket_share.dart';
@@ -34,7 +36,9 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
 
   Future<void> _resolve() async {
     try {
-      final collab = await resolveCollaboratorToken(ref, widget.token);
+      final collab = await ref
+          .read(collaboratorRepositoryProvider)
+          .findByToken(widget.token);
       if (!mounted) return;
       if (collab == null) {
         setState(() {
@@ -43,7 +47,10 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
         });
         return;
       }
-      ref.read(sessionProvider.notifier).enterAsCollaborator(widget.token);
+      await ref
+          .read(sessionProvider.notifier)
+          .enterAsCollaborator(widget.token, role: collab.role);
+      if (!mounted) return;
       final path = switch (collab.role) {
         CollaboratorRole.seller => '/seller/${widget.token}',
         CollaboratorRole.validator => '/validator/${widget.token}',
@@ -92,22 +99,48 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
-    final seller = repo.collaboratorByToken(widget.token);
-    if (seller == null || seller.role != CollaboratorRole.seller) {
-      return const Scaffold(body: Center(child: Text('Vendedor no encontrado.')));
+    final sellerAsync = ref.watch(collaboratorByTokenProvider(widget.token));
+    if (sellerAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final event = repo.eventById(seller.eventId);
-    final tickets = repo.ticketsForSeller(seller.id)
+    final seller = sellerAsync.valueOrNull;
+    if (seller == null || seller.role != CollaboratorRole.seller) {
+      return const Scaffold(
+        body: Center(child: Text('Vendedor no encontrado.')),
+      );
+    }
+
+    final eventAsync = ref.watch(eventProvider(seller.eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(seller.eventId));
+
+    if (eventAsync.isLoading || ticketsAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (eventAsync.hasError || ticketsAsync.hasError) {
+      return Scaffold(
+        body: Center(
+          child: Text('${eventAsync.error ?? ticketsAsync.error}'),
+        ),
+      );
+    }
+
+    final event = eventAsync.requireValue;
+    final tickets = ticketsAsync.requireValue
+        .where((t) => t.sellerId == seller.id)
+        .toList()
       ..sort((a, b) {
-        final byStatus = _sellerTicketSortRank(a.status).compareTo(_sellerTicketSortRank(b.status));
+        final byStatus = _sellerTicketSortRank(
+          a.status,
+        ).compareTo(_sellerTicketSortRank(b.status));
         if (byStatus != 0) return byStatus;
         return a.number.compareTo(b.number);
       });
-    final selectableTickets =
-        tickets.where((t) => t.status == TicketStatus.withSeller).toList(growable: false);
-    final selectedTickets =
-        selectableTickets.where((t) => _selectedIds.contains(t.id)).toList(growable: false);
+    final selectableTickets = tickets
+        .where((t) => t.status == TicketStatus.withSeller)
+        .toList(growable: false);
+    final selectedTickets = selectableTickets
+        .where((t) => _selectedIds.contains(t.id))
+        .toList(growable: false);
     final hasSelection = selectedTickets.isNotEmpty;
 
     return Scaffold(
@@ -132,7 +165,10 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Tus tickets para vender', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Tus tickets para vender',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   seller.ranges.isEmpty
@@ -141,9 +177,10 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Seleccioná tickets sin cobrar. Al tocar Imprimir lote o Links se pide '
-                  'destinatario / detalle y se comparte.',
+                  const Text(
+                  'Seleccioná tickets sin cobrar. Compartir pide destinatario y '
+                  'WhatsApp, genera una imagen por ticket y abre el envío. '
+                  'Imprimir lote arma el PDF.',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 ),
                 if (tickets.isNotEmpty) ...[
@@ -161,15 +198,17 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                   onPressed: !hasSelection
                       ? null
                       : () => _prepareAndContinue(
-                            context,
-                            tickets: selectedTickets,
-                            event: event,
-                            sellerName: seller.name,
-                            action: _SharePrintAction.printPdf,
-                          ),
+                          context,
+                          tickets: selectedTickets,
+                          event: event,
+                          sellerName: seller.name,
+                          action: _SharePrintAction.printPdf,
+                        ),
                   icon: const Icon(Icons.print_outlined),
                   label: Text(
-                    hasSelection ? 'Imprimir lote (${selectedTickets.length})' : 'Imprimir lote',
+                    hasSelection
+                        ? 'Imprimir lote (${selectedTickets.length})'
+                        : 'Imprimir lote',
                   ),
                 ),
               ),
@@ -179,15 +218,17 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                   onPressed: !hasSelection
                       ? null
                       : () => _prepareAndContinue(
-                            context,
-                            tickets: selectedTickets,
-                            event: event,
-                            sellerName: seller.name,
-                            action: _SharePrintAction.links,
-                          ),
-                  icon: const Icon(Icons.link),
+                          context,
+                          tickets: selectedTickets,
+                          event: event,
+                          sellerName: seller.name,
+                          action: _SharePrintAction.whatsapp,
+                        ),
+                  icon: const Icon(Icons.chat_outlined),
                   label: Text(
-                    hasSelection ? 'Links (${selectedTickets.length})' : 'Links',
+                    hasSelection
+                        ? 'WhatsApp (${selectedTickets.length})'
+                        : 'WhatsApp',
                   ),
                 ),
               ),
@@ -212,7 +253,9 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                   child: const Text('Todos'),
                 ),
                 TextButton(
-                  onPressed: hasSelection ? () => setState(_selectedIds.clear) : null,
+                  onPressed: hasSelection
+                      ? () => setState(_selectedIds.clear)
+                      : null,
                   child: const Text('Ninguno'),
                 ),
               ],
@@ -231,23 +274,34 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                 child: _SellerTicketCard(
                   ticket: ticket,
                   event: event,
-                  selected: ticket.status == TicketStatus.withSeller && _selectedIds.contains(ticket.id),
+                  selected:
+                      ticket.status == TicketStatus.withSeller &&
+                      _selectedIds.contains(ticket.id),
                   selectionEnabled: ticket.status == TicketStatus.withSeller,
                   onToggleSelect: ticket.status == TicketStatus.withSeller
                       ? () => setState(() {
-                            if (_selectedIds.contains(ticket.id)) {
-                              _selectedIds.remove(ticket.id);
-                            } else {
-                              _selectedIds.add(ticket.id);
-                            }
-                          })
+                          if (_selectedIds.contains(ticket.id)) {
+                            _selectedIds.remove(ticket.id);
+                          } else {
+                            _selectedIds.add(ticket.id);
+                          }
+                        })
                       : null,
-                  onMarkCollected: () {
-                    ref.read(repositoryProvider).updateTicketStatus(
-                          ticket.id,
-                          TicketStatus.collected,
-                        );
-                    setState(() => _selectedIds.remove(ticket.id));
+                  onMarkCollected: () async {
+                    try {
+                      await collectTicketsAction(
+                        ref,
+                        eventId: event.id,
+                        ticketIds: [ticket.id],
+                      );
+                      if (!mounted) return;
+                      setState(() => _selectedIds.remove(ticket.id));
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('$e')));
+                    }
                   },
                 ),
               ),
@@ -277,63 +331,99 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
   }) async {
     final result = await showDialog<_SharePrintFormResult>(
       context: context,
-      builder: (dialogContext) => _SharePrintFormDialog(
-        tickets: tickets,
-        action: action,
-      ),
+      builder: (dialogContext) =>
+          _SharePrintFormDialog(tickets: tickets, action: action),
     );
 
     if (result == null || !context.mounted) return;
 
-    final repo = ref.read(repositoryProvider);
-    for (final ticket in tickets) {
-      repo.updateTicketBuyer(ticket.id, buyerName: result.buyerName);
+    try {
+      await setTicketsBuyerAction(
+        ref,
+        eventId: event.id,
+        ticketIds: tickets.map((t) => t.id),
+        buyerName: result.buyerName,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return;
     }
+
+    if (!context.mounted) return;
     setState(() {
       _selectedIds.removeAll(tickets.map((ticket) => ticket.id));
     });
 
-    final updated = tickets
-        .map((ticket) => repo.tickets.firstWhere((x) => x.id == ticket.id))
-        .toList(growable: false);
-    final note = result.note;
-
-    if (action == _SharePrintAction.links) {
-      await TicketShare.shareMany(
-        tickets: updated,
-        event: event,
-        sellerName: sellerName,
-        note: note.isEmpty ? null : note,
-      );
-    } else if (context.mounted) {
-      final lines = updated.map((t) => '#${t.number} (${t.buyerName})').join(', ');
-      final notePart = note.isEmpty ? '' : ' Nota: $note.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PDF con ${updated.length} tickets ($lines) listo para imprimir (simulado).$notePart',
-          ),
+    final updated = [
+      for (final ticket in tickets)
+        Ticket(
+          id: ticket.id,
+          eventId: ticket.eventId,
+          number: ticket.number,
+          status: ticket.status,
+          sellerId: ticket.sellerId,
+          validatorId: ticket.validatorId,
+          collectorId: ticket.collectorId,
+          buyerName: result.buyerName,
         ),
-      );
+    ];
+
+    if (action == _SharePrintAction.whatsapp) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Elegí WhatsApp y enviá a ${result.buyerName} (${result.phone}). '
+              'Solo van las imágenes.',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      try {
+        await TicketShare.shareImages(
+          context,
+          tickets: updated,
+          event: event,
+          style: event.ticketDesign,
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
+        );
+      }
+    } else if (context.mounted) {
+      try {
+        await TicketPdf.printTickets(event: event, tickets: updated);
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo generar el PDF: $e')),
+        );
+      }
     }
   }
 }
 
-enum _SharePrintAction { links, printPdf }
+enum _SharePrintAction { whatsapp, printPdf }
 
 class _SharePrintFormResult {
-  const _SharePrintFormResult({required this.buyerName, required this.note});
+  const _SharePrintFormResult({
+    required this.buyerName,
+    this.phone = '',
+  });
 
   final String buyerName;
-  final String note;
+
+  /// WhatsApp number (share flow only). Not sent to the buyer.
+  final String phone;
 }
 
 /// Owns text controllers so dispose is safe when the dialog closes.
 class _SharePrintFormDialog extends StatefulWidget {
-  const _SharePrintFormDialog({
-    required this.tickets,
-    required this.action,
-  });
+  const _SharePrintFormDialog({required this.tickets, required this.action});
 
   final List<Ticket> tickets;
   final _SharePrintAction action;
@@ -344,28 +434,28 @@ class _SharePrintFormDialog extends StatefulWidget {
 
 class _SharePrintFormDialogState extends State<_SharePrintFormDialog> {
   late final TextEditingController _buyerController;
-  late final TextEditingController _noteController;
+  late final TextEditingController _phoneController;
+
+  bool get _isWhatsApp => widget.action == _SharePrintAction.whatsapp;
 
   @override
   void initState() {
     super.initState();
     _buyerController = TextEditingController();
-    _noteController = TextEditingController();
+    _phoneController = TextEditingController();
   }
 
   @override
   void dispose() {
     _buyerController.dispose();
-    _noteController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(
-        widget.action == _SharePrintAction.links ? 'Antes de enviar links' : 'Antes de imprimir',
-      ),
+      title: Text(_isWhatsApp ? 'Enviar por WhatsApp' : 'Antes de imprimir'),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -373,9 +463,13 @@ class _SharePrintFormDialogState extends State<_SharePrintFormDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Ingresá el destinatario para todos los tickets seleccionados.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              Text(
+                _isWhatsApp
+                    ? 'Se van a generar ${widget.tickets.length} '
+                        'imagen${widget.tickets.length == 1 ? '' : 'es'} '
+                        '(una por ticket). El comprador solo recibe las fotos.'
+                    : 'Ingresá el destinatario para todos los tickets seleccionados.',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
               ),
               const SizedBox(height: 12),
               Text(
@@ -396,35 +490,48 @@ class _SharePrintFormDialogState extends State<_SharePrintFormDialog> {
                   isDense: true,
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _noteController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Nota / detalle (opcional)',
-                  hintText: 'Ej. Entregar el sábado en la sede',
+              if (_isWhatsApp) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp',
+                    hintText: 'Ej. 11 2345-6789',
+                    isDense: true,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
         FilledButton(
           onPressed: () {
             final buyerName = _buyerController.text.trim();
             if (buyerName.isEmpty) return;
+            final phone = _phoneController.text.trim();
+            if (_isWhatsApp &&
+                TicketShare.normalizeWhatsAppPhone(phone) == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Ingresá un número de WhatsApp válido.'),
+                ),
+              );
+              return;
+            }
             Navigator.pop(
               context,
-              _SharePrintFormResult(
-                buyerName: buyerName,
-                note: _noteController.text.trim(),
-              ),
+              _SharePrintFormResult(buyerName: buyerName, phone: phone),
             );
           },
           child: Text(
-            widget.action == _SharePrintAction.links ? 'Continuar y enviar' : 'Continuar e imprimir',
+            _isWhatsApp ? 'Generar e ir a WhatsApp' : 'Continuar e imprimir',
           ),
         ),
       ],
@@ -485,19 +592,27 @@ class _SellerTicketCard extends StatelessWidget {
                   children: [
                     Text(
                       'Ticket #${ticket.number}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
                     ),
                     if (buyer.isNotEmpty || !isPending) ...[
                       const SizedBox(height: 6),
                       Text(
                         buyer.isEmpty ? 'Sin destinatario' : 'Para: $buyer',
                         style: TextStyle(
-                          color: buyer.isEmpty ? AppColors.textMuted : AppColors.textSecondary,
+                          color: buyer.isEmpty
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -505,7 +620,10 @@ class _SellerTicketCard extends StatelessWidget {
                     ],
                     if (!isPending) ...[
                       const SizedBox(height: 6),
-                      StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
+                      StatusBadge(
+                        label: ticket.status.label,
+                        tone: ticketStatusTone(ticket.status),
+                      ),
                     ],
                   ],
                 ),
@@ -516,73 +634,16 @@ class _SellerTicketCard extends StatelessWidget {
               FilledButton(
                 onPressed: onMarkCollected,
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   minimumSize: const Size(0, 40),
                 ),
                 child: const Text('Cobrar'),
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Buyer-facing public ticket page (opened from share link). No login required.
-class PublicTicketScreen extends ConsumerWidget {
-  const PublicTicketScreen({super.key, required this.ticketId});
-
-  final String ticketId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final ticket = repo.ticketById(ticketId);
-    if (ticket == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Ticket')),
-        body: const Center(child: Text('Este ticket no existe o el link no es válido.')),
-      );
-    }
-    final event = repo.eventById(ticket.eventId);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Tu ticket')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TicketSharePreview(ticket: ticket, event: event),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Datos',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Evento: ${event.name}'),
-                const SizedBox(height: 4),
-                if (ticket.buyerName.trim().isNotEmpty) ...[
-                  Text('Para: ${ticket.buyerName.trim()}'),
-                  const SizedBox(height: 4),
-                ],
-                Text('Producto: ${event.product}'),
-                const SizedBox(height: 4),
-                Text('Lugar: ${event.pickupPlace}'),
-                const SizedBox(height: 4),
-                Text(
-                  'Horario: ${event.pickupFrom.format(context)} – ${event.pickupTo.format(context)}',
-                ),
-                const SizedBox(height: 10),
-                StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Mostrá este ticket (o el QR) en el retiro o en la entrada. No necesitás crear una cuenta.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
-        ],
       ),
     );
   }
@@ -595,7 +656,8 @@ class ValidatorPortalScreen extends ConsumerStatefulWidget {
   final String token;
 
   @override
-  ConsumerState<ValidatorPortalScreen> createState() => _ValidatorPortalScreenState();
+  ConsumerState<ValidatorPortalScreen> createState() =>
+      _ValidatorPortalScreenState();
 }
 
 class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
@@ -609,11 +671,11 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
     super.dispose();
   }
 
-  void _lookup() {
-    final repo = ref.read(repositoryProvider);
-    final validator = repo.collaboratorByToken(widget.token);
+  void _lookup([int? forcedNumber]) {
+    final validator =
+        ref.read(collaboratorByTokenProvider(widget.token)).valueOrNull;
     if (validator == null) return;
-    final number = int.tryParse(_numberController.text.trim());
+    final number = forcedNumber ?? int.tryParse(_numberController.text.trim());
     if (number == null) {
       setState(() {
         _message = 'Ingresá un número de ticket válido.';
@@ -621,7 +683,11 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
       });
       return;
     }
-    final ticket = repo.findTicketByNumber(validator.eventId, number);
+    _numberController.text = '$number';
+    final tickets =
+        ref.read(eventTicketsProvider(validator.eventId)).valueOrNull ??
+            const <Ticket>[];
+    final ticket = tickets.where((t) => t.number == number).firstOrNull;
     if (ticket == null) {
       setState(() {
         _message = 'Ticket #$number no encontrado en este evento.';
@@ -635,35 +701,125 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
     });
   }
 
-  void _deliver() {
+  Future<void> _scanQr() async {
+    final raw = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (!mounted || raw == null) return;
+
+    final parsed = ScannedTicketRef.parse(raw);
+    if (parsed == null) {
+      setState(() {
+        _message = 'No reconocí ese QR. Probá de nuevo o ingresá el número.';
+        _lastTicket = null;
+      });
+      return;
+    }
+
+    final validator =
+        ref.read(collaboratorByTokenProvider(widget.token)).valueOrNull;
+    if (validator == null) return;
+    final tickets =
+        ref.read(eventTicketsProvider(validator.eventId)).valueOrNull ??
+            const <Ticket>[];
+
+    Ticket? ticket;
+    if (parsed.ticketId != null) {
+      if (parsed.eventId != null && parsed.eventId != validator.eventId) {
+        setState(() {
+          _message = 'Ese ticket es de otro evento.';
+          _lastTicket = null;
+        });
+        return;
+      }
+      ticket = tickets.where((t) => t.id == parsed.ticketId).firstOrNull;
+    } else if (parsed.number != null) {
+      ticket = tickets.where((t) => t.number == parsed.number).firstOrNull;
+    }
+
+    if (ticket == null) {
+      setState(() {
+        _message = 'Ticket no encontrado en este evento.';
+        _lastTicket = null;
+      });
+      return;
+    }
+
+    _numberController.text = '${ticket.number}';
+    setState(() {
+      _lastTicket = ticket;
+      _message = null;
+    });
+  }
+
+  Future<void> _deliver() async {
     final ticket = _lastTicket;
     if (ticket == null) return;
     if (ticket.status == TicketStatus.delivered) {
       setState(() => _message = 'Este ticket ya fue validado.');
       return;
     }
-    if (ticket.status != TicketStatus.collected && ticket.status != TicketStatus.settled) {
-      setState(() => _message = 'El ticket no figura como cobrado. Revisá con el organizador.');
+    if (ticket.status != TicketStatus.collected &&
+        ticket.status != TicketStatus.settled) {
+      setState(
+        () => _message =
+            'El ticket no figura como cobrado. Revisá con el organizador.',
+      );
       return;
     }
-    ref.read(repositoryProvider).markDelivered(
-          ticket.id,
-          validatorId: ref.read(repositoryProvider).collaboratorByToken(widget.token)?.id,
-        );
-    setState(() {
-      _message = 'Ticket #${ticket.number} validado.';
-      _lastTicket = ref.read(repositoryProvider).findTicketByNumber(ticket.eventId, ticket.number);
-    });
+    final validator =
+        ref.read(collaboratorByTokenProvider(widget.token)).valueOrNull;
+    if (validator == null) return;
+    try {
+      await deliverTicketAction(
+        ref,
+        eventId: ticket.eventId,
+        ticketId: ticket.id,
+        validatorId: validator.id,
+      );
+      if (!mounted) return;
+      final refreshed = ref
+          .read(eventTicketsProvider(ticket.eventId))
+          .valueOrNull
+          ?.where((t) => t.id == ticket.id)
+          .firstOrNull;
+      setState(() {
+        _message = 'Ticket #${ticket.number} validado.';
+        _lastTicket = refreshed ??
+            (ticket
+              ..status = TicketStatus.delivered
+              ..validatorId = validator.id);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _message = '$e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
-    final validator = repo.collaboratorByToken(widget.token);
-    if (validator == null || validator.role != CollaboratorRole.validator) {
-      return const Scaffold(body: Center(child: Text('Validador no encontrado.')));
+    final validatorAsync = ref.watch(collaboratorByTokenProvider(widget.token));
+    if (validatorAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final event = repo.eventById(validator.eventId);
+    final validator = validatorAsync.valueOrNull;
+    if (validator == null || validator.role != CollaboratorRole.validator) {
+      return const Scaffold(
+        body: Center(child: Text('Validador no encontrado.')),
+      );
+    }
+
+    ref.watch(eventTicketsProvider(validator.eventId));
+    final eventAsync = ref.watch(eventProvider(validator.eventId));
+    if (eventAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (eventAsync.hasError || !eventAsync.hasValue) {
+      return Scaffold(
+        body: Center(child: Text('${eventAsync.error ?? 'Evento no encontrado'}')),
+      );
+    }
+    final event = eventAsync.requireValue;
 
     return Scaffold(
       appBar: AppBar(
@@ -694,7 +850,10 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${event.pickupFrom.format(context)} – ${event.pickupTo.format(context)}',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -711,13 +870,9 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cámara QR simulada: ingresá el número manualmente.')),
-                    );
-                  },
+                  onPressed: _scanQr,
                   icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Escanear QR (simulado)'),
+                  label: const Text('Escanear QR'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -740,12 +895,19 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  StatusBadge(label: _lastTicket!.status.label, tone: ticketStatusTone(_lastTicket!.status)),
+                  StatusBadge(
+                    label: _lastTicket!.status.label,
+                    tone: ticketStatusTone(_lastTicket!.status),
+                  ),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: _lastTicket!.status == TicketStatus.delivered ? null : _deliver,
+                    onPressed: _lastTicket!.status == TicketStatus.delivered
+                        ? null
+                        : _deliver,
                     child: Text(
-                      _lastTicket!.status == TicketStatus.delivered ? 'Ya validado' : 'Marcar validado',
+                      _lastTicket!.status == TicketStatus.delivered
+                          ? 'Ya validado'
+                          : 'Marcar validado',
                     ),
                   ),
                 ],
@@ -754,7 +916,10 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
           ],
           if (_message != null) ...[
             const SizedBox(height: 16),
-            Text(_message!, style: const TextStyle(color: AppColors.textSecondary)),
+            Text(
+              _message!,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
           ],
         ],
       ),
@@ -769,7 +934,8 @@ class CollectorPortalScreen extends ConsumerStatefulWidget {
   final String token;
 
   @override
-  ConsumerState<CollectorPortalScreen> createState() => _CollectorPortalScreenState();
+  ConsumerState<CollectorPortalScreen> createState() =>
+      _CollectorPortalScreenState();
 }
 
 class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
@@ -778,13 +944,39 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
-    final collector = repo.collaboratorByToken(widget.token);
-    if (collector == null || collector.role != CollaboratorRole.collector) {
-      return const Scaffold(body: Center(child: Text('Recaudador no encontrado.')));
+    final collectorAsync = ref.watch(collaboratorByTokenProvider(widget.token));
+    if (collectorAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final event = repo.eventById(collector.eventId);
-    final sellers = repo.sellersForEvent(collector.eventId);
+    final collector = collectorAsync.valueOrNull;
+    if (collector == null || collector.role != CollaboratorRole.collector) {
+      return const Scaffold(
+        body: Center(child: Text('Recaudador no encontrado.')),
+      );
+    }
+
+    final eventAsync = ref.watch(eventProvider(collector.eventId));
+    final sellersAsync = ref.watch(eventSellersProvider(collector.eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(collector.eventId));
+
+    if (eventAsync.isLoading ||
+        sellersAsync.isLoading ||
+        ticketsAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (eventAsync.hasError || sellersAsync.hasError || ticketsAsync.hasError) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            '${eventAsync.error ?? sellersAsync.error ?? ticketsAsync.error}',
+          ),
+        ),
+      );
+    }
+
+    final event = eventAsync.requireValue;
+    final sellers = sellersAsync.requireValue;
+    final allTickets = ticketsAsync.requireValue;
 
     if (_selectedSeller != null) {
       return _buildSellerSettlement(
@@ -792,6 +984,9 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
         collector: collector,
         event: event,
         seller: _selectedSeller!,
+        tickets: allTickets
+            .where((t) => t.sellerId == _selectedSeller!.id)
+            .toList(),
       );
     }
 
@@ -824,18 +1019,28 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
           Text('Vendedores', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
           if (sellers.isEmpty)
-            const Text('Todavía no hay vendedores.', style: TextStyle(color: AppColors.textMuted))
+            const Text(
+              'Todavía no hay vendedores.',
+              style: TextStyle(color: AppColors.textMuted),
+            )
           else
             for (final seller in sellers)
               _CollectorSellerCard(
                 seller: seller,
-                pending: repo
-                    .ticketsForSeller(seller.id)
-                    .where((t) => t.status == TicketStatus.collected)
+                pending: allTickets
+                    .where(
+                      (t) =>
+                          t.sellerId == seller.id &&
+                          t.status == TicketStatus.collected,
+                    )
                     .length,
-                settled: repo
-                    .ticketsForSeller(seller.id)
-                    .where((t) => t.status == TicketStatus.settled || t.status == TicketStatus.delivered)
+                settled: allTickets
+                    .where(
+                      (t) =>
+                          t.sellerId == seller.id &&
+                          (t.status == TicketStatus.settled ||
+                              t.status == TicketStatus.delivered),
+                    )
                     .length,
                 onTap: () => setState(() {
                   _selectedSeller = seller;
@@ -852,16 +1057,20 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
     required Collaborator collector,
     required Event event,
     required Collaborator seller,
+    required List<Ticket> tickets,
   }) {
-    final repo = ref.watch(repositoryProvider);
-    final tickets = repo.ticketsForSeller(seller.id)
-      ..sort((a, b) {
-        final byStatus = _collectorTicketSortRank(a.status).compareTo(_collectorTicketSortRank(b.status));
+    final sorted = [...tickets]..sort((a, b) {
+        final byStatus = _collectorTicketSortRank(a.status)
+            .compareTo(_collectorTicketSortRank(b.status));
         if (byStatus != 0) return byStatus;
         return a.number.compareTo(b.number);
       });
-    final pending = tickets.where((t) => t.status == TicketStatus.collected).toList(growable: false);
-    final selectedTickets = pending.where((t) => _selectedIds.contains(t.id)).toList(growable: false);
+    final pending = sorted
+        .where((t) => t.status == TicketStatus.collected)
+        .toList(growable: false);
+    final selectedTickets = pending
+        .where((t) => _selectedIds.contains(t.id))
+        .toList(growable: false);
     final currency = event.ticketPrice;
 
     return Scaffold(
@@ -896,10 +1105,13 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                 Text(
                   'Solo podés rendir tickets ya cobrados por el vendedor. '
                   'Al confirmar quedan rendidos a tu nombre.',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 10),
-                TicketStatusSummary(tickets: tickets),
+                TicketStatusSummary(tickets: sorted),
               ],
             ),
           ),
@@ -910,20 +1122,30 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                 child: FilledButton.icon(
                   onPressed: selectedTickets.isEmpty
                       ? null
-                      : () {
-                          ref.read(repositoryProvider).markTicketsSettled(
-                                ticketIds: selectedTickets.map((t) => t.id),
-                                collectorId: collector.id,
-                              );
-                          setState(_selectedIds.clear);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Rendiste ${selectedTickets.length} tickets '
-                                '(\$${(selectedTickets.length * currency).toStringAsFixed(0)}).',
+                      : () async {
+                          try {
+                            await settleTicketsAction(
+                              ref,
+                              eventId: event.id,
+                              ticketIds: selectedTickets.map((t) => t.id),
+                              collectorId: collector.id,
+                            );
+                            if (!context.mounted) return;
+                            setState(_selectedIds.clear);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Rendiste ${selectedTickets.length} tickets '
+                                  '(\$${(selectedTickets.length * currency).toStringAsFixed(0)}).',
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text('$e')));
+                          }
                         },
                   icon: const Icon(Icons.fact_check_outlined),
                   label: Text(
@@ -948,7 +1170,9 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                   child: const Text('Todos pendientes'),
                 ),
                 TextButton(
-                  onPressed: selectedTickets.isEmpty ? null : () => setState(_selectedIds.clear),
+                  onPressed: selectedTickets.isEmpty
+                      ? null
+                      : () => setState(_selectedIds.clear),
                   child: const Text('Ninguno'),
                 ),
               ],
@@ -957,7 +1181,7 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
           const SizedBox(height: 12),
           Text('Tickets', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 10),
-          for (final ticket in tickets)
+          for (final ticket in sorted)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _CollectorTicketCard(
@@ -967,15 +1191,17 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                 selectable: ticket.status == TicketStatus.collected,
                 collectorName: ticket.collectorId == null
                     ? null
-                    : repo.collaboratorById(ticket.collectorId!).name,
+                    : (ticket.collectorId == collector.id
+                        ? collector.name
+                        : null),
                 onToggle: ticket.status == TicketStatus.collected
                     ? () => setState(() {
-                          if (_selectedIds.contains(ticket.id)) {
-                            _selectedIds.remove(ticket.id);
-                          } else {
-                            _selectedIds.add(ticket.id);
-                          }
-                        })
+                        if (_selectedIds.contains(ticket.id)) {
+                          _selectedIds.remove(ticket.id);
+                        } else {
+                          _selectedIds.add(ticket.id);
+                        }
+                      })
                     : null,
               ),
             ),
@@ -1082,12 +1308,18 @@ class _CollectorTicketCard extends StatelessWidget {
                   children: [
                     Text(
                       'Ticket #${ticket.number}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
                     ),
                     if (buyer.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -1104,11 +1336,17 @@ class _CollectorTicketCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Recaudó: $collectorName',
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 6),
-                    StatusBadge(label: ticket.status.label, tone: ticketStatusTone(ticket.status)),
+                    StatusBadge(
+                      label: ticket.status.label,
+                      tone: ticketStatusTone(ticket.status),
+                    ),
                   ],
                 ),
               ),

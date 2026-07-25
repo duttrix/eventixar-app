@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Payment screen. Confirming payment enables the event and generates tickets.
@@ -24,21 +24,9 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
     if (_confirming) return;
     setState(() => _confirming = true);
     try {
-      final session = ref.read(sessionProvider);
-      final Event updated;
-      if (session.usesFirestore) {
-        updated = await ref
-            .read(eventRepositoryProvider)
-            .confirmPaymentAndGenerateTickets(widget.eventId);
-        final tickets =
-            await ref.read(eventRepositoryProvider).listTickets(widget.eventId);
-        final mock = ref.read(repositoryProvider);
-        mock.upsertEvent(updated);
-        mock.replaceTicketsForEvent(widget.eventId, tickets);
-      } else {
-        ref.read(repositoryProvider).confirmPayment(widget.eventId);
-        updated = ref.read(repositoryProvider).eventById(widget.eventId);
-      }
+      final updated = await ref
+          .read(eventRepositoryProvider)
+          .confirmPaymentAndGenerateTickets(widget.eventId);
 
       if (!mounted) return;
       await showDialog<void>(
@@ -47,10 +35,8 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Evento habilitado'),
           content: Text(
-            session.usesFirestore
-                ? 'El pago fue aceptado (simulado). Se generaron ${updated.ticketCount} tickets. '
-                    'Ya podés invitar colaboradores y asignar tickets.'
-                : 'El pago fue aceptado (simulado). Ya podés asignar tickets a vendedores y compartirles el acceso.',
+            'Evento habilitado. Se generaron ${updated.ticketCount} tickets. '
+            'Ya podés invitar colaboradores y asignar tickets.',
           ),
           actions: [
             FilledButton(
@@ -75,31 +61,16 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider);
-    final Event? event;
-
-    if (session.usesFirestore) {
-      final async = ref.watch(ensureLocalEventProvider(widget.eventId));
-      return async.when(
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (e, _) => Scaffold(
-          appBar: AppBar(title: const Text('Pagar y habilitar')),
-          body: Center(child: Text('No se pudo cargar el evento: $e')),
-        ),
-        data: (e) => _buildBody(e),
-      );
-    }
-
-    event = ref.watch(repositoryProvider).tryEventById(widget.eventId);
-    if (event == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Pagar y habilitar')),
-        body: const Center(child: Text('Evento no encontrado.')),
-      );
-    }
-    return _buildBody(event);
+    return ref.watch(eventProvider(widget.eventId)).when(
+          loading: () => const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Scaffold(
+            appBar: AppBar(title: const Text('Pagar y habilitar')),
+            body: Center(child: Text('No se pudo cargar el evento: $e')),
+          ),
+          data: _buildBody,
+        );
   }
 
   Widget _buildBody(Event event) {
@@ -156,17 +127,19 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          if (quote.amount > 0)
-            const SectionCard(
-              title: 'Datos de pago (demo)',
-              child: Column(
-                children: [
-                  _InfoRow(label: 'Alias', value: 'eventixar.mp'),
-                  SizedBox(height: 6),
-                  _InfoRow(label: 'CBU', value: '0000003100000012345678'),
-                ],
-              ),
+          const SectionCard(
+            title: 'Habilitación (provisorio)',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Todavía no hay checkout integrado. Al confirmar se habilita '
+                  'el evento y se generan los tickets.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+              ],
             ),
+          ),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: _confirming ? null : () => _confirm(event),
@@ -181,36 +154,17 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
                   : Text(
                       quote.amount == 0
                           ? 'Habilitar gratis'
-                          : 'Confirmar pago (simulado)',
+                          : 'Confirmar y habilitar',
                     ),
             ),
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: _confirming ? null : () => context.go('/home'),
-            child: const Text('Pagar después'),
+            child: const Text('Habilitar después'),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label, style: const TextStyle(color: AppColors.textSecondary)),
-        ),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
     );
   }
 }

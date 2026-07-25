@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/mock/providers.dart';
+import '../../data/models/collaborator.dart';
+import '../../data/app_providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/event_workspace/collector_detail_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
@@ -29,16 +30,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = ref.read(sessionProvider);
       final location = state.matchedLocation;
       final isLogin = location == '/login';
-      final isJoin = location.startsWith('/join/') ||
+      final isJoin =
+          location.startsWith('/join/') ||
           location.startsWith('/seller/') ||
           location.startsWith('/validator/') ||
-          location.startsWith('/collector/') ||
-          location.startsWith('/ticket/');
+          location.startsWith('/collector/');
+
+      // Keep the initial screen stable until local collaborator restoration ends.
+      if (session.isRestoring) return null;
+
+      final collaboratorToken = session.collaboratorToken;
+      if (collaboratorToken != null) {
+        // Opening a new invite is the only way to replace the installed access.
+        if (location.startsWith('/join/')) return null;
+
+        // The role is unknown while the token is still being resolved; the
+        // portal screens handle that transient state themselves.
+        final portal = switch (session.collaboratorRole) {
+          CollaboratorRole.seller => '/seller/$collaboratorToken',
+          CollaboratorRole.validator => '/validator/$collaboratorToken',
+          CollaboratorRole.collector => '/collector/$collaboratorToken',
+          null => null,
+        };
+        if (portal == null) return null;
+        return location == portal ? null : portal;
+      }
 
       if (!session.isLoggedIn && !isLogin && !isJoin) {
         return '/login';
       }
-      if (session.isLoggedIn && isLogin && session.userEmail != null) {
+      if (session.isLoggedIn && isLogin && session.userUid != null) {
         return '/home';
       }
       return null;
@@ -57,7 +78,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/join/:token',
-        builder: (context, state) => JoinScreen(token: state.pathParameters['token']!),
+        builder: (context, state) =>
+            JoinScreen(token: state.pathParameters['token']!),
       ),
       GoRoute(
         path: '/seller/:token',
@@ -73,11 +95,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/collector/:token',
         builder: (context, state) =>
             CollectorPortalScreen(token: state.pathParameters['token']!),
-      ),
-      GoRoute(
-        path: '/ticket/:ticketId',
-        builder: (context, state) =>
-            PublicTicketScreen(ticketId: state.pathParameters['ticketId']!),
       ),
       GoRoute(
         path: '/event/:eventId',

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/event.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Edit basic event data (organizer only).
@@ -37,7 +37,6 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   }
 
   Future<void> _save() async {
-    final session = ref.read(sessionProvider);
     final name = _nameController.text.trim();
     final product = _product ?? kEventProducts.first;
     final ticketPrice = double.tryParse(_priceController.text) ?? 0;
@@ -48,32 +47,17 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final notes = _notesController.text.trim();
 
     try {
-      if (session.usesFirestore) {
-        final updated = await ref.read(eventRepositoryProvider).updateEvent(
-              widget.eventId,
-              name: name,
-              product: product,
-              ticketPrice: ticketPrice,
-              eventDate: eventDate,
-              pickupFrom: pickupFrom,
-              pickupTo: pickupTo,
-              pickupPlace: pickupPlace,
-              notes: notes,
-            );
-        ref.read(repositoryProvider).upsertEvent(updated);
-      } else {
-        ref.read(repositoryProvider).updateEvent(
-              widget.eventId,
-              name: name,
-              product: product,
-              ticketPrice: ticketPrice,
-              eventDate: eventDate,
-              pickupFrom: pickupFrom,
-              pickupTo: pickupTo,
-              pickupPlace: pickupPlace,
-              notes: notes,
-            );
-      }
+      await ref.read(eventRepositoryProvider).updateEvent(
+            widget.eventId,
+            name: name,
+            product: product,
+            ticketPrice: ticketPrice,
+            eventDate: eventDate,
+            pickupFrom: pickupFrom,
+            pickupTo: pickupTo,
+            pickupPlace: pickupPlace,
+            notes: notes,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cambios guardados.')),
@@ -88,12 +72,19 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(widget.eventId);
+    final eventAsync = ref.watch(eventProvider(widget.eventId));
+    if (eventAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (eventAsync.hasError || !eventAsync.hasValue) {
+      return Center(child: Text('${eventAsync.error ?? 'Evento no encontrado'}'));
+    }
+    final event = eventAsync.requireValue;
     final finished = event.status == EventStatus.finished;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
-      _priceController = TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
+      _priceController =
+          TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
       _product = event.product;

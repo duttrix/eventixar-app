@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/brand_icons.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -41,13 +41,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _loginDemoOrganizer() {
-    ref.read(sessionProvider.notifier).login('organizador@demo.com');
-    context.go('/home');
-  }
-
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionProvider);
+    if (session.isRestoring) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -63,7 +63,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const Text(
                     'Iniciá sesión para crear tu evento y gestionar tickets.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, height: 1.4),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 28),
                   SizedBox(
@@ -77,7 +80,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const GoogleLogo(size: 18),
-                      label: Text(_busy ? 'Conectando…' : 'Continuar con Google'),
+                      label: Text(
+                        _busy ? 'Conectando…' : 'Continuar con Google',
+                      ),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppColors.text,
@@ -105,60 +110,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Text(
                       _error!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.dangerText, fontSize: 13),
+                      style: const TextStyle(
+                        color: AppColors.dangerText,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 32),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      border: Border.all(color: AppColors.border),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Modo demo · accesos rápidos',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton(
-                            onPressed: _loginDemoOrganizer,
-                            child: const Text('Entrar como organizador (mock)'),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => context.go('/join/seller-ana-demo'),
-                            child: const Text('Simular deeplink vendedor'),
-                          ),
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => context.go('/join/validator-carlos-demo'),
-                            child: const Text('Simular deeplink validador'),
-                          ),
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => context.go('/join/collector-laura-demo'),
-                            child: const Text('Simular deeplink recaudador'),
-                          ),
-                        ),
-                      ],
+                  const Text(
+                    'Si te invitaron como vendedor, validador o recaudador, '
+                    'abrí el link que te compartieron: no necesitás cuenta.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -185,12 +151,20 @@ class _Logo extends StatelessWidget {
             color: AppColors.accentBg,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(Icons.confirmation_number_outlined, color: AppColors.accent, size: 32),
+          child: const Icon(
+            Icons.confirmation_number_outlined,
+            color: AppColors.accent,
+            size: 32,
+          ),
         ),
         const SizedBox(height: 16),
         const Text(
           'Eventixar',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.text),
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: AppColors.text,
+          ),
         ),
         const SizedBox(height: 4),
         const Text(

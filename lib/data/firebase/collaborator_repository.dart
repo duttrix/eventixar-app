@@ -5,6 +5,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/collaborator.dart';
 
+/// Where an invite token points to.
+class CollaboratorLocation {
+  const CollaboratorLocation({
+    required this.eventId,
+    required this.collaboratorId,
+  });
+
+  final String eventId;
+  final String collaboratorId;
+}
+
 /// Firestore access for event collaborators + invite tokens.
 class CollaboratorRepository {
   CollaboratorRepository({FirebaseFirestore? firestore})
@@ -20,6 +31,21 @@ class CollaboratorRepository {
 
   CollectionReference<Map<String, dynamic>> _collaborators(String eventId) =>
       _events.doc(eventId).collection('collaborators');
+
+  /// Invite tokens, readable only by the event owner.
+  CollectionReference<Map<String, dynamic>> _access(String eventId) =>
+      _events.doc(eventId).collection('access');
+
+  /// collaboratorId → invite token, for the organizer's share links.
+  Stream<Map<String, String>> watchAccessTokens(String eventId) {
+    return _access(eventId).snapshots().map((snap) {
+      return {
+        for (final doc in snap.docs)
+          if (doc.data()['token'] is String)
+            doc.id: doc.data()['token'] as String,
+      };
+    });
+  }
 
   Future<List<Collaborator>> listForEvent(String eventId) async {
     final snap = await _collaborators(eventId).orderBy('createdAt').get();
@@ -79,6 +105,10 @@ class CollaboratorRepository {
       'role': role.firestoreValue,
       'createdAt': now,
     });
+    batch.set(_access(eventId).doc(ref.id), {
+      'token': token,
+      'createdAt': now,
+    });
     await batch.commit();
     return collaborator;
   }
@@ -109,8 +139,8 @@ class CollaboratorRepository {
     );
   }
 
-  /// Resolves a deeplink token → collaborator (via `tokens/{token}` mirror).
-  Future<Collaborator?> findByToken(String token) async {
+  /// Resolves a deeplink token to its event + collaborator ids.
+  Future<CollaboratorLocation?> resolveToken(String token) async {
     final tokenSnap = await _tokens.doc(token).get();
     final tokenData = tokenSnap.data();
     if (!tokenSnap.exists || tokenData == null) return null;
@@ -119,7 +149,34 @@ class CollaboratorRepository {
     final collaboratorId = tokenData['collaboratorId'] as String?;
     if (eventId == null || collaboratorId == null) return null;
 
-    final snap = await _collaborators(eventId).doc(collaboratorId).get();
+    return CollaboratorLocation(
+      eventId: eventId,
+      collaboratorId: collaboratorId,
+    );
+  }
+
+  Stream<Collaborator?> watchOne({
+    required String eventId,
+    required String collaboratorId,
+  }) {
+    return _collaborators(eventId).doc(collaboratorId).snapshots().map((snap) {
+      final data = snap.data();
+      if (!snap.exists || data == null) return null;
+      return Collaborator.fromFirestore(
+        id: snap.id,
+        eventId: eventId,
+        data: data,
+      );
+    });
+  }
+
+  /// Resolves a deeplink token → collaborator (via `tokens/{token}` mirror).
+  Future<Collaborator?> findByToken(String token) async {
+    final location = await resolveToken(token);
+    if (location == null) return null;
+
+    final eventId = location.eventId;
+    final snap = await _collaborators(eventId).doc(location.collaboratorId).get();
     final data = snap.data();
     if (!snap.exists || data == null) return null;
 
@@ -136,21 +193,22 @@ class CollaboratorRepository {
     required String collaboratorId,
   }) async {
     final ref = _collaborators(eventId).doc(collaboratorId);
+    final accessRef = _access(eventId).doc(collaboratorId);
     final snap = await ref.get();
     final data = snap.data();
     if (!snap.exists || data == null) {
       throw StateError('Colaborador $collaboratorId no encontrado.');
     }
 
-    final oldToken = data['token'] as String?;
+    // Collaborators created before tokens moved to /access still carry the
+    // legacy inline field; drop it so the old link really stops working.
+    final oldToken = (await accessRef.get()).data()?['token'] as String? ??
+        data['token'] as String?;
     final newToken = _generateToken();
     final now = FieldValue.serverTimestamp();
 
     final batch = _firestore.batch();
-    batch.update(ref, {
-      'token': newToken,
-      'updatedAt': now,
-    });
+    batch.update(ref, {'updatedAt': now, 'token': FieldValue.delete()});
     if (oldToken != null && oldToken.isNotEmpty) {
       batch.delete(_tokens.doc(oldToken));
     }
@@ -160,14 +218,44 @@ class CollaboratorRepository {
       'role': data['role'],
       'createdAt': now,
     });
+    batch.set(accessRef, {'token': newToken, 'createdAt': now});
     await batch.commit();
 
-    final updated = await ref.get();
     return Collaborator.fromFirestore(
-      id: updated.id,
+      id: snap.id,
       eventId: eventId,
-      data: updated.data()!,
-    );
+      data: data,
+    )..token = newToken;
+  }
+
+  /// Removes the collaborator, their invite token and access mirror.
+  Future<void> delete({
+    required String eventId,
+    required String collaboratorId,
+  }) async {
+    final ref = _collaborators(eventId).doc(collaboratorId);
+    final accessRef = _access(eventId).doc(collaboratorId);
+    final snap = await ref.get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Colaborador $collaboratorId no encontrado.');
+    }
+
+    final accessToken = (await accessRef.get()).data()?['token'] as String?;
+    final legacyToken = data['token'] as String?;
+
+    final batch = _firestore.batch();
+    batch.delete(ref);
+    batch.delete(accessRef);
+    if (accessToken != null && accessToken.isNotEmpty) {
+      batch.delete(_tokens.doc(accessToken));
+    }
+    if (legacyToken != null &&
+        legacyToken.isNotEmpty &&
+        legacyToken != accessToken) {
+      batch.delete(_tokens.doc(legacyToken));
+    }
+    await batch.commit();
   }
 
   String _generateToken() {

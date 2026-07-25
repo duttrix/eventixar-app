@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/mock/providers.dart';
+import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 
 /// Organizer roster of collectors (recaudadores) + access sharing.
@@ -15,63 +15,97 @@ class CollectorsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(repositoryProvider);
-    final event = repo.eventById(eventId);
-    final collectors = repo.collectorsForEvent(eventId);
+    final eventAsync = ref.watch(eventProvider(eventId));
+    final collectorsAsync = ref.watch(eventCollectorsProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showEditor(context, ref, eventName: event.name),
+        onPressed: eventAsync.hasValue
+            ? () => _showEditor(
+                  context,
+                  ref,
+                  eventName: eventAsync.requireValue.name,
+                )
+            : null,
         icon: const Icon(Icons.person_add_alt_1_outlined),
         label: const Text('Agregar'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-        children: [
-          Text(
-            'El recaudador rinde lo que el vendedor ya cobró. Cada uno recibe un acceso '
-            'para ver a todos los vendedores y marcar la rendición. Abre el link sin cuenta.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          if (collectors.isEmpty)
-            const Text('Todavía no hay recaudadores.', style: TextStyle(color: AppColors.textMuted))
-          else
-            for (final collector in collectors)
-              Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  title: Text(collector.name),
-                  subtitle: Text(
-                    [
-                      collector.phone.isEmpty ? 'Sin celular' : collector.phone,
-                      if (collector.notes.isNotEmpty) collector.notes,
-                      '${repo.ticketsSettledBy(collector.id).length} tickets rendidos',
-                    ].join(' · '),
-                  ),
-                  onTap: () => context.push(
-                    '/event/$eventId/collectors/${collector.id}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'Editar',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () =>
-                            _showEditor(context, ref, eventName: event.name, existing: collector),
-                      ),
-                      IconButton(
-                        tooltip: 'Compartir acceso',
-                        icon: const Icon(Icons.ios_share),
-                        onPressed: () => AccessShare.copy(context, collector, eventName: event.name),
-                      ),
-                    ],
-                  ),
-                ),
+      body: collectorsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
+        data: (collectors) {
+          final eventName = eventAsync.valueOrNull?.name ?? '';
+          final tickets = ticketsAsync.valueOrNull ?? const [];
+          final tokens =
+              ref.watch(eventAccessTokensProvider(eventId)).valueOrNull ??
+                  const <String, String>{};
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              Text(
+                'El recaudador rinde lo que el vendedor ya cobró. Cada uno recibe un acceso '
+                'para ver a todos los vendedores y marcar la rendición. Abre el link sin cuenta.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
               ),
-        ],
+              const SizedBox(height: 16),
+              if (collectors.isEmpty)
+                const Text(
+                  'Todavía no hay recaudadores.',
+                  style: TextStyle(color: AppColors.textMuted),
+                )
+              else
+                for (final collector in collectors)
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      title: Text(collector.name),
+                      subtitle: Text(
+                        [
+                          collector.phone.isEmpty
+                              ? 'Sin celular'
+                              : collector.phone,
+                          if (collector.notes.isNotEmpty) collector.notes,
+                          '${tickets.where((t) => t.collectorId == collector.id).length} tickets rendidos',
+                        ].join(' · '),
+                      ),
+                      onTap: () => context.push(
+                        '/event/$eventId/collectors/${collector.id}',
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Editar',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => _showEditor(
+                              context,
+                              ref,
+                              eventName: eventName,
+                              existing: collector,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Compartir acceso',
+                            icon: const Icon(Icons.ios_share),
+                            onPressed: () => AccessShare.copy(
+                              context,
+                              collector,
+                              eventName: eventName,
+                              token: tokens[collector.id] ?? '',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -160,7 +194,12 @@ class CollectorsTab extends ConsumerWidget {
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
                 if (!context.mounted) return;
-                AccessShare.copy(context, collector, eventName: eventName);
+                AccessShare.copy(
+                  context,
+                  collector,
+                  eventName: eventName,
+                  token: collector.token,
+                );
               } catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

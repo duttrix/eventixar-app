@@ -3,15 +3,18 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 /// Google Sign-In → Firebase Auth for organizers.
 class GoogleAuthService {
-  GoogleAuthService({
-    FirebaseAuth? auth,
-    GoogleSignIn? googleSignIn,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+  GoogleAuthService({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
+      : _authOverride = auth,
+        _googleSignInOverride = googleSignIn;
 
-  final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn;
+  final FirebaseAuth? _authOverride;
+  final GoogleSignIn? _googleSignInOverride;
   bool _initialized = false;
+
+  // Resolved lazily so that constructing the service never requires Firebase
+  // to be initialized (tests subclass this and override the members they use).
+  FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
+  GoogleSignIn get _googleSignIn => _googleSignInOverride ?? GoogleSignIn.instance;
 
   /// Web client ID from Firebase (needed on Android to obtain an ID token).
   static const String webClientId =

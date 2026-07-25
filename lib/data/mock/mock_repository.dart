@@ -7,8 +7,9 @@ import '../models/user.dart';
 
 /// In-memory mock source of truth for the simplified Eventixar circuit.
 ///
-/// No institutions / memberships: a registered user owns events; sellers and
-/// validators enter via deeplink tokens without needing an account first.
+/// **Test fixture only.** The app runs entirely on Firestore (see
+/// `lib/data/app_providers.dart`); nothing in production code reads from here.
+/// It is kept as seeded sample data for future widget/unit tests.
 class MockRepository extends ChangeNotifier {
   MockRepository() {
     _seed();
@@ -96,10 +97,67 @@ class MockRepository extends ChangeNotifier {
       aggregateForEvent(eventId).values.fold(0, (a, b) => a + b);
 
   int nextAvailableTicketNumber(String eventId) {
-    final numbers = tickets.where((t) => t.eventId == eventId).map((t) => t.number).toList();
-    if (numbers.isEmpty) return 1;
-    numbers.sort();
+    final eventTickets = tickets.where((t) => t.eventId == eventId).toList();
+    if (eventTickets.isEmpty) return 1;
+
+    // Firestore events pre-create all tickets: use the lowest unassigned one.
+    final unassigned = eventTickets
+        .where((t) => t.status == TicketStatus.unassigned)
+        .map((t) => t.number)
+        .toList();
+    if (unassigned.isNotEmpty) {
+      unassigned.sort();
+      return unassigned.first;
+    }
+
+    // Mock (lazy) events: tickets only exist once assigned → next after last.
+    final numbers = eventTickets.map((t) => t.number).toList()..sort();
     return numbers.last + 1;
+  }
+
+  /// Applies an already-persisted Firestore range to the local cache: marks
+  /// tickets `withSeller` (creating them if the cache doesn't have them yet)
+  /// and appends the range to the seller.
+  void applyAssignedRange({
+    required String eventId,
+    required String sellerId,
+    required int from,
+    required int to,
+    required String rangeId,
+  }) {
+    final seller = collaboratorById(sellerId);
+    if (!seller.ranges.any((r) => r.id == rangeId)) {
+      seller.ranges.add(
+        TicketRange(id: rangeId, from: from, to: to, date: DateTime.now()),
+      );
+    }
+    for (var n = from; n <= to; n++) {
+      final existing = tickets.firstWhere(
+        (t) => t.eventId == eventId && t.number == n,
+        orElse: () => Ticket(id: '', eventId: eventId, number: -1),
+      );
+      if (existing.number == -1) {
+        tickets.add(
+          Ticket(
+            id: 't_$n',
+            eventId: eventId,
+            number: n,
+            status: TicketStatus.withSeller,
+            sellerId: sellerId,
+          ),
+        );
+        _shiftAggregate(eventId, TicketStatus.withSeller, 1);
+      } else if (existing.status != TicketStatus.withSeller) {
+        _shiftAggregate(eventId, existing.status, -1);
+        _shiftAggregate(eventId, TicketStatus.withSeller, 1);
+        existing
+          ..status = TicketStatus.withSeller
+          ..sellerId = sellerId;
+      } else {
+        existing.sellerId = sellerId;
+      }
+    }
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------
