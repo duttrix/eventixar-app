@@ -19,13 +19,16 @@ class AccessShare {
     return switch (person.role) {
       CollaboratorRole.seller =>
         'Hola ${person.name}, te comparto tu acceso a los tickets de "$eventName". '
-            'Abrí el link y vas a ver tus tickets. No necesitás registrarte.\n\n$url',
+            'Abrí el link (con Eventixar instalada) y vas a ver tus tickets. '
+            'No necesitás registrarte.\n\n$url',
       CollaboratorRole.validator =>
         'Hola ${person.name}, te comparto tu acceso de validador para "$eventName". '
-            'Abrí el link para leer tickets (retiro o entrada). No necesitás registrarte.\n\n$url',
+            'Abrí el link (con Eventixar instalada) para leer tickets. '
+            'No necesitás registrarte.\n\n$url',
       CollaboratorRole.collector =>
         'Hola ${person.name}, te comparto tu acceso de recaudador para "$eventName". '
-            'Abrí el link para cobrar las rendiciones de los vendedores. No necesitás registrarte.\n\n$url',
+            'Abrí el link (con Eventixar instalada) para las rendiciones. '
+            'No necesitás registrarte.\n\n$url',
     };
   }
 

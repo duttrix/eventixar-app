@@ -20,8 +20,11 @@ extension CollaboratorRoleX on CollaboratorRole {
   }
 }
 
+/// HTTPS invite link shared in WhatsApp (clickable).
+///
+/// Canonical host: Firebase Hosting. Landing opens `eventixar://join/...`.
 String collaboratorShareUrl(String token) =>
-    'https://app.eventixar.com/join/$token';
+    'https://eventixar.web.app/join/$token';
 
 String collaboratorDeeplink(String token) => 'eventixar://join/$token';
 

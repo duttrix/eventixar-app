@@ -12,6 +12,7 @@ import '../../features/home/home_screen.dart';
 import '../../features/join/join_screens.dart';
 import '../../features/onboarding/create_event_screen.dart';
 import '../../features/onboarding/pay_event_screen.dart';
+import 'deep_link_mapper.dart';
 import 'go_router_refresh_stream.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -24,9 +25,24 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen(sessionProvider, (_, _) => refresh.refresh());
 
   return GoRouter(
+    // Platform intents arrive as `eventixar://…` / https hosts. Those strings
+    // are not GoRouter paths — map them below (and via AppLinks in main.dart).
+    overridePlatformDefaultLocation: true,
     initialLocation: '/login',
     refreshListenable: refresh,
+    onException: (context, state, router) {
+      final mapped = DeepLinkMapper.locationFromUri(state.uri);
+      router.go(mapped ?? '/login');
+    },
     redirect: (context, state) {
+      // Cold/warm start from Android/iOS may feed the full deep link URI into
+      // GoRouter. Convert it before route matching fails.
+      final deepLinkLocation = DeepLinkMapper.locationFromUri(state.uri);
+      if (deepLinkLocation != null &&
+          state.uri.toString() != deepLinkLocation) {
+        return deepLinkLocation;
+      }
+
       final session = ref.read(sessionProvider);
       final location = state.matchedLocation;
       final isLogin = location == '/login';

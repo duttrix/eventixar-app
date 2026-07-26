@@ -13,8 +13,20 @@ void main() {
         '/join/abc123',
       );
       expect(
+        DeepLinkMapper.locationFromUri(
+          Uri.parse('https://eventixar.web.app/join/abc123'),
+        ),
+        '/join/abc123',
+      );
+      expect(
         DeepLinkMapper.locationFromUri(Uri.parse('eventixar://join/tok')),
         '/join/tok',
+      );
+      expect(
+        DeepLinkMapper.locationFromUri(
+          Uri.parse('eventixar://join/QO-OT5wX5xYt9Oym71bugY9P_RMmlkHu'),
+        ),
+        '/join/QO-OT5wX5xYt9Oym71bugY9P_RMmlkHu',
       );
     });
 

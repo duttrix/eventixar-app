@@ -38,9 +38,11 @@ Plantillas, colores, fondo y tipografía se **guardan en el documento del evento
 | Rol | ¿Necesita cuenta? | Cómo entra |
 |-----|-------------------|------------|
 | **Organizador** | Sí (Google) | Login → Mis eventos |
-| **Vendedor** | No | Deeplink `/join/{token}` |
-| **Validador** | No | Deeplink `/join/{token}` |
-| **Recaudador** | No | Deeplink `/join/{token}` |
+| **Vendedor** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
+| **Validador** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
+| **Recaudador** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
+
+> El link compartido es HTTPS en **eventixar.web.app** (clicable en WhatsApp). La landing abre `eventixar://join/...`. Sin la app instalada no hay acceso. Un dominio propio (`app.eventixar.com`) puede aliasarse después si hace falta.
 
 Los tokens viven en `tokens/{token}` + espejo owner-only `events/{id}/access/{collaboratorId}` (no en el perfil público del colaborador).
 

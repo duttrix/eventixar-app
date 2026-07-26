@@ -4,6 +4,8 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>applinks:eventixar.web.app</string>
+		<string>applinks:eventixar.firebaseapp.com</string>
 		<string>applinks:app.eventixar.com</string>
 	</array>
 </dict>

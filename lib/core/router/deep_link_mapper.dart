@@ -5,8 +5,14 @@
 class DeepLinkMapper {
   DeepLinkMapper._();
 
-  static const host = 'app.eventixar.com';
   static const customScheme = 'eventixar';
+
+  /// Invite hosts. Share links use `eventixar.web.app`; others are aliases.
+  static const httpsHosts = {
+    'eventixar.web.app',
+    'eventixar.firebaseapp.com',
+    'app.eventixar.com',
+  };
 
   /// Returns a GoRouter location (`/join/...`) or null.
   static String? locationFromUri(Uri uri) {
@@ -19,7 +25,8 @@ class DeepLinkMapper {
       return _fromSegments(segments);
     }
 
-    if ((uri.scheme == 'https' || uri.scheme == 'http') && uri.host == host) {
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        httpsHosts.contains(uri.host)) {
       return _fromSegments(uri.pathSegments.where((s) => s.isNotEmpty).toList());
     }
 
