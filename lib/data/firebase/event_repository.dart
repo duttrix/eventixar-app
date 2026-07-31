@@ -53,6 +53,7 @@ class EventRepository {
     required int sellersCount,
     required int validatorsCount,
     int collectorsCount = 0,
+    int coordinatorsCount = 0,
     String notes = '',
   }) async {
     final ref = _events.doc();
@@ -72,6 +73,7 @@ class EventRepository {
       sellersCount: sellersCount,
       validatorsCount: validatorsCount,
       collectorsCount: collectorsCount,
+      coordinatorsCount: coordinatorsCount,
       notes: notes,
       status: EventStatus.awaitingPayment,
       paid: false,
@@ -133,7 +135,16 @@ class EventRepository {
           'sellerId': null,
           'validatorId': null,
           'collectorId': null,
+          'assignedByCollaboratorId': null,
           'buyerName': '',
+          'history': [
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.created,
+              toStatus: TicketStatus.unassigned,
+              actorRole: 'organizer',
+            ).toFirestoreMap(),
+          ],
         });
       }
       await batch.commit();
@@ -176,12 +187,15 @@ class EventRepository {
   }
 
   /// Assigns tickets [from]..[to] to [sellerId]: marks them `withSeller` and
-  /// records the range on the collaborator doc. Tickets must be `unassigned`.
+  /// records the range on the collaborator doc.
+  ///
+  /// Tickets must be in the free pool (`unassigned` or `returned`).
   Future<TicketRange> assignTicketRange({
     required String eventId,
     required String sellerId,
     required int from,
     required int to,
+    String? assignedByCollaboratorId,
   }) async {
     if (to < from) {
       throw ArgumentError('El rango es inválido (hasta < desde).');
@@ -200,10 +214,10 @@ class EventRepository {
     }
 
     for (final doc in snap.docs) {
-      final status = doc.data()['status'];
-      if (status != TicketStatus.unassigned.firestoreValue) {
+      final status = TicketStatusX.fromFirestore(doc.data()['status'] as String?);
+      if (!status.isAssignablePool) {
         throw StateError(
-          'El ticket #${doc.data()['number']} ya está asignado.',
+          'El ticket #${doc.data()['number']} no está disponible en el pool.',
         );
       }
     }
@@ -213,6 +227,7 @@ class EventRepository {
       from: from,
       to: to,
       date: DateTime.now(),
+      assignedByCollaboratorId: assignedByCollaboratorId,
     );
 
     // Chunk ticket updates to stay under Firestore's batch limit.
@@ -221,9 +236,22 @@ class EventRepository {
       final batch = _firestore.batch();
       final slice = snap.docs.skip(i).take(chunk);
       for (final doc in slice) {
+        final from = TicketStatusX.fromFirestore(doc.data()['status'] as String?);
+        final history = TicketHistoryEntry(
+          at: DateTime.now(),
+          action: TicketHistoryAction.assigned,
+          fromStatus: from,
+          toStatus: TicketStatus.withSeller,
+          actorId: assignedByCollaboratorId ?? sellerId,
+          actorRole:
+              assignedByCollaboratorId != null ? 'coordinator' : 'organizer',
+          note: 'Asignado al vendedor $sellerId',
+        );
         batch.update(doc.reference, {
           'status': TicketStatus.withSeller.firestoreValue,
           'sellerId': sellerId,
+          'assignedByCollaboratorId': assignedByCollaboratorId,
+          'history': FieldValue.arrayUnion([history.toFirestoreMap()]),
         });
       }
       await batch.commit();
@@ -241,9 +269,29 @@ class EventRepository {
     required String eventId,
     required String ticketId,
     required String buyerName,
+    String? actorId,
+    String? actorRole,
   }) async {
-    await _tickets(eventId).doc(ticketId).update({
-      'buyerName': buyerName.trim(),
+    final name = buyerName.trim();
+    final snap = await _tickets(eventId).doc(ticketId).get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Ticket no encontrado.');
+    }
+    final status = TicketStatusX.fromFirestore(data['status'] as String?);
+    await snap.reference.update({
+      'buyerName': name,
+      'history': FieldValue.arrayUnion([
+        TicketHistoryEntry(
+          at: DateTime.now(),
+          action: TicketHistoryAction.buyerSet,
+          fromStatus: status,
+          toStatus: status,
+          actorId: actorId ?? data['sellerId'] as String?,
+          actorRole: actorRole ?? 'seller',
+          note: name.isEmpty ? 'Comprador borrado' : 'Para: $name',
+        ).toFirestoreMap(),
+      ]),
     });
   }
 
@@ -251,14 +299,36 @@ class EventRepository {
     required String eventId,
     required Iterable<String> ticketIds,
     required String buyerName,
+    String? actorId,
+    String? actorRole,
   }) async {
     final name = buyerName.trim();
     const chunk = 400;
     final ids = ticketIds.toList(growable: false);
     for (var i = 0; i < ids.length; i += chunk) {
+      final slice = ids.skip(i).take(chunk).toList(growable: false);
+      final snaps = await Future.wait(
+        slice.map((id) => _tickets(eventId).doc(id).get()),
+      );
       final batch = _firestore.batch();
-      for (final id in ids.skip(i).take(chunk)) {
-        batch.update(_tickets(eventId).doc(id), {'buyerName': name});
+      for (final snap in snaps) {
+        final data = snap.data();
+        if (!snap.exists || data == null) continue;
+        final status = TicketStatusX.fromFirestore(data['status'] as String?);
+        batch.update(snap.reference, {
+          'buyerName': name,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.buyerSet,
+              fromStatus: status,
+              toStatus: status,
+              actorId: actorId ?? data['sellerId'] as String?,
+              actorRole: actorRole ?? 'seller',
+              note: name.isEmpty ? 'Comprador borrado' : 'Para: $name',
+            ).toFirestoreMap(),
+          ]),
+        });
       }
       await batch.commit();
     }
@@ -268,12 +338,41 @@ class EventRepository {
   Future<void> markTicketsCollected({
     required String eventId,
     required Iterable<String> ticketIds,
+    String? actorId,
   }) async {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
       expectedStatuses: {TicketStatus.withSeller},
       newStatus: TicketStatus.collected,
+      historyAction: TicketHistoryAction.collected,
+      actorRole: 'seller',
+      actorId: actorId,
+      actorIdFromField: 'sellerId',
+    );
+  }
+
+  /// Collector marks tickets as returned to the free pool
+  /// (`withSeller`/`collected` → `returned`) so a coordinator can reassign.
+  Future<void> markTicketsReturned({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    String? actorId,
+  }) async {
+    await _updateTicketStatuses(
+      eventId: eventId,
+      ticketIds: ticketIds,
+      expectedStatuses: {TicketStatus.withSeller, TicketStatus.collected},
+      newStatus: TicketStatus.returned,
+      historyAction: TicketHistoryAction.returned,
+      actorRole: 'collector',
+      actorId: actorId,
+      extraFields: {
+        'sellerId': null,
+        'buyerName': '',
+        'assignedByCollaboratorId': null,
+        'collectorId': null,
+      },
     );
   }
 
@@ -282,15 +381,21 @@ class EventRepository {
   Future<void> returnTicketsToPool({
     required String eventId,
     required Iterable<String> ticketIds,
+    String? actorId,
+    String actorRole = 'organizer',
   }) async {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
       expectedStatuses: {TicketStatus.withSeller},
       newStatus: TicketStatus.unassigned,
+      historyAction: TicketHistoryAction.returnedToPool,
+      actorRole: actorRole,
+      actorId: actorId,
       extraFields: {
         'sellerId': null,
         'buyerName': '',
+        'assignedByCollaboratorId': null,
       },
     );
   }
@@ -319,6 +424,16 @@ class EventRepository {
     await ref.update({
       'status': TicketStatus.delivered.firestoreValue,
       'validatorId': validatorId,
+      'history': FieldValue.arrayUnion([
+        TicketHistoryEntry(
+          at: DateTime.now(),
+          action: TicketHistoryAction.delivered,
+          fromStatus: status,
+          toStatus: TicketStatus.delivered,
+          actorId: validatorId,
+          actorRole: 'validator',
+        ).toFirestoreMap(),
+      ]),
     });
   }
 
@@ -333,6 +448,9 @@ class EventRepository {
       ticketIds: ticketIds,
       expectedStatuses: {TicketStatus.collected},
       newStatus: TicketStatus.settled,
+      historyAction: TicketHistoryAction.settled,
+      actorRole: 'collector',
+      actorId: collectorId,
       extraFields: {'collectorId': collectorId},
     );
   }
@@ -342,6 +460,11 @@ class EventRepository {
     required Iterable<String> ticketIds,
     required Set<TicketStatus> expectedStatuses,
     required TicketStatus newStatus,
+    required TicketHistoryAction historyAction,
+    required String actorRole,
+    String? actorId,
+    String? actorIdFromField,
+    String? note,
     Map<String, Object?> extraFields = const {},
   }) async {
     final ids = ticketIds.toList(growable: false);
@@ -367,9 +490,24 @@ class EventRepository {
             'Ticket #${data['number']} no está en el estado esperado.',
           );
         }
+        final resolvedActorId = actorId ??
+            (actorIdFromField == null
+                ? null
+                : data[actorIdFromField] as String?);
         batch.update(snap.reference, {
           'status': newStatus.firestoreValue,
           ...extraFields,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: historyAction,
+              fromStatus: status,
+              toStatus: newStatus,
+              actorId: resolvedActorId,
+              actorRole: actorRole,
+              note: note,
+            ).toFirestoreMap(),
+          ]),
         });
       }
       await batch.commit();

@@ -47,6 +47,15 @@ class CollaboratorRepository {
     });
   }
 
+  Future<String?> getAccessToken({
+    required String eventId,
+    required String collaboratorId,
+  }) async {
+    final snap = await _access(eventId).doc(collaboratorId).get();
+    final token = snap.data()?['token'];
+    return token is String ? token : null;
+  }
+
   Future<List<Collaborator>> listForEvent(String eventId) async {
     final snap = await _collaborators(eventId).orderBy('createdAt').get();
     return snap.docs
@@ -80,6 +89,7 @@ class CollaboratorRepository {
     required String name,
     required String phone,
     String notes = '',
+    String? createdByCoordinatorId,
   }) async {
     final token = _generateToken();
     final ref = _collaborators(eventId).doc();
@@ -92,6 +102,7 @@ class CollaboratorRepository {
       phone: phone.trim(),
       notes: notes.trim(),
       token: token,
+      createdByCoordinatorId: createdByCoordinatorId,
     );
 
     final batch = _firestore.batch();

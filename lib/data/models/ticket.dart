@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 /// Life-cycle status of a single ticket within an event.
 enum TicketStatus {
   unassigned,
@@ -28,11 +30,114 @@ extension TicketStatusX on TicketStatus {
 
   String get firestoreValue => name;
 
+  /// Free for (re)assignment by organizer/coordinator.
+  bool get isAssignablePool =>
+      this == TicketStatus.unassigned || this == TicketStatus.returned;
+
   static TicketStatus fromFirestore(String? value) {
     return TicketStatus.values.firstWhere(
       (s) => s.name == value,
       orElse: () => TicketStatus.unassigned,
     );
+  }
+}
+
+/// Kind of movement recorded on a ticket's history trail.
+enum TicketHistoryAction {
+  created,
+  assigned,
+  buyerSet,
+  collected,
+  settled,
+  delivered,
+  returnedToPool,
+  returned,
+}
+
+extension TicketHistoryActionX on TicketHistoryAction {
+  String get firestoreValue => name;
+
+  String get label => switch (this) {
+    TicketHistoryAction.created => 'Ticket generado',
+    TicketHistoryAction.assigned => 'Asignado a vendedor',
+    TicketHistoryAction.buyerSet => 'Comprador cargado',
+    TicketHistoryAction.collected => 'Cobrado',
+    TicketHistoryAction.settled => 'Rendido',
+    TicketHistoryAction.delivered => 'Validado / entregado',
+    TicketHistoryAction.returnedToPool => 'Devuelto al pool',
+    TicketHistoryAction.returned => 'Marcado como devuelto',
+  };
+
+  static TicketHistoryAction fromFirestore(String? value) {
+    return TicketHistoryAction.values.firstWhere(
+      (a) => a.name == value,
+      orElse: () => TicketHistoryAction.created,
+    );
+  }
+}
+
+/// One movement in a ticket's audit trail.
+class TicketHistoryEntry {
+  TicketHistoryEntry({
+    required this.at,
+    required this.action,
+    this.fromStatus,
+    this.toStatus,
+    this.actorId,
+    this.actorRole,
+    this.note,
+  });
+
+  final DateTime at;
+  final TicketHistoryAction action;
+  final TicketStatus? fromStatus;
+  final TicketStatus? toStatus;
+
+  /// Collaborator id or organizer uid when known.
+  final String? actorId;
+
+  /// `organizer` | `seller` | `validator` | `collector` | `coordinator`
+  final String? actorRole;
+
+  final String? note;
+
+  String get actorRoleLabel => switch (actorRole) {
+    'organizer' => 'Organizador',
+    'seller' => 'Vendedor',
+    'validator' => 'Validador',
+    'collector' => 'Recaudador',
+    'coordinator' => 'Coordinador',
+    _ => actorRole ?? 'Sistema',
+  };
+
+  factory TicketHistoryEntry.fromFirestore(Map<String, dynamic> data) {
+    return TicketHistoryEntry(
+      at: data['at'] is Timestamp
+          ? (data['at'] as Timestamp).toDate()
+          : (data['at'] as DateTime? ?? DateTime.now()),
+      action: TicketHistoryActionX.fromFirestore(data['action'] as String?),
+      fromStatus: data['fromStatus'] == null
+          ? null
+          : TicketStatusX.fromFirestore(data['fromStatus'] as String?),
+      toStatus: data['toStatus'] == null
+          ? null
+          : TicketStatusX.fromFirestore(data['toStatus'] as String?),
+      actorId: data['actorId'] as String?,
+      actorRole: data['actorRole'] as String?,
+      note: data['note'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'at': Timestamp.fromDate(at),
+      'action': action.firestoreValue,
+      if (fromStatus != null) 'fromStatus': fromStatus!.firestoreValue,
+      if (toStatus != null) 'toStatus': toStatus!.firestoreValue,
+      if (actorId != null) 'actorId': actorId,
+      if (actorRole != null) 'actorRole': actorRole,
+      if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
+    };
   }
 }
 
@@ -45,8 +150,10 @@ class Ticket {
     this.sellerId,
     this.validatorId,
     this.collectorId,
+    this.assignedByCollaboratorId,
     this.buyerName = '',
-  });
+    List<TicketHistoryEntry>? history,
+  }) : history = history ?? const [];
 
   final String id;
   final String eventId;
@@ -60,8 +167,14 @@ class Ticket {
   /// Collector who received the money from the seller (rendición).
   String? collectorId;
 
+  /// Coordinator who assigned this ticket to a seller (null = organizer).
+  String? assignedByCollaboratorId;
+
   /// Who the ticket was sold / given to (filled when sharing / collecting).
   String buyerName;
+
+  /// Chronological audit trail (append-only in Firestore).
+  final List<TicketHistoryEntry> history;
 
   /// Payload encoded in the ticket QR for validators (not a buyer deeplink).
   ///
@@ -73,6 +186,19 @@ class Ticket {
     required String eventId,
     required Map<String, dynamic> data,
   }) {
+    final historyRaw = data['history'];
+    final history = <TicketHistoryEntry>[];
+    if (historyRaw is List) {
+      for (final item in historyRaw) {
+        if (item is Map) {
+          history.add(
+            TicketHistoryEntry.fromFirestore(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+    history.sort((a, b) => a.at.compareTo(b.at));
+
     return Ticket(
       id: id,
       eventId: eventId,
@@ -81,7 +207,9 @@ class Ticket {
       sellerId: data['sellerId'] as String?,
       validatorId: data['validatorId'] as String?,
       collectorId: data['collectorId'] as String?,
+      assignedByCollaboratorId: data['assignedByCollaboratorId'] as String?,
       buyerName: (data['buyerName'] as String?) ?? '',
+      history: history,
     );
   }
 
@@ -92,7 +220,9 @@ class Ticket {
       'sellerId': sellerId,
       'validatorId': validatorId,
       'collectorId': collectorId,
+      'assignedByCollaboratorId': assignedByCollaboratorId,
       'buyerName': buyerName,
+      'history': history.map((e) => e.toFirestoreMap()).toList(),
     };
   }
 }

@@ -107,6 +107,7 @@ class Event {
     required this.sellersCount,
     required this.validatorsCount,
     this.collectorsCount = 0,
+    this.coordinatorsCount = 0,
     this.notes = '',
     this.status = EventStatus.awaitingPayment,
     this.paid = false,
@@ -142,6 +143,9 @@ class Event {
 
   /// Suggested max collectors for this event.
   int collectorsCount;
+
+  /// Suggested max coordinators for this event.
+  int coordinatorsCount;
 
   EventStatus status;
   bool paid;
@@ -181,6 +185,7 @@ class Event {
       sellersCount: (data['sellersCount'] as num?)?.toInt() ?? 0,
       validatorsCount: (data['validatorsCount'] as num?)?.toInt() ?? 0,
       collectorsCount: (data['collectorsCount'] as num?)?.toInt() ?? 0,
+      coordinatorsCount: (data['coordinatorsCount'] as num?)?.toInt() ?? 0,
       notes: (data['notes'] as String?) ?? '',
       status: EventStatusX.fromFirestore(data['status'] as String?),
       paid: data['paid'] == true,
@@ -211,6 +216,7 @@ class Event {
       'sellersCount': sellersCount,
       'validatorsCount': validatorsCount,
       'collectorsCount': collectorsCount,
+      'coordinatorsCount': coordinatorsCount,
       'notes': notes,
       'status': status.firestoreValue,
       'paid': paid,

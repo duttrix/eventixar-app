@@ -87,6 +87,11 @@ final eventCollectorsProvider =
   return _collaboratorsWithRole(ref, eventId, CollaboratorRole.collector);
 });
 
+final eventCoordinatorsProvider =
+    Provider.family<AsyncValue<List<Collaborator>>, String>((ref, eventId) {
+  return _collaboratorsWithRole(ref, eventId, CollaboratorRole.coordinator);
+});
+
 final eventTicketAggregateProvider =
     Provider.family<AsyncValue<Map<TicketStatus, int>>, String>((ref, eventId) {
   return ref.watch(eventTicketsProvider(eventId)).whenData((tickets) {
@@ -98,7 +103,20 @@ final eventTicketAggregateProvider =
   });
 });
 
-/// collaboratorId → invite token. Only the event owner can read these.
+/// Invite token for one collaborator (works for organizer and portals).
+final collaboratorAccessTokenProvider =
+    FutureProvider.family<String, ({String eventId, String collaboratorId})>((
+  ref,
+  args,
+) async {
+  return await ref.read(collaboratorRepositoryProvider).getAccessToken(
+            eventId: args.eventId,
+            collaboratorId: args.collaboratorId,
+          ) ??
+      '';
+});
+
+/// collaboratorId → invite token. Owner lists the access subcollection.
 final eventAccessTokensProvider =
     StreamProvider.family<Map<String, String>, String>((ref, eventId) {
   return ref.watch(collaboratorRepositoryProvider).watchAccessTokens(eventId);
@@ -132,6 +150,7 @@ Future<Collaborator> inviteCollaborator(
   required String name,
   required String phone,
   String notes = '',
+  String? createdByCoordinatorId,
 }) {
   return ref.read(collaboratorRepositoryProvider).create(
         eventId: eventId,
@@ -139,6 +158,7 @@ Future<Collaborator> inviteCollaborator(
         name: name,
         phone: phone,
         notes: notes,
+        createdByCoordinatorId: createdByCoordinatorId,
       );
 }
 
@@ -204,12 +224,14 @@ Future<void> assignTicketRangeAction(
   required String sellerId,
   required int from,
   required int to,
+  String? assignedByCollaboratorId,
 }) async {
   await ref.read(eventRepositoryProvider).assignTicketRange(
         eventId: eventId,
         sellerId: sellerId,
         from: from,
         to: to,
+        assignedByCollaboratorId: assignedByCollaboratorId,
       );
 }
 
@@ -218,6 +240,8 @@ Future<void> setTicketsBuyerAction(
   required String eventId,
   required Iterable<String> ticketIds,
   required String buyerName,
+  String? actorId,
+  String? actorRole,
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
@@ -225,6 +249,8 @@ Future<void> setTicketsBuyerAction(
         eventId: eventId,
         ticketIds: ids,
         buyerName: buyerName,
+        actorId: actorId,
+        actorRole: actorRole,
       );
 }
 
@@ -232,25 +258,48 @@ Future<void> collectTicketsAction(
   WidgetRef ref, {
   required String eventId,
   required Iterable<String> ticketIds,
+  String? actorId,
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref
-      .read(eventRepositoryProvider)
-      .markTicketsCollected(eventId: eventId, ticketIds: ids);
+  await ref.read(eventRepositoryProvider).markTicketsCollected(
+        eventId: eventId,
+        ticketIds: ids,
+        actorId: actorId,
+      );
 }
 
-/// Organizer frees unsold tickets so they can be assigned to another seller.
+/// Organizer/coordinator frees unsold tickets so they can be reassigned.
 Future<void> returnTicketsToPoolAction(
   WidgetRef ref, {
   required String eventId,
   required Iterable<String> ticketIds,
+  String? actorId,
+  String actorRole = 'organizer',
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
   await ref.read(eventRepositoryProvider).returnTicketsToPool(
         eventId: eventId,
         ticketIds: ids,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+}
+
+/// Collector returns tickets (`withSeller`/`collected` → `returned` pool).
+Future<void> markTicketsReturnedAction(
+  WidgetRef ref, {
+  required String eventId,
+  required Iterable<String> ticketIds,
+  String? actorId,
+}) async {
+  final ids = ticketIds.toList(growable: false);
+  if (ids.isEmpty) return;
+  await ref.read(eventRepositoryProvider).markTicketsReturned(
+        eventId: eventId,
+        ticketIds: ids,
+        actorId: actorId,
       );
 }
 

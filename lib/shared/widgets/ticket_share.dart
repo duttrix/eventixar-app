@@ -12,8 +12,6 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../data/models/ticket_design.dart';
-import 'access_share.dart';
-import 'status_badge.dart';
 
 export '../../data/models/ticket_design.dart';
 
@@ -236,11 +234,6 @@ class TicketSharePreview extends StatelessWidget {
                   ),
                 ),
               ],
-              const Spacer(),
-              StatusBadge(
-                label: ticket.status.label,
-                tone: ticketStatusTone(ticket.status),
-              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -297,9 +290,9 @@ class TicketSharePreview extends StatelessWidget {
               ),
               if (showQr)
                 Container(
-                  width: 72,
-                  height: 72,
-                  padding: const EdgeInsets.all(4),
+                  width: 104,
+                  height: 104,
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),

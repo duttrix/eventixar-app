@@ -10,12 +10,13 @@ Pendientes a propósito (no implementar todavía): **Apple Sign-In**, **pago rea
 App para organizar un evento con tickets numerados (beneficio, rifa, kermesse, etc.):
 
 1. El **organizador** inicia sesión con Google, crea el evento y lo habilita.
-2. Asigna **rangos de tickets** a cada vendedor (pueden ser cantidades distintas).
-3. Comparte un **link de acceso** a vendedores, validadores y recaudadores.
-4. El **vendedor** abre el link (sin cuenta), ve sus tickets y los comparte al comprador.
-5. El **recaudador** rinde lo cobrado por cada vendedor.
-6. El **validador** escanea el QR del ticket al retiro / entrada.
-7. El organizador ve el resumen y puede finalizar el evento.
+2. Invita **coordinadores** (opcionales) y/o asigna **rangos de tickets** a cada vendedor.
+3. Comparte un **link de acceso** a coordinadores, vendedores, validadores y recaudadores.
+4. El **coordinador** gestiona todos los vendedores: crear, asignar rangos, share, regenerar, devolver al pool, eliminar.
+5. El **vendedor** abre el link (sin cuenta), ve sus tickets y los comparte al comprador.
+6. El **recaudador** rinde lo cobrado por cada vendedor.
+7. El **validador** escanea el QR del ticket al retiro / entrada.
+8. El organizador ve el resumen y puede finalizar el evento.
 
 ### Formato de los tickets
 
@@ -38,9 +39,12 @@ Plantillas, colores, fondo y tipografía se **guardan en el documento del evento
 | Rol | ¿Necesita cuenta? | Cómo entra |
 |-----|-------------------|------------|
 | **Organizador** | Sí (Google) | Login → Mis eventos |
+| **Coordinador** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
 | **Vendedor** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
 | **Validador** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
 | **Recaudador** | No | Link HTTPS → app (`eventixar.web.app/join/{token}`) |
+
+**Coordinador:** ve y gestiona **todos** los vendedores del evento (crear, asignar rangos, compartir/regenerar acceso, devolver al pool, eliminar). Queda auditoría en `assignedByCollaboratorId` (quién asignó cada ticket/rango) y `createdByCoordinatorId` (quién creó al vendedor).
 
 > El link compartido es HTTPS en **eventixar.web.app** (clicable en WhatsApp). La landing abre `eventixar://join/...`. Sin la app instalada no hay acceso. Un dominio propio (`app.eventixar.com`) puede aliasarse después si hace falta.
 
@@ -73,7 +77,9 @@ Cotización (solo por cantidad de tickets; el equipo no suma al costo):
 |-----|----------|
 | **Resumen** | Totales, desempeño, finalizar evento |
 | **Tickets** | Desglose, vista previa, diseño, PDF |
+| **Rastreador** | Buscar un ticket por número y ver historial de movimientos |
 | **Vendedores** | Alta, rangos, share, regenerar acceso, eliminar, devoluciones al pool |
+| **Coordinadores** | Alta, share, regenerar, eliminar |
 | **Validadores** | Alta, share, regenerar, eliminar |
 | **Recaudadores** | Alta, share, regenerar, eliminar, detalle de rendiciones |
 | **Datos** | Editar datos del evento |
@@ -99,6 +105,12 @@ Desde Resumen, cuando el organizador cierra el evento.
 
 ## 4. Portales por deeplink
 
+### Coordinador
+
+- Lista de **todos** los vendedores del evento.
+- Crear vendedores, asignar rangos, compartir/regenerar acceso, devolver al pool, eliminar.
+- Las asignaciones guardan `assignedByCollaboratorId`.
+
 ### Vendedor
 
 - Lista de sus tickets y estados.
@@ -108,7 +120,8 @@ Desde Resumen, cuando el organizador cierra el evento.
 
 ### Recaudador
 
-- Elige vendedor y marca rendición de lo cobrado.
+- Elige vendedor y marca rendición de lo cobrado (`collected` → `settled`).
+- También puede marcar tickets **cobrados** o **en poder** como **Devuelto** (`returned`): vuelven al pool (sin vendedor) para que un coordinador los reasigne.
 
 ### Validador
 

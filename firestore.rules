@@ -13,10 +13,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/events/$(eventId)).data.ownerId;
     }
 
+    function isEventOwner(eventId) {
+      return isSignedIn() && eventOwnerId(eventId) == request.auth.uid;
+    }
+
     // Ticket mutations allowed from collaborator portals (no Auth yet).
     // Knowing the event id (via invite token) is the gate, so the rules also
-    // pin down which fields move and in which direction: assignment to a
-    // seller stays organizer-only and the life cycle can never run backwards.
+    // pin down which fields move and in which direction.
     function portalStatusTransition() {
       return request.resource.data.status == resource.data.status
         || (resource.data.status == 'withSeller'
@@ -29,8 +32,65 @@ service cloud.firestore {
 
     function ticketPortalUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['status', 'buyerName', 'validatorId', 'collectorId'])
+        .hasOnly(['status', 'buyerName', 'validatorId', 'collectorId', 'history'])
         && portalStatusTransition();
+    }
+
+    // Coordinator (or organizer without Auth path) assigns / returns tickets.
+    function ticketAssignmentUpdate() {
+      return resource.data.status in ['unassigned', 'returned']
+        && request.resource.data.status == 'withSeller'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'sellerId', 'assignedByCollaboratorId', 'history'])
+        && request.resource.data.sellerId is string;
+    }
+
+    function ticketReturnToPoolUpdate() {
+      return resource.data.status == 'withSeller'
+        && request.resource.data.status == 'unassigned'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'history'])
+        && request.resource.data.sellerId == null
+        && request.resource.data.buyerName == ''
+        && request.resource.data.assignedByCollaboratorId == null;
+    }
+
+    // Collector marks cobrado / en poder as "devuelto" → free pool for reassignment.
+    function ticketCollectorReturnedUpdate() {
+      return resource.data.status in ['withSeller', 'collected']
+        && request.resource.data.status == 'returned'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'collectorId', 'history'])
+        && request.resource.data.sellerId == null
+        && request.resource.data.buyerName == ''
+        && request.resource.data.assignedByCollaboratorId == null
+        && request.resource.data.collectorId == null;
+    }
+
+    // Coordinator portal may manage sellers only (not other roles).
+    function sellerOnlyCreate() {
+      return request.resource.data.role == 'seller'
+        && request.resource.data.name is string;
+    }
+
+    function sellerOnlyUpdate() {
+      return resource.data.role == 'seller'
+        && request.resource.data.role == 'seller';
+    }
+
+    function sellerOnlyDelete() {
+      return resource.data.role == 'seller';
+    }
+
+    function sellerTokenCreate() {
+      return request.resource.data.keys().hasAll(['eventId', 'collaboratorId', 'role'])
+        && request.resource.data.role == 'seller'
+        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)/collaborators/$(request.resource.data.collaboratorId))
+        && get(/databases/$(database)/documents/events/$(request.resource.data.eventId)/collaborators/$(request.resource.data.collaboratorId)).data.role == 'seller';
+    }
+
+    function sellerTokenDelete() {
+      return resource.data.role == 'seller';
     }
 
     // Organizer profile: only the signed-in user can read/write their own doc.
@@ -52,28 +112,32 @@ service cloud.firestore {
       allow delete: if false;
 
       match /tickets/{ticketId} {
-        allow create: if isSignedIn()
-          && eventOwnerId(eventId) == request.auth.uid;
-        // Organizer full update, or portal update of operational fields only.
-        allow update: if (isSignedIn()
-            && eventOwnerId(eventId) == request.auth.uid)
-          || ticketPortalUpdate();
+        allow create: if isEventOwner(eventId);
+        allow update: if isEventOwner(eventId)
+          || ticketPortalUpdate()
+          || ticketAssignmentUpdate()
+          || ticketReturnToPoolUpdate()
+          || ticketCollectorReturnedUpdate();
         allow get, list: if true;
         allow delete: if false;
       }
 
       // Public profile of each collaborator. Holds no credentials: the invite
-      // token lives in /access, so portals can list peers safely.
+      // token lives in /access. Coordinator portal may CUD sellers only.
       match /collaborators/{collaboratorId} {
-        allow create, update, delete: if isSignedIn()
-          && eventOwnerId(eventId) == request.auth.uid;
+        allow create: if isEventOwner(eventId) || sellerOnlyCreate();
+        allow update: if isEventOwner(eventId) || sellerOnlyUpdate();
+        allow delete: if isEventOwner(eventId) || sellerOnlyDelete();
         allow get, list: if true;
       }
 
-      // Invite tokens for the organizer's share links. Never public.
+      // Invite tokens. Get is open so portals can share; list stays owner-only.
       match /access/{collaboratorId} {
-        allow read, write: if isSignedIn()
-          && eventOwnerId(eventId) == request.auth.uid;
+        allow get: if true;
+        allow list: if isEventOwner(eventId);
+        allow create, update, delete: if isEventOwner(eventId)
+          || exists(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId))
+            && get(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId)).data.role == 'seller';
       }
     }
 
@@ -82,10 +146,12 @@ service cloud.firestore {
     match /tokens/{token} {
       allow get: if true;
       allow list: if false;
-      allow create: if isSignedIn()
-        && eventOwnerId(request.resource.data.eventId) == request.auth.uid;
-      allow delete: if isSignedIn()
-        && eventOwnerId(resource.data.eventId) == request.auth.uid;
+      allow create: if (isSignedIn()
+          && eventOwnerId(request.resource.data.eventId) == request.auth.uid)
+        || sellerTokenCreate();
+      allow delete: if (isSignedIn()
+          && eventOwnerId(resource.data.eventId) == request.auth.uid)
+        || sellerTokenDelete();
       allow update: if false;
     }
 

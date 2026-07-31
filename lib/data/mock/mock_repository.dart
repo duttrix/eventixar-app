@@ -359,6 +359,7 @@ class MockRepository extends ChangeNotifier {
       CollaboratorRole.seller => 'sel_',
       CollaboratorRole.validator => 'val_',
       CollaboratorRole.collector => 'col_',
+      CollaboratorRole.coordinator => 'coord_',
     };
     final collaborator = Collaborator(
       id: _nextId(idPrefix),

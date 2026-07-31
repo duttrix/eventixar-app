@@ -11,14 +11,18 @@ import '../../shared/widgets/status_badge.dart';
 import 'event_data_tab.dart';
 import 'validators_tab.dart';
 import 'collectors_tab.dart';
+import 'coordinators_tab.dart';
 import 'summary_tab.dart';
 import 'tickets_tab.dart';
+import 'ticket_tracker_tab.dart';
 import 'sellers_tab.dart';
 
 enum EventTab {
   summary,
   tickets,
+  tracker,
   sellers,
+  coordinators,
   validators,
   collectors,
   eventData,
@@ -50,7 +54,9 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     final Widget body = switch (_selected) {
       EventTab.summary => SummaryTab(eventId: widget.eventId),
       EventTab.tickets => TicketsTab(eventId: widget.eventId),
+      EventTab.tracker => TicketTrackerTab(eventId: widget.eventId),
       EventTab.sellers => SellersTab(eventId: widget.eventId),
+      EventTab.coordinators => CoordinatorsTab(eventId: widget.eventId),
       EventTab.validators => ValidatorsTab(eventId: widget.eventId),
       EventTab.collectors => CollectorsTab(eventId: widget.eventId),
       EventTab.eventData => EventDataTab(eventId: widget.eventId),
@@ -107,7 +113,9 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return switch (tab) {
       EventTab.summary => Icons.bar_chart_outlined,
       EventTab.tickets => Icons.confirmation_number_outlined,
+      EventTab.tracker => Icons.timeline_outlined,
       EventTab.sellers => Icons.groups_outlined,
+      EventTab.coordinators => Icons.supervisor_account_outlined,
       EventTab.validators => Icons.qr_code_scanner_outlined,
       EventTab.collectors => Icons.account_balance_wallet_outlined,
       EventTab.eventData => Icons.event_note_outlined,
@@ -118,7 +126,9 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return switch (tab) {
       EventTab.summary => 'Resumen',
       EventTab.tickets => 'Tickets',
+      EventTab.tracker => 'Rastreador',
       EventTab.sellers => 'Vendedores',
+      EventTab.coordinators => 'Coordinadores',
       EventTab.validators => 'Validadores',
       EventTab.collectors => 'Recaudadores',
       EventTab.eventData => 'Datos del evento',

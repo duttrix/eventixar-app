@@ -194,7 +194,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Tickets: ${event.ticketCount} · Vendedores: ${event.sellersCount} · Validadores: ${event.validatorsCount}',
+                'Tickets: ${event.ticketCount} · Vendedores: ${event.sellersCount} · Coordinadores: ${event.coordinatorsCount} · Validadores: ${event.validatorsCount}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],

@@ -55,6 +55,7 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
         CollaboratorRole.seller => '/seller/${widget.token}',
         CollaboratorRole.validator => '/validator/${widget.token}',
         CollaboratorRole.collector => '/collector/${widget.token}',
+        CollaboratorRole.coordinator => '/coordinator/${widget.token}',
       };
       context.go(path);
     } catch (e) {
@@ -201,6 +202,7 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                           context,
                           tickets: selectedTickets,
                           event: event,
+                          sellerId: seller.id,
                           sellerName: seller.name,
                           action: _SharePrintAction.printPdf,
                         ),
@@ -221,6 +223,7 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                           context,
                           tickets: selectedTickets,
                           event: event,
+                          sellerId: seller.id,
                           sellerName: seller.name,
                           action: _SharePrintAction.whatsapp,
                         ),
@@ -293,6 +296,7 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
                         ref,
                         eventId: event.id,
                         ticketIds: [ticket.id],
+                        actorId: seller.id,
                       );
                       if (!mounted) return;
                       setState(() => _selectedIds.remove(ticket.id));
@@ -326,6 +330,7 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
     BuildContext context, {
     required List<Ticket> tickets,
     required Event event,
+    required String sellerId,
     required String sellerName,
     required _SharePrintAction action,
   }) async {
@@ -343,6 +348,8 @@ class _SellerPortalScreenState extends ConsumerState<SellerPortalScreen> {
         eventId: event.id,
         ticketIds: tickets.map((t) => t.id),
         buyerName: result.buyerName,
+        actorId: sellerId,
+        actorRole: 'seller',
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -811,6 +818,7 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
 
     ref.watch(eventTicketsProvider(validator.eventId));
     final eventAsync = ref.watch(eventProvider(validator.eventId));
+    final collabsAsync = ref.watch(eventCollaboratorsProvider(validator.eventId));
     if (eventAsync.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -820,6 +828,18 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
       );
     }
     final event = eventAsync.requireValue;
+    final collaborators =
+        collabsAsync.valueOrNull ?? const <Collaborator>[];
+    final lastTicket = _lastTicket;
+    Collaborator? seller;
+    if (lastTicket?.sellerId != null) {
+      for (final c in collaborators) {
+        if (c.id == lastTicket!.sellerId) {
+          seller = c;
+          break;
+        }
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -882,32 +902,83 @@ class _ValidatorPortalScreenState extends ConsumerState<ValidatorPortalScreen> {
                     labelText: 'Número de ticket',
                     hintText: 'Ej. 18',
                   ),
+                  onSubmitted: (_) => _lookup(),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(onPressed: _lookup, child: const Text('Buscar')),
               ],
             ),
           ),
-          if (_lastTicket != null) ...[
+          if (lastTicket != null) ...[
             const SizedBox(height: 16),
             SectionCard(
-              title: 'Ticket #${_lastTicket!.number}',
+              title: 'Ticket #${lastTicket.number}',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   StatusBadge(
-                    label: _lastTicket!.status.label,
-                    tone: ticketStatusTone(_lastTicket!.status),
+                    label: lastTicket.status.label,
+                    tone: ticketStatusTone(lastTicket.status),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Destinatario',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    lastTicket.buyerName.trim().isEmpty
+                        ? 'Sin destinatario cargado'
+                        : lastTicket.buyerName.trim(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: lastTicket.buyerName.trim().isEmpty
+                          ? AppColors.textMuted
+                          : AppColors.text,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: _lastTicket!.status == TicketStatus.delivered
+                  const Text(
+                    'Vendedor',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    seller?.name ??
+                        (lastTicket.sellerId == null
+                            ? 'Sin vendedor'
+                            : 'Vendedor no encontrado'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: seller == null
+                          ? AppColors.textMuted
+                          : AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: lastTicket.status == TicketStatus.delivered
                         ? null
                         : _deliver,
-                    child: Text(
-                      _lastTicket!.status == TicketStatus.delivered
+                    icon: Icon(
+                      lastTicket.status == TicketStatus.delivered
+                          ? Icons.check_circle_outline
+                          : Icons.verified_outlined,
+                    ),
+                    label: Text(
+                      lastTicket.status == TicketStatus.delivered
                           ? 'Ya validado'
-                          : 'Marcar validado',
+                          : 'Validar',
                     ),
                   ),
                 ],
@@ -1010,8 +1081,8 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
           SectionCard(
             title: event.name,
             child: const Text(
-              'Elegí un vendedor para rendir lo que ya cobró. '
-              'Por ahora ves a todos los vendedores del evento.',
+              'Elegí un vendedor para rendir lo cobrado o devolver tickets '
+              'al pool (para que un coordinador los reasigne).',
               style: TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ),
@@ -1065,11 +1136,18 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
         if (byStatus != 0) return byStatus;
         return a.number.compareTo(b.number);
       });
-    final pending = sorted
-        .where((t) => t.status == TicketStatus.collected)
+    final selectable = sorted
+        .where(
+          (t) =>
+              t.status == TicketStatus.collected ||
+              t.status == TicketStatus.withSeller,
+        )
         .toList(growable: false);
-    final selectedTickets = pending
+    final selectedTickets = selectable
         .where((t) => _selectedIds.contains(t.id))
+        .toList(growable: false);
+    final selectedCollected = selectedTickets
+        .where((t) => t.status == TicketStatus.collected)
         .toList(growable: false);
     final currency = event.ticketPrice;
 
@@ -1102,10 +1180,11 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Solo podés rendir tickets ya cobrados por el vendedor. '
-                  'Al confirmar quedan rendidos a tu nombre.',
-                  style: const TextStyle(
+                const Text(
+                  'Seleccioná tickets cobrados o en poder del vendedor. '
+                  'Podés rendir lo cobrado, o marcar como devuelto para que '
+                  'vuelvan al pool y el coordinador los reasigne.',
+                  style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 13,
                   ),
@@ -1120,23 +1199,27 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: selectedTickets.isEmpty
+                  onPressed: selectedCollected.isEmpty
                       ? null
                       : () async {
                           try {
                             await settleTicketsAction(
                               ref,
                               eventId: event.id,
-                              ticketIds: selectedTickets.map((t) => t.id),
+                              ticketIds: selectedCollected.map((t) => t.id),
                               collectorId: collector.id,
                             );
                             if (!context.mounted) return;
-                            setState(_selectedIds.clear);
+                            setState(() {
+                              _selectedIds.removeWhere(
+                                (id) => selectedCollected.any((t) => t.id == id),
+                              );
+                            });
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'Rendiste ${selectedTickets.length} tickets '
-                                  '(\$${(selectedTickets.length * currency).toStringAsFixed(0)}).',
+                                  'Rendiste ${selectedCollected.length} tickets '
+                                  '(\$${(selectedCollected.length * currency).toStringAsFixed(0)}).',
                                 ),
                               ),
                             );
@@ -1149,15 +1232,79 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                         },
                   icon: const Icon(Icons.fact_check_outlined),
                   label: Text(
+                    selectedCollected.isEmpty
+                        ? 'Rendir cobrados'
+                        : 'Rendir (${selectedCollected.length})',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: selectedTickets.isEmpty
+                      ? null
+                      : () async {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (dialogContext) => AlertDialog(
+                              title: const Text('Marcar como devuelto'),
+                              content: Text(
+                                'Vas a devolver ${selectedTickets.length} ticket'
+                                '${selectedTickets.length == 1 ? '' : 's'} al pool. '
+                                'Quedan libres para que un coordinador los reasigne.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(dialogContext, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                FilledButton(
+                                  onPressed: () =>
+                                      Navigator.pop(dialogContext, true),
+                                  child: const Text('Devolver'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirmed != true || !context.mounted) return;
+                          try {
+                            await markTicketsReturnedAction(
+                              ref,
+                              eventId: event.id,
+                              ticketIds: selectedTickets.map((t) => t.id),
+                              actorId: collector.id,
+                            );
+                            if (!context.mounted) return;
+                            setState(_selectedIds.clear);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${selectedTickets.length} ticket'
+                                  '${selectedTickets.length == 1 ? '' : 's'} '
+                                  'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
+                                  'al pool (devuelto).',
+                                ),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('$e')),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.undo),
+                  label: Text(
                     selectedTickets.isEmpty
-                        ? 'Rendir selección'
-                        : 'Rendir (${selectedTickets.length})',
+                        ? 'Devolver'
+                        : 'Devolver (${selectedTickets.length})',
                   ),
                 ),
               ),
             ],
           ),
-          if (pending.isNotEmpty) ...[
+          if (selectable.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1165,9 +1312,9 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                   onPressed: () => setState(() {
                     _selectedIds
                       ..clear()
-                      ..addAll(pending.map((t) => t.id));
+                      ..addAll(selectable.map((t) => t.id));
                   }),
-                  child: const Text('Todos pendientes'),
+                  child: const Text('Todos'),
                 ),
                 TextButton(
                   onPressed: selectedTickets.isEmpty
@@ -1188,13 +1335,15 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
                 ticket: ticket,
                 event: event,
                 selected: _selectedIds.contains(ticket.id),
-                selectable: ticket.status == TicketStatus.collected,
+                selectable: ticket.status == TicketStatus.collected ||
+                    ticket.status == TicketStatus.withSeller,
                 collectorName: ticket.collectorId == null
                     ? null
                     : (ticket.collectorId == collector.id
                         ? collector.name
                         : null),
-                onToggle: ticket.status == TicketStatus.collected
+                onToggle: ticket.status == TicketStatus.collected ||
+                        ticket.status == TicketStatus.withSeller
                     ? () => setState(() {
                         if (_selectedIds.contains(ticket.id)) {
                           _selectedIds.remove(ticket.id);
@@ -1210,7 +1359,7 @@ class _CollectorPortalScreenState extends ConsumerState<CollectorPortalScreen> {
     );
   }
 
-  /// Order: cobrados (seleccionables) → en poder → rendidos → devueltos → validados.
+  /// Order: cobrados → en poder → rendidos → devueltos → validados.
   static int _collectorTicketSortRank(TicketStatus status) {
     return switch (status) {
       TicketStatus.collected => 0,

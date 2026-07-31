@@ -32,6 +32,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   int _sellersCount = 2;
   int _validatorsCount = 1;
   int _collectorsCount = 0;
+  int _coordinatorsCount = 0;
 
   @override
   void dispose() {
@@ -93,6 +94,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             sellersCount: _sellersCount,
             validatorsCount: _validatorsCount,
             collectorsCount: _collectorsCount,
+            coordinatorsCount: _coordinatorsCount,
             notes: _notesController.text.trim(),
           );
 
@@ -316,6 +318,24 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               _CountStepper(
                 value: _validatorsCount,
                 onChanged: (v) => setState(() => _validatorsCount = v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SectionCard(
+          title: '¿Cuántos coordinadores?',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Opcional. Gestionan vendedores y les asignan tickets.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              _CountStepper(
+                value: _coordinatorsCount,
+                onChanged: (v) => setState(() => _coordinatorsCount = v),
               ),
             ],
           ),

@@ -29,6 +29,10 @@ class AccessShare {
         'Hola ${person.name}, te comparto tu acceso de recaudador para "$eventName". '
             'Abrí el link (con Eventixar instalada) para las rendiciones. '
             'No necesitás registrarte.\n\n$url',
+      CollaboratorRole.coordinator =>
+        'Hola ${person.name}, te comparto tu acceso de coordinador para "$eventName". '
+            'Abrí el link (con Eventixar instalada) para gestionar vendedores y '
+            'asignar tickets. No necesitás registrarte.\n\n$url',
     };
   }
 

@@ -19,10 +19,14 @@ class SellerDetailScreen extends ConsumerStatefulWidget {
     super.key,
     required this.eventId,
     required this.sellerId,
+    this.actingCoordinatorId,
   });
 
   final String eventId;
   final String sellerId;
+
+  /// When set, assignments are attributed to this coordinator.
+  final String? actingCoordinatorId;
 
   @override
   ConsumerState<SellerDetailScreen> createState() => _SellerDetailScreenState();
@@ -67,6 +71,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         ref,
         eventId: eventId,
         ticketIds: ids,
+        actorId: widget.actingCoordinatorId,
+        actorRole:
+            widget.actingCoordinatorId != null ? 'coordinator' : 'organizer',
       );
       if (!mounted) return;
       setState(() => _returnIds.clear());
@@ -125,9 +132,15 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         .toList(growable: false);
     final dateFormat = DateFormat('dd/MM/yyyy');
     final allTickets = ticketsAsync.requireValue;
-    final token =
-        ref.watch(eventAccessTokensProvider(eventId)).valueOrNull?[sellerId] ??
-            '';
+    final token = ref
+            .watch(
+              collaboratorAccessTokenProvider((
+                eventId: eventId,
+                collaboratorId: sellerId,
+              )),
+            )
+            .valueOrNull ??
+        '';
 
     final selectedReturnable = _returnIds
         .where((id) => returnable.any((t) => t.id == id))
@@ -467,7 +480,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     List<Ticket> allTickets,
   ) {
     final unassigned = allTickets
-        .where((t) => t.status == TicketStatus.unassigned)
+        .where((t) => t.status.isAssignablePool)
         .map((t) => t.number)
         .toList()
       ..sort();
@@ -484,8 +497,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           children: [
             Text(
               unassigned.isEmpty
-                  ? 'No hay tickets sin asignar.'
-                  : '${unassigned.length} disponibles · próximo: #$nextNumber',
+                  ? 'No hay tickets disponibles en el pool.'
+                  : '${unassigned.length} disponibles (sin asignar / devueltos) · próximo: #$nextNumber',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -533,6 +546,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                         sellerId: sellerId,
                         from: from,
                         to: to,
+                        assignedByCollaboratorId: widget.actingCoordinatorId,
                       );
                       if (!dialogContext.mounted) return;
                       Navigator.pop(dialogContext);
