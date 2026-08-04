@@ -18,8 +18,6 @@ service cloud.firestore {
     }
 
     // Ticket mutations allowed from collaborator portals (no Auth yet).
-    // Knowing the event id (via invite token) is the gate, so the rules also
-    // pin down which fields move and in which direction.
     function portalStatusTransition() {
       return request.resource.data.status == resource.data.status
         || (resource.data.status == 'withSeller'
@@ -36,7 +34,6 @@ service cloud.firestore {
         && portalStatusTransition();
     }
 
-    // Coordinator (or organizer without Auth path) assigns / returns tickets.
     function ticketAssignmentUpdate() {
       return resource.data.status in ['unassigned', 'returned']
         && request.resource.data.status == 'withSeller'
@@ -55,7 +52,6 @@ service cloud.firestore {
         && request.resource.data.assignedByCollaboratorId == null;
     }
 
-    // Collector marks cobrado / en poder as "devuelto" → free pool for reassignment.
     function ticketCollectorReturnedUpdate() {
       return resource.data.status in ['withSeller', 'collected']
         && request.resource.data.status == 'returned'
@@ -82,26 +78,35 @@ service cloud.firestore {
       return resource.data.role == 'seller';
     }
 
+    // Portal invite token for a seller (no Auth). Do not require exists():
+    // in a batch, exists() sees the DB *before* the write; existsAfter would
+    // be needed. Role on the token doc is enough for the current trust model.
     function sellerTokenCreate() {
-      return request.resource.data.keys().hasAll(['eventId', 'collaboratorId', 'role'])
-        && request.resource.data.role == 'seller'
-        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)/collaborators/$(request.resource.data.collaboratorId))
-        && get(/databases/$(database)/documents/events/$(request.resource.data.eventId)/collaborators/$(request.resource.data.collaboratorId)).data.role == 'seller';
+      return request.resource.data.role == 'seller'
+        && request.resource.data.eventId is string
+        && request.resource.data.collaboratorId is string;
     }
 
     function sellerTokenDelete() {
       return resource.data.role == 'seller';
     }
 
-    // Organizer profile: only the signed-in user can read/write their own doc.
+    function sellerAccessCreate() {
+      return request.resource.data.token is string;
+    }
+
+    // After the seller doc exists (or will exist in this batch).
+    function sellerAccessMutate(eventId, collaboratorId) {
+      return existsAfter(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId))
+        && getAfter(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId)).data.role == 'seller';
+    }
+
     match /users/{userId} {
       allow read, create, update: if isOwner(userId);
       allow delete: if false;
     }
 
-    // Events owned by the organizer.
     match /events/{eventId} {
-      // Public get by unguessable id (collaborator portals).
       allow get: if true;
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn()
@@ -122,8 +127,6 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // Public profile of each collaborator. Holds no credentials: the invite
-      // token lives in /access. Coordinator portal may CUD sellers only.
       match /collaborators/{collaboratorId} {
         allow create: if isEventOwner(eventId) || sellerOnlyCreate();
         allow update: if isEventOwner(eventId) || sellerOnlyUpdate();
@@ -131,18 +134,17 @@ service cloud.firestore {
         allow get, list: if true;
       }
 
-      // Invite tokens. Get is open so portals can share; list stays owner-only.
       match /access/{collaboratorId} {
         allow get: if true;
         allow list: if isEventOwner(eventId);
-        allow create, update, delete: if isEventOwner(eventId)
-          || exists(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId))
-            && get(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId)).data.role == 'seller';
+        allow create: if isEventOwner(eventId)
+          || sellerAccessCreate()
+          || sellerAccessMutate(eventId, collaboratorId);
+        allow update, delete: if isEventOwner(eventId)
+          || sellerAccessMutate(eventId, collaboratorId);
       }
     }
 
-    // Opaque invite tokens. Knowing the doc id is the credential, so reads are
-    // per-document only: listing the collection would hand out every access.
     match /tokens/{token} {
       allow get: if true;
       allow list: if false;
@@ -155,7 +157,6 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Deny everything else.
     match /{document=**} {
       allow read, write: if false;
     }

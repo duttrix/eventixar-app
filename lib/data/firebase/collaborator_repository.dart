@@ -105,11 +105,13 @@ class CollaboratorRepository {
       createdByCoordinatorId: createdByCoordinatorId,
     );
 
-    final batch = _firestore.batch();
-    batch.set(
-      ref,
+    // Write the collaborator first so portal rules that check
+    // `exists(collaborators/{id})` (tokens / access) can succeed without Auth.
+    await ref.set(
       collaborator.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
     );
+
+    final batch = _firestore.batch();
     batch.set(_tokens.doc(token), {
       'eventId': eventId,
       'collaboratorId': ref.id,
