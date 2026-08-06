@@ -7,8 +7,8 @@ enum TicketTypographyStyle { system, featured, compact }
 /// Visual knobs for the ticket card.
 class TicketVisualStyle {
   const TicketVisualStyle({
-    this.primary = const Color(0xFF1B3A5F),
-    this.accent = const Color(0xFF378ADD),
+    this.primary = const Color(0xFF0C1F1C),
+    this.accent = const Color(0xFF0E9F8E),
     this.backgroundMode = TicketBackgroundMode.gradient,
     this.typography = TicketTypographyStyle.system,
   });

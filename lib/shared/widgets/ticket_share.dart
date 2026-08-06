@@ -205,7 +205,7 @@ class TicketSharePreview extends StatelessWidget {
           Row(
             children: [
               Text(
-                'EVENTIXAR',
+                'DUTTRIX',
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 11,

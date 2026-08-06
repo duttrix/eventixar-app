@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <title>Duttrix · app icon</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0E9F8E"/>
+      <stop offset="100%" stop-color="#16C79A"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="115" fill="url(#bg)"/>
+  <g transform="translate(156, 156) scale(2)">
+    <rect x="30" y="26" width="40" height="54" rx="9" fill="#FFFFFF" opacity="0.28" transform="rotate(-18 50 53)"/>
+    <rect x="34" y="22" width="40" height="54" rx="9" fill="#FFFFFF" opacity="0.5" transform="rotate(-4 54 49)"/>
+    <g transform="rotate(12 52 53)">
+      <rect x="38" y="26" width="40" height="54" rx="9" fill="#FFFFFF"/>
+      <rect x="47" y="43" width="23" height="5" rx="2.5" fill="#0E9F8E" opacity="0.7"/>
+      <rect x="47" y="54" width="15" height="4" rx="2" fill="#0E9F8E" opacity="0.4"/>
+    </g>
+    <circle cx="76" cy="34" r="7" fill="#FFC24A"/>
+  </g>
+</svg>

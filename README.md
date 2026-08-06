@@ -1,4 +1,4 @@
-# Eventixar (App)
+# Duttrix (App)
 
 App Flutter: **organizador crea y habilita un evento; vendedores, validadores y recaudadores entran por deeplink**. Gestión de **tickets** por rangos, cobros, rendición y validación. Backend: **Firestore** + auth Google.
 

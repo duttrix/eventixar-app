@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// App-wide [ThemeData], built from the palette in [AppColors]. Uses the
-/// platform's default system font stack (no custom font family set).
+/// App-wide [ThemeData], built from the Duttrix Esmeralda palette.
 class AppTheme {
   AppTheme._();
 

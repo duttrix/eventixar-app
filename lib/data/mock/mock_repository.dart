@@ -5,7 +5,7 @@ import '../models/event.dart';
 import '../models/ticket.dart';
 import '../models/user.dart';
 
-/// In-memory mock source of truth for the simplified Eventixar circuit.
+/// In-memory mock source of truth for the simplified Duttrix circuit.
 ///
 /// **Test fixture only.** The app runs entirely on Firestore (see
 /// `lib/data/app_providers.dart`); nothing in production code reads from here.

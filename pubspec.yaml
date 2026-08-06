@@ -1,5 +1,5 @@
 name: eventixar
-description: "Eventixar - Sistema de Cupones"
+description: "Duttrix - Gestión de eventos y tickets"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -50,6 +50,7 @@ dependencies:
   path_provider: ^2.1.6
   mobile_scanner: ^7.4.0
   app_links: ^7.0.0
+  flutter_native_splash: ^2.4.6
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +62,43 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# ---------------------------------------------------------------------------
+# Brand assets — regenerate with:
+#   dart run flutter_launcher_icons
+#   dart run flutter_native_splash:create
+# ---------------------------------------------------------------------------
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/brand/duttrix-app-icon.png
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#0C1F1C"
+  adaptive_icon_foreground: assets/brand/duttrix-adaptive-foreground.png
+  adaptive_icon_foreground_inset: 0
+  web:
+    generate: true
+    image_path: assets/brand/duttrix-app-icon.png
+    background_color: "#0C1F1C"
+    theme_color: "#0E9F8E"
+
+flutter_native_splash:
+  color: "#F4F6F5"
+  image: assets/brand/duttrix-splash-mark.png
+  color_dark: "#0C1F1C"
+  image_dark: assets/brand/duttrix-splash-mark.png
+  android: true
+  ios: true
+  web: true
+  android_12:
+    color: "#F4F6F5"
+    image: assets/brand/duttrix-splash-mark.png
+    icon_background_color: "#0C1F1C"
+    color_dark: "#0C1F1C"
+    image_dark: assets/brand/duttrix-splash-mark.png
+    icon_background_color_dark: "#0C1F1C"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -73,10 +111,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/brand/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

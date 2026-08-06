@@ -1,0 +1,86 @@
+<svg width="900" height="620" viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg">
+  <title>Duttrix · logo — variantes</title>
+  <defs>
+    <linearGradient id="dxGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0E9F8E"/>
+      <stop offset="100%" stop-color="#16C79A"/>
+    </linearGradient>
+    <linearGradient id="dxGradSoft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#12B89F"/>
+      <stop offset="100%" stop-color="#4FDCB8"/>
+    </linearGradient>
+
+    <!-- SÍMBOLO reutilizable (abanico de tarjetas). Caja base 100x100, centrado en 50,50 -->
+    <g id="dxMark">
+      <rect x="30" y="26" width="40" height="54" rx="9" fill="url(#dxGrad)" opacity="0.35"
+            transform="rotate(-18 50 53)"/>
+      <rect x="34" y="22" width="40" height="54" rx="9" fill="url(#dxGradSoft)" opacity="0.6"
+            transform="rotate(-4 54 49)"/>
+      <g transform="rotate(12 52 53)">
+        <rect x="38" y="26" width="40" height="54" rx="9" fill="url(#dxGrad)"/>
+        <rect x="47" y="43" width="23" height="5" rx="2.5" fill="#FFFFFF" opacity="0.85"/>
+        <rect x="47" y="54" width="15" height="4" rx="2" fill="#FFFFFF" opacity="0.45"/>
+      </g>
+      <circle cx="76" cy="34" r="7" fill="#FFC24A"/>
+    </g>
+  </defs>
+
+  <!-- ============ 1. LOGO HORIZONTAL SOBRE OSCURO ============ -->
+  <rect x="0" y="0" width="900" height="150" rx="0" fill="#0C1F1C"/>
+  <use href="#dxMark" transform="translate(48, 40) scale(0.7)"/>
+  <text x="132" y="90" font-family="Inter, Arial, sans-serif" font-size="46" font-weight="700" letter-spacing="1">
+    <tspan fill="#4FDCB8">D</tspan><tspan fill="#FFFFFF">uttrix</tspan>
+  </text>
+  <text x="134" y="112" font-family="Inter, Arial, sans-serif" font-size="11" letter-spacing="4" fill="#FFFFFF" opacity="0.4">GESTIÓN DE EVENTOS</text>
+
+  <!-- ============ 2. LOGO HORIZONTAL SOBRE CLARO ============ -->
+  <rect x="0" y="150" width="900" height="150" fill="#F4F6F5"/>
+  <use href="#dxMark" transform="translate(48, 190) scale(0.7)"/>
+  <text x="132" y="240" font-family="Inter, Arial, sans-serif" font-size="46" font-weight="700" letter-spacing="1">
+    <tspan fill="#0E9F8E">D</tspan><tspan fill="#0C1F1C">uttrix</tspan>
+  </text>
+  <text x="134" y="262" font-family="Inter, Arial, sans-serif" font-size="11" letter-spacing="4" fill="#5B6B66">GESTIÓN DE EVENTOS</text>
+
+  <!-- ============ 3. ÍCONOS DE APP ============ -->
+  <rect x="0" y="300" width="900" height="320" fill="#EEF1F0"/>
+  <text x="48" y="345" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="2" fill="#8A9793">ICONO DE APP</text>
+
+  <!-- App icon oscuro -->
+  <rect x="48" y="370" width="140" height="140" rx="32" fill="#0C1F1C"/>
+  <use href="#dxMark" transform="translate(83, 405) scale(0.7)"/>
+
+  <!-- App icon color -->
+  <rect x="212" y="370" width="140" height="140" rx="32" fill="url(#dxGrad)"/>
+  <g transform="translate(247, 405) scale(0.7)">
+    <g transform="rotate(12 52 53)">
+      <rect x="38" y="26" width="40" height="54" rx="9" fill="#FFFFFF"/>
+    </g>
+    <circle cx="76" cy="34" r="7" fill="#FFC24A"/>
+  </g>
+
+  <!-- Tamaños intermedios -->
+  <rect x="376" y="410" width="100" height="100" rx="24" fill="#0C1F1C"/>
+  <use href="#dxMark" transform="translate(401, 435) scale(0.5)"/>
+
+  <rect x="496" y="430" width="80" height="80" rx="18" fill="#0C1F1C"/>
+  <use href="#dxMark" transform="translate(516, 450) scale(0.4)"/>
+
+  <rect x="596" y="450" width="60" height="60" rx="14" fill="#0C1F1C"/>
+  <use href="#dxMark" transform="translate(611, 465) scale(0.3)"/>
+
+  <!-- Favicon mínimo (símbolo simplificado) -->
+  <rect x="676" y="470" width="40" height="40" rx="9" fill="url(#dxGrad)"/>
+  <g transform="translate(686, 480) scale(0.2)">
+    <g transform="rotate(12 52 53)">
+      <rect x="38" y="26" width="40" height="54" rx="9" fill="#FFFFFF"/>
+    </g>
+    <circle cx="76" cy="34" r="8" fill="#FFC24A"/>
+  </g>
+
+  <text x="118" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">App oscuro</text>
+  <text x="282" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">App color</text>
+  <text x="426" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">100px</text>
+  <text x="536" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">80px</text>
+  <text x="626" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">60px</text>
+  <text x="696" y="540" font-family="Inter, Arial, sans-serif" font-size="11" fill="#8A9793" text-anchor="middle">favicon</text>
+</svg>

@@ -44,12 +44,13 @@ void main() {
           collaboratorSessionStorageProvider
               .overrideWithValue(_EmptySessionStorage()),
         ],
-        child: const EventixarApp(),
+        child: const DuttrixApp(),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Eventixar'), findsWidgets);
+    expect(find.text('GESTIÓN DE EVENTOS'), findsOneWidget);
+    expect(find.textContaining('uttrix'), findsWidgets);
     expect(find.text('Continuar con Google'), findsOneWidget);
     expect(find.text('Continuar con Apple (próximamente)'), findsOneWidget);
   });

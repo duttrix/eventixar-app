@@ -23,16 +23,16 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
   bool _saving = false;
 
   static const _primarySwatches = <Color>[
+    Color(0xFF0C1F1C),
+    Color(0xFF0E9F8E),
     Color(0xFF1B3A5F),
     Color(0xFF7A1F2B),
     Color(0xFF111827),
     Color(0xFF14532D),
-    Color(0xFF5B21B6),
-    Color(0xFF9A3412),
   ];
 
   static const _accentSwatches = <Color>[
-    Color(0xFF378ADD),
+    Color(0xFF0E9F8E),
     Color(0xFFE8A838),
     Color(0xFF6B7280),
     Color(0xFF86EFAC),

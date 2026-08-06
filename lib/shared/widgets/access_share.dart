@@ -19,19 +19,19 @@ class AccessShare {
     return switch (person.role) {
       CollaboratorRole.seller =>
         'Hola ${person.name}, te comparto tu acceso a los tickets de "$eventName". '
-            'Abrí el link (con Eventixar instalada) y vas a ver tus tickets. '
+            'Abrí el link (con Duttrix instalada) y vas a ver tus tickets. '
             'No necesitás registrarte.\n\n$url',
       CollaboratorRole.validator =>
         'Hola ${person.name}, te comparto tu acceso de validador para "$eventName". '
-            'Abrí el link (con Eventixar instalada) para leer tickets. '
+            'Abrí el link (con Duttrix instalada) para leer tickets. '
             'No necesitás registrarte.\n\n$url',
       CollaboratorRole.collector =>
         'Hola ${person.name}, te comparto tu acceso de recaudador para "$eventName". '
-            'Abrí el link (con Eventixar instalada) para las rendiciones. '
+            'Abrí el link (con Duttrix instalada) para las rendiciones. '
             'No necesitás registrarte.\n\n$url',
       CollaboratorRole.coordinator =>
         'Hola ${person.name}, te comparto tu acceso de coordinador para "$eventName". '
-            'Abrí el link (con Eventixar instalada) para gestionar vendedores y '
+            'Abrí el link (con Duttrix instalada) para gestionar vendedores y '
             'asignar tickets. No necesitás registrarte.\n\n$url',
     };
   }

@@ -90,7 +90,7 @@ class TicketPdf {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'EVENTIXAR',
+                  'DUTTRIX',
                   style: const pw.TextStyle(
                     fontSize: 8,
                     color: PdfColors.blueGrey600,
@@ -159,7 +159,7 @@ class TicketPdf {
     final bytes = await build(event: event, tickets: tickets);
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
-      name: 'eventixar_${event.name}_tickets',
+      name: 'duttrix_${event.name}_tickets',
     );
   }
 }

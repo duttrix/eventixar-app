@@ -3,11 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Abrir Eventixar</title>
+    <title>Abrir Duttrix</title>
     <style>
       :root {
         color-scheme: light;
         font-family: system-ui, -apple-system, sans-serif;
+        --dx-bg: #f4f6f5;
+        --dx-text: #14231f;
+        --dx-soft: #5b6b66;
+        --dx-emerald: #0e9f8e;
+        --dx-night: #0c1f1c;
       }
       body {
         margin: 0;
@@ -15,27 +20,38 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: #f4f7fb;
-        color: #12263a;
+        background: var(--dx-bg);
+        color: var(--dx-text);
       }
       main {
         max-width: 360px;
         text-align: center;
       }
+      .mark {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 16px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0e9f8e, #16c79a);
+      }
       h1 {
-        font-size: 1.4rem;
+        font-size: 1.5rem;
         margin: 0 0 8px;
+        letter-spacing: 0.5px;
+      }
+      h1 span {
+        color: var(--dx-emerald);
       }
       p {
         margin: 0 0 16px;
         line-height: 1.4;
-        color: #4b5c6e;
+        color: var(--dx-soft);
       }
       a.button {
         display: inline-block;
         padding: 12px 18px;
         border-radius: 10px;
-        background: #1b3a5f;
+        background: linear-gradient(135deg, #0e9f8e, #16c79a);
         color: #fff;
         text-decoration: none;
         font-weight: 600;
@@ -48,13 +64,14 @@
   </head>
   <body>
     <main>
-      <h1>Eventixar</h1>
+      <div class="mark" aria-hidden="true"></div>
+      <h1><span>D</span>uttrix</h1>
       <p id="status">Abriendo tu acceso…</p>
       <p>
         <a class="button" id="open" href="#">Abrir la app</a>
       </p>
       <p class="hint">
-        Si no se abre, instalá Eventixar y tocá de nuevo el botón.
+        Si no se abre, instalá Duttrix y tocá de nuevo el botón.
       </p>
     </main>
     <script>

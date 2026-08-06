@@ -1,0 +1,21 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <title>Duttrix · símbolo</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0E9F8E"/>
+      <stop offset="100%" stop-color="#16C79A"/>
+    </linearGradient>
+    <linearGradient id="gs" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#12B89F"/>
+      <stop offset="100%" stop-color="#4FDCB8"/>
+    </linearGradient>
+  </defs>
+  <rect x="30" y="26" width="40" height="54" rx="9" fill="url(#g)" opacity="0.35" transform="rotate(-18 50 53)"/>
+  <rect x="34" y="22" width="40" height="54" rx="9" fill="url(#gs)" opacity="0.6" transform="rotate(-4 54 49)"/>
+  <g transform="rotate(12 52 53)">
+    <rect x="38" y="26" width="40" height="54" rx="9" fill="url(#g)"/>
+    <rect x="47" y="43" width="23" height="5" rx="2.5" fill="#FFFFFF" opacity="0.85"/>
+    <rect x="47" y="54" width="15" height="4" rx="2" fill="#FFFFFF" opacity="0.45"/>
+  </g>
+  <circle cx="76" cy="34" r="7" fill="#FFC24A"/>
+</svg>

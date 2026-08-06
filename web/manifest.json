@@ -1,11 +1,11 @@
 {
-    "name": "eventixar",
-    "short_name": "eventixar",
+    "name": "Duttrix",
+    "short_name": "Duttrix",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Eventixar - Sistema de Cupones",
+    "background_color": "#0C1F1C",
+    "theme_color": "#0E9F8E",
+    "description": "Duttrix - Gestión de eventos y tickets",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

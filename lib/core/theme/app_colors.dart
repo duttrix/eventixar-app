@@ -1,27 +1,40 @@
 import 'package:flutter/material.dart';
 
-/// Color palette extracted from the reference HTML mockups (CSS variables).
+/// Duttrix palette — Esmeralda design tokens.
 class AppColors {
   AppColors._();
 
-  static const Color background = Color(0xFFF5F4F0);
+  // Brand
+  static const Color night = Color(0xFF0C1F1C);
+  static const Color emerald = Color(0xFF0E9F8E);
+  static const Color emerald500 = Color(0xFF16C79A);
+  static const Color emerald200 = Color(0xFF7DE8CE);
+  static const Color amber = Color(0xFFFFC24A);
+
+  // Surfaces / neutrals
+  static const Color background = Color(0xFFF4F6F5);
   static const Color card = Color(0xFFFFFFFF);
-  static const Color border = Color(0xFFE2E0D8);
-  static const Color borderStrong = Color(0xFFC9C6BA);
-  static const Color text = Color(0xFF2C2C2A);
-  static const Color textSecondary = Color(0xFF5F5E5A);
-  static const Color textMuted = Color(0xFF888780);
+  static const Color surface2 = Color(0xFFEEF1F0);
+  static const Color border = Color(0xFFDDE3E1);
+  static const Color borderStrong = Color(0xFFC5CEC9);
 
-  static const Color accent = Color(0xFF378ADD);
-  static const Color accentBg = Color(0xFFE6F1FB);
-  static const Color accentText = Color(0xFF0C447C);
+  // Text
+  static const Color text = Color(0xFF14231F);
+  static const Color textSecondary = Color(0xFF5B6B66);
+  static const Color textMuted = Color(0xFF8A9793);
 
-  static const Color successText = Color(0xFF27500A);
-  static const Color successBg = Color(0xFFEAF3DE);
+  // Primary accent (maps to emerald)
+  static const Color accent = emerald;
+  static const Color accentBg = Color(0xFFE6F7F2);
+  static const Color accentText = Color(0xFF0A6B5F);
 
-  static const Color dangerText = Color(0xFF791F1F);
-  static const Color dangerBg = Color(0xFFFCEBEB);
+  // Semantic
+  static const Color successText = Color(0xFF0A6B5F);
+  static const Color successBg = Color(0xFFE6F7F2);
 
-  static const Color warnText = Color(0xFF8A5A10);
-  static const Color warnBg = Color(0xFFFBF1E0);
+  static const Color dangerText = Color(0xFF9E2C2C);
+  static const Color dangerBg = Color(0xFFFBE9E9);
+
+  static const Color warnText = Color(0xFF8A6410);
+  static const Color warnBg = Color(0xFFFEF3D9);
 }

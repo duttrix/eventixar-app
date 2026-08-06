@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
@@ -12,23 +13,25 @@ import 'data/app_providers.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const ProviderScope(child: EventixarApp()));
+  runApp(const ProviderScope(child: DuttrixApp()));
+  FlutterNativeSplash.remove();
 }
 
-/// Root widget for Eventixar (internal system name: "Sistema de Tickets").
+/// Root widget for Duttrix (gestión de eventos y tickets).
 ///
 /// Organizer auth uses Firebase Google Sign-In; all event, ticket and
 /// collaborator data lives in Firestore.
-class EventixarApp extends ConsumerStatefulWidget {
-  const EventixarApp({super.key});
+class DuttrixApp extends ConsumerStatefulWidget {
+  const DuttrixApp({super.key});
 
   @override
-  ConsumerState<EventixarApp> createState() => _EventixarAppState();
+  ConsumerState<DuttrixApp> createState() => _DuttrixAppState();
 }
 
-class _EventixarAppState extends ConsumerState<EventixarApp>
+class _DuttrixAppState extends ConsumerState<DuttrixApp>
     with WidgetsBindingObserver {
   StreamSubscription<Uri>? _linkSub;
 
@@ -78,7 +81,7 @@ class _EventixarAppState extends ConsumerState<EventixarApp>
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Eventixar',
+      title: 'Duttrix',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,

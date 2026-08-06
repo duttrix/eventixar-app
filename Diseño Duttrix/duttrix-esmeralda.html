@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duttrix · Sistema de diseño Esmeralda</title>
+<style>
+/* ============================================================
+   DUTTRIX · DESIGN TOKENS — paleta Esmeralda
+   Copiar estas variables a styles.scss (Angular) como :root
+   ============================================================ */
+:root {
+  /* --- Marca --- */
+  --dx-night:        #0C1F1C;  /* base oscura: navbar, textos fuertes, fondos hero */
+  --dx-emerald:      #0E9F8E;  /* primario: botones, links, elementos activos */
+  --dx-emerald-500:  #16C79A;  /* primario claro: degradés, hover */
+  --dx-emerald-200:  #7DE8CE;  /* acento suave: bordes, chips */
+  --dx-amber:        #FFC24A;  /* destacado: alertas positivas, highlights, el punto del logo */
+
+  /* --- Degradé de marca --- */
+  --dx-gradient: linear-gradient(135deg, #0E9F8E 0%, #16C79A 100%);
+
+  /* --- Superficies / neutros --- */
+  --dx-bg:           #F4F6F5;  /* fondo general de la app */
+  --dx-surface:      #FFFFFF;  /* tarjetas, paneles, inputs */
+  --dx-surface-2:    #EEF1F0;  /* fondo de campos, filas alternas */
+  --dx-border:       #DDE3E1;  /* bordes sutiles, divisores */
+
+  /* --- Texto --- */
+  --dx-text:         #14231F;  /* texto principal */
+  --dx-text-soft:    #5B6B66;  /* texto secundario, labels */
+  --dx-text-mute:    #8A9793;  /* placeholders, texto deshabilitado */
+
+  /* --- Semánticos (estados de negocio) --- */
+  --dx-success:      #0E9F8E;  --dx-success-bg: #E6F7F2;  --dx-success-fg: #0A6B5F;
+  --dx-warning:      #D99A1C;  --dx-warning-bg: #FEF3D9;  --dx-warning-fg: #8A6410;
+  --dx-info:         #12B89F;  --dx-info-bg:    #E6F7F2;  --dx-info-fg:    #0A6B5F;
+  --dx-danger:       #E05656;  --dx-danger-bg:  #FBE9E9;  --dx-danger-fg:  #9E2C2C;
+
+  /* --- Tipografía --- */
+  --dx-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --dx-font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* Escala tipográfica */
+  --dx-fs-label: 11px;   --dx-fw-label: 500;   /* labels de campos */
+  --dx-fs-value: 13px;   --dx-fw-value: 400;   /* valores */
+  --dx-fs-body:  14px;
+  --dx-fs-h3:    18px;
+  --dx-fs-h2:    24px;
+  --dx-fs-h1:    32px;
+
+  /* --- Radios --- */
+  --dx-radius-sm: 8px;
+  --dx-radius:    12px;
+  --dx-radius-lg: 16px;
+  --dx-radius-pill: 999px;
+
+  /* --- Sombras --- */
+  --dx-shadow-sm: 0 1px 2px rgba(12,31,28,.06);
+  --dx-shadow:    0 4px 16px rgba(12,31,28,.08);
+  --dx-shadow-lg: 0 12px 32px rgba(12,31,28,.12);
+
+  /* --- Espaciado base --- */
+  --dx-space: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--dx-font);
+  background: var(--dx-bg);
+  color: var(--dx-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  padding: 40px 24px;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.page-title { font-size: var(--dx-fs-h1); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+.page-sub { color: var(--dx-text-soft); font-size: var(--dx-fs-body); margin-bottom: 40px; }
+
+.block { margin-bottom: 48px; }
+.block-label {
+  font-size: var(--dx-fs-label); font-weight: 600; letter-spacing: 2px;
+  color: var(--dx-text-mute); text-transform: uppercase; margin-bottom: 16px;
+}
+
+/* ============================================================
+   LOGO
+   ============================================================ */
+.logo {
+  display: inline-flex; align-items: center; gap: 12px;
+}
+.logo-mark { position: relative; width: 48px; height: 48px; flex: none; }
+.logo-mark .card {
+  position: absolute; width: 30px; height: 40px; border-radius: 7px;
+  left: 6px; top: 4px;
+}
+.logo-mark .c3 { background: var(--dx-gradient); opacity: .35; transform: rotate(-18deg) translateX(-4px); }
+.logo-mark .c2 { background: linear-gradient(135deg,#12B89F,#4FDCB8); opacity: .6; transform: rotate(-4deg); }
+.logo-mark .c1 { background: var(--dx-gradient); transform: rotate(12deg) translateX(4px); }
+.logo-mark .dot {
+  position: absolute; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--dx-amber); right: 2px; top: 8px; z-index: 2;
+}
+.logo-word { font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+.logo-word .i { color: var(--dx-emerald); }
+
+.logo-hero {
+  background: var(--dx-night); border-radius: var(--dx-radius-lg);
+  padding: 40px; display: flex; align-items: center; gap: 16px;
+}
+.logo-hero .logo-word { color: #fff; font-size: 40px; }
+.logo-hero .logo-word .i { color: var(--dx-emerald-200); }
+.logo-hero .logo-mark { width: 72px; height: 72px; }
+.logo-hero .logo-mark .card { width: 46px; height: 60px; border-radius: 10px; left: 9px; top: 6px; }
+.logo-hero .logo-mark .dot { width: 15px; height: 15px; right: 3px; top: 12px; }
+.logo-hero .tagline { color: rgba(255,255,255,.4); font-size: 11px; letter-spacing: 3px; margin-top: 6px; }
+
+/* ============================================================
+   PALETA
+   ============================================================ */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.swatch { border-radius: var(--dx-radius); overflow: hidden; box-shadow: var(--dx-shadow-sm); background: var(--dx-surface); }
+.swatch .chip { height: 80px; }
+.swatch .meta { padding: 10px 12px; }
+.swatch .name { font-size: 12px; font-weight: 600; }
+.swatch .hex { font-family: var(--dx-font-mono); font-size: 11px; color: var(--dx-text-soft); }
+
+/* ============================================================
+   BOTONES
+   ============================================================ */
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn {
+  font-family: var(--dx-font); font-size: var(--dx-fs-body); font-weight: 600;
+  border: none; border-radius: var(--dx-radius-sm); padding: 11px 20px;
+  cursor: pointer; transition: transform .1s, box-shadow .2s, background .2s;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--dx-gradient); color: #fff; box-shadow: var(--dx-shadow-sm); }
+.btn-primary:hover { box-shadow: var(--dx-shadow); }
+.btn-secondary { background: var(--dx-surface); color: var(--dx-emerald); border: 1.5px solid var(--dx-emerald); }
+.btn-secondary:hover { background: var(--dx-success-bg); }
+.btn-ghost { background: transparent; color: var(--dx-text-soft); }
+.btn-ghost:hover { background: var(--dx-surface-2); }
+.btn-danger { background: var(--dx-danger); color: #fff; }
+
+/* ============================================================
+   BADGES / ESTADOS
+   ============================================================ */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: var(--dx-radius-pill);
+}
+.badge .d { width: 8px; height: 8px; border-radius: 50%; }
+.badge-success { background: var(--dx-success-bg); color: var(--dx-success-fg); }
+.badge-success .d { background: var(--dx-success); }
+.badge-warning { background: var(--dx-warning-bg); color: var(--dx-warning-fg); }
+.badge-warning .d { background: var(--dx-warning); }
+.badge-info { background: var(--dx-info-bg); color: var(--dx-info-fg); }
+.badge-info .d { background: var(--dx-info); }
+.badge-danger { background: var(--dx-danger-bg); color: var(--dx-danger-fg); }
+.badge-danger .d { background: var(--dx-danger); }
+
+/* ============================================================
+   CARDS / CAMPOS
+   ============================================================ */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+
+.card-ui {
+  background: var(--dx-surface); border-radius: var(--dx-radius);
+  box-shadow: var(--dx-shadow); overflow: hidden;
+}
+.card-head {
+  background: var(--dx-gradient); padding: 20px; color: #fff;
+  display: flex; align-items: center; gap: 10px;
+}
+.card-head .logo-mark { width: 34px; height: 34px; }
+.card-head .logo-mark .card { width: 22px; height: 28px; border-radius: 5px; left: 4px; top: 3px; }
+.card-head .logo-mark .dot { width: 8px; height: 8px; right: 1px; top: 5px; }
+.card-head .t { font-weight: 700; font-size: 16px; }
+.card-body { padding: 20px; }
+
+.stat-label { font-size: var(--dx-fs-label); font-weight: var(--dx-fw-label); color: var(--dx-text-soft); text-transform: uppercase; letter-spacing: 1px; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--dx-night); margin: 4px 0 12px; }
+
+.progress { height: 8px; background: var(--dx-success-bg); border-radius: var(--dx-radius-pill); overflow: hidden; }
+.progress > span { display: block; height: 100%; width: 82%; background: var(--dx-gradient); border-radius: var(--dx-radius-pill); }
+.progress-note { font-size: 12px; color: var(--dx-text-soft); margin-top: 6px; }
+
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: var(--dx-fs-label); font-weight: var(--dx-fw-label); color: var(--dx-text-soft); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.field input {
+  width: 100%; font-family: var(--dx-font); font-size: var(--dx-fs-body);
+  background: var(--dx-surface-2); border: 1px solid transparent; border-radius: var(--dx-radius-sm);
+  padding: 10px 12px; color: var(--dx-text); transition: border .15s, background .15s;
+}
+.field input:focus { outline: none; background: var(--dx-surface); border-color: var(--dx-emerald); }
+.field input::placeholder { color: var(--dx-text-mute); }
+
+.list-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--dx-surface-2); border-radius: var(--dx-radius-sm);
+  padding: 10px 14px; margin-bottom: 8px;
+}
+.list-row .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+.list-row .info { flex: 1; }
+.list-row .info .n { font-size: 13px; font-weight: 600; }
+.list-row .info .s { font-size: 12px; color: var(--dx-text-soft); }
+
+.highlight-bar {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--dx-night); color: #fff; border-radius: var(--dx-radius-sm);
+  padding: 14px 18px;
+}
+.highlight-bar .d { width: 16px; height: 16px; border-radius: 50%; background: var(--dx-amber); flex: none; }
+.highlight-bar .txt { font-size: 13px; }
+.highlight-bar b { color: var(--dx-amber); }
+
+/* ============================================================
+   ÍCONOS APP
+   ============================================================ */
+.icons { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.app-icon { border-radius: 22%; display: grid; place-items: center; box-shadow: var(--dx-shadow); position: relative; }
+.app-icon.dark { background: var(--dx-night); }
+.app-icon.color { background: var(--dx-gradient); }
+.app-icon .logo-mark { width: 60%; height: 60%; }
+
+/* Tipografía muestra */
+.type-row { padding: 14px 0; border-bottom: 1px solid var(--dx-border); }
+.type-row:last-child { border: none; }
+.type-row .sample { color: var(--dx-text); }
+.type-row .desc { font-size: 12px; color: var(--dx-text-mute); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-title">Duttrix · Sistema Esmeralda</div>
+  <div class="page-sub">Design tokens y componentes base para web y app. Las variables CSS de <code>:root</code> se copian directo a <code>styles.scss</code>.</div>
+
+  <!-- LOGO -->
+  <div class="block">
+    <div class="block-label">Logo</div>
+    <div class="logo-hero">
+      <div class="logo-mark">
+        <div class="card c3"></div><div class="card c2"></div><div class="card c1"></div>
+        <div class="dot"></div>
+      </div>
+      <div>
+        <div class="logo-word"><span class="i">D</span>uttrix</div>
+        <div class="tagline">GESTIÓN DE EVENTOS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PALETA -->
+  <div class="block">
+    <div class="block-label">Paleta</div>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#0C1F1C"></div><div class="meta"><div class="name">Night</div><div class="hex">#0C1F1C</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#0E9F8E"></div><div class="meta"><div class="name">Emerald</div><div class="hex">#0E9F8E</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#16C79A"></div><div class="meta"><div class="name">Emerald 500</div><div class="hex">#16C79A</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#7DE8CE"></div><div class="meta"><div class="name">Emerald 200</div><div class="hex">#7DE8CE</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#FFC24A"></div><div class="meta"><div class="name">Amber</div><div class="hex">#FFC24A</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--dx-gradient)"></div><div class="meta"><div class="name">Degradé</div><div class="hex">135° · 0E9F8E→16C79A</div></div></div>
+    </div>
+  </div>
+
+  <!-- BOTONES -->
+  <div class="block">
+    <div class="block-label">Botones</div>
+    <div class="row">
+      <button class="btn btn-primary">+ Nuevo evento</button>
+      <button class="btn btn-secondary">Ver detalle</button>
+      <button class="btn btn-ghost">Cancelar</button>
+      <button class="btn btn-danger">Eliminar</button>
+    </div>
+  </div>
+
+  <!-- BADGES -->
+  <div class="block">
+    <div class="block-label">Estados</div>
+    <div class="row">
+      <span class="badge badge-success"><span class="d"></span>Vendido</span>
+      <span class="badge badge-warning"><span class="d"></span>Pendiente</span>
+      <span class="badge badge-info"><span class="d"></span>Entregado</span>
+      <span class="badge badge-danger"><span class="d"></span>Anulado</span>
+    </div>
+  </div>
+
+  <!-- COMPONENTES -->
+  <div class="block">
+    <div class="block-label">Componentes en contexto</div>
+    <div class="grid2">
+
+      <!-- Card resumen -->
+      <div class="card-ui">
+        <div class="card-head">
+          <div class="logo-mark"><div class="card c3"></div><div class="card c2"></div><div class="card c1"></div><div class="dot"></div></div>
+          <div class="t">Duttrix</div>
+        </div>
+        <div class="card-body">
+          <div class="stat-label">Recaudado este mes</div>
+          <div class="stat-value">$284.500</div>
+          <div class="progress"><span></span></div>
+          <div class="progress-note">82% del objetivo de $350.000</div>
+          <div style="height:16px"></div>
+          <div class="list-row">
+            <div class="avatar" style="background:var(--dx-emerald)">GC</div>
+            <div class="info"><div class="n">Cena aniversario</div><div class="s">120 tarjetas · 98 vendidas</div></div>
+            <span class="badge badge-success"><span class="d"></span>Activo</span>
+          </div>
+          <div class="list-row">
+            <div class="avatar" style="background:var(--dx-amber)">VP</div>
+            <div class="info"><div class="n">Venta de pollos</div><div class="s">80 tarjetas · 44 vendidas</div></div>
+            <span class="badge badge-warning"><span class="d"></span>En curso</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulario + highlight -->
+      <div class="card-ui">
+        <div class="card-body">
+          <div class="stat-label" style="margin-bottom:14px">Nuevo evento</div>
+          <div class="field">
+            <label>Nombre del evento</label>
+            <input type="text" placeholder="Ej: Cena de fin de año" value="Quermés primavera">
+          </div>
+          <div class="field">
+            <label>Cantidad de tarjetas</label>
+            <input type="text" placeholder="0" value="150">
+          </div>
+          <div class="field">
+            <label>Valor por tarjeta</label>
+            <input type="text" placeholder="$0" value="$2.500">
+          </div>
+          <div class="row" style="margin:16px 0 20px">
+            <button class="btn btn-primary">Crear evento</button>
+            <button class="btn btn-ghost">Cancelar</button>
+          </div>
+          <div class="highlight-bar">
+            <div class="d"></div>
+            <div class="txt">Recaudación potencial: <b>$375.000</b></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ÍCONOS -->
+  <div class="block">
+    <div class="block-label">Ícono de app</div>
+    <div class="icons">
+      <div class="app-icon dark" style="width:96px;height:96px"><div class="logo-mark" style="width:56px;height:56px"><div class="card c3"></div><div class="card c2"></div><div class="card c1"></div><div class="dot"></div></div></div>
+      <div class="app-icon color" style="width:96px;height:96px">
+        <div class="logo-mark" style="width:56px;height:56px">
+          <div class="card" style="width:34px;height:44px;border-radius:8px;left:11px;top:6px;background:#fff;transform:rotate(12deg)"></div>
+          <div class="dot" style="background:var(--dx-amber);z-index:3"></div>
+        </div>
+      </div>
+      <div class="app-icon dark" style="width:64px;height:64px"><div class="logo-mark" style="width:38px;height:38px"><div class="card c3"></div><div class="card c2"></div><div class="card c1"></div><div class="dot"></div></div></div>
+      <div class="app-icon dark" style="width:44px;height:44px"><div class="logo-mark" style="width:26px;height:26px"><div class="card c3"></div><div class="card c2"></div><div class="card c1"></div><div class="dot"></div></div></div>
+    </div>
+  </div>
+
+  <!-- TIPOGRAFÍA -->
+  <div class="block">
+    <div class="block-label">Tipografía — Inter</div>
+    <div class="card-ui"><div class="card-body">
+      <div class="type-row"><div class="sample" style="font-size:32px;font-weight:700;letter-spacing:-.5px">Duttrix — gestión de eventos</div><div class="desc">H1 · 32px · 700</div></div>
+      <div class="type-row"><div class="sample" style="font-size:24px;font-weight:700">Panel de recaudación</div><div class="desc">H2 · 24px · 700</div></div>
+      <div class="type-row"><div class="sample" style="font-size:18px;font-weight:600">Detalle del evento</div><div class="desc">H3 · 18px · 600</div></div>
+      <div class="type-row"><div class="sample" style="font-size:14px">Administrá ventas de pollos, cenas, quermeses y más desde un solo lugar.</div><div class="desc">Body · 14px · 400</div></div>
+      <div class="type-row"><div class="sample" style="font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--dx-emerald)">Evento · Tarjeta · Vendedor · Rendición</div><div class="desc">Label · 11px · 500 · mayúsculas</div></div>
+    </div></div>
+  </div>
+
+</div>
+</body>
+</html>

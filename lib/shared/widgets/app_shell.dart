@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import 'duttrix_brand.dart';
 
 class ShellNavItem {
   const ShellNavItem({
@@ -147,21 +148,7 @@ class _DrawerHeader extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Eventixar',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.text),
-          ),
-          SizedBox(height: 2),
-          Text(
-            'Tickets para tu evento',
-            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
-        ],
-      ),
+      child: const DuttrixBrandHeader(compact: true),
     );
   }
 }

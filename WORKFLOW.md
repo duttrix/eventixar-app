@@ -1,11 +1,11 @@
-# Eventixar — Workflow del producto
+# Duttrix — Workflow del producto
 
 Guía del circuito real de la app (Firestore + auth Google).  
 Pendientes a propósito (no implementar todavía): **Apple Sign-In**, **pago real** (Mercado Pago / Wallet) y **ticket en URL web pública**.
 
 ---
 
-## 1. Qué es Eventixar
+## 1. Qué es Duttrix
 
 App para organizar un evento con tickets numerados (beneficio, rifa, kermesse, etc.):
 
