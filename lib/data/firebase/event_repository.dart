@@ -45,6 +45,7 @@ class EventRepository {
     required String name,
     required String product,
     required double ticketPrice,
+    double ticketProfit = 0,
     required int ticketCount,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
@@ -65,6 +66,7 @@ class EventRepository {
       name: name,
       product: product,
       ticketPrice: ticketPrice,
+      ticketProfit: ticketProfit,
       ticketCount: ticketCount,
       eventDate: eventDate,
       pickupFrom: pickupFrom,
@@ -230,6 +232,14 @@ class EventRepository {
       assignedByCollaboratorId: assignedByCollaboratorId,
     );
 
+    final sellerSnap =
+        await _events.doc(eventId).collection('collaborators').doc(sellerId).get();
+    final sellerName =
+        (sellerSnap.data()?['name'] as String?)?.trim() ?? '';
+    final sellerLabel = sellerName.isNotEmpty
+        ? sellerName
+        : (sellerSnap.exists ? 'vendedor $sellerId' : 'Organizador');
+
     // Chunk ticket updates to stay under Firestore's batch limit.
     const chunk = 400;
     for (var i = 0; i < snap.docs.length; i += chunk) {
@@ -242,10 +252,10 @@ class EventRepository {
           action: TicketHistoryAction.assigned,
           fromStatus: from,
           toStatus: TicketStatus.withSeller,
-          actorId: assignedByCollaboratorId ?? sellerId,
+          actorId: assignedByCollaboratorId,
           actorRole:
               assignedByCollaboratorId != null ? 'coordinator' : 'organizer',
-          note: 'Asignado al vendedor $sellerId',
+          note: 'Asignado a $sellerLabel',
         );
         batch.update(doc.reference, {
           'status': TicketStatus.withSeller.firestoreValue,
@@ -257,12 +267,77 @@ class EventRepository {
       await batch.commit();
     }
 
-    await _events.doc(eventId).collection('collaborators').doc(sellerId).update({
-      'ranges': FieldValue.arrayUnion([range.toFirestoreMap()]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // Organizer can hold tickets under their uid without a collaborator doc.
+    if (sellerSnap.exists) {
+      await _events.doc(eventId).collection('collaborators').doc(sellerId).update({
+        'ranges': FieldValue.arrayUnion([range.toFirestoreMap()]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
 
     return range;
+  }
+
+  /// Claims free-pool tickets for [sellerId] (`unassigned`/`returned` → `withSeller`).
+  ///
+  /// Used when the organizer sells from the pool without a collaborator doc.
+  Future<void> claimTicketsForSeller({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required String sellerId,
+    String actorRole = 'organizer',
+    String? actorId,
+  }) async {
+    final ids = ticketIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final sellerSnap =
+        await _events.doc(eventId).collection('collaborators').doc(sellerId).get();
+    final sellerName =
+        (sellerSnap.data()?['name'] as String?)?.trim() ?? '';
+    final sellerLabel = sellerName.isNotEmpty
+        ? sellerName
+        : (sellerSnap.exists ? 'vendedor $sellerId' : 'Organizador');
+
+    const chunk = 400;
+    for (var i = 0; i < ids.length; i += chunk) {
+      final slice = ids.skip(i).take(chunk).toList(growable: false);
+      final snaps = await Future.wait(
+        slice.map((id) => _tickets(eventId).doc(id).get()),
+      );
+
+      final batch = _firestore.batch();
+      for (var j = 0; j < slice.length; j++) {
+        final snap = snaps[j];
+        final data = snap.data();
+        if (!snap.exists || data == null) {
+          throw StateError('Ticket ${slice[j]} no encontrado.');
+        }
+        final status = TicketStatusX.fromFirestore(data['status'] as String?);
+        if (!status.isAssignablePool) {
+          throw StateError(
+            'Ticket #${data['number']} ya no está en el pool.',
+          );
+        }
+        batch.update(snap.reference, {
+          'status': TicketStatus.withSeller.firestoreValue,
+          'sellerId': sellerId,
+          'assignedByCollaboratorId': null,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.assigned,
+              fromStatus: status,
+              toStatus: TicketStatus.withSeller,
+              actorId: actorId ?? sellerId,
+              actorRole: actorRole,
+              note: 'Asignado a $sellerLabel',
+            ).toFirestoreMap(),
+          ]),
+        });
+      }
+      await batch.commit();
+    }
   }
 
   Future<void> updateTicketBuyer({
@@ -339,6 +414,7 @@ class EventRepository {
     required String eventId,
     required Iterable<String> ticketIds,
     String? actorId,
+    String actorRole = 'seller',
   }) async {
     await _updateTicketStatuses(
       eventId: eventId,
@@ -346,7 +422,7 @@ class EventRepository {
       expectedStatuses: {TicketStatus.withSeller},
       newStatus: TicketStatus.collected,
       historyAction: TicketHistoryAction.collected,
-      actorRole: 'seller',
+      actorRole: actorRole,
       actorId: actorId,
       actorIdFromField: 'sellerId',
     );
@@ -358,6 +434,7 @@ class EventRepository {
     required String eventId,
     required Iterable<String> ticketIds,
     String? actorId,
+    String actorRole = 'collector',
   }) async {
     await _updateTicketStatuses(
       eventId: eventId,
@@ -365,7 +442,7 @@ class EventRepository {
       expectedStatuses: {TicketStatus.withSeller, TicketStatus.collected},
       newStatus: TicketStatus.returned,
       historyAction: TicketHistoryAction.returned,
-      actorRole: 'collector',
+      actorRole: actorRole,
       actorId: actorId,
       extraFields: {
         'sellerId': null,
@@ -400,11 +477,13 @@ class EventRepository {
     );
   }
 
-  /// Validator marks a ticket as delivered (`collected`/`settled` → `delivered`).
+  /// Validator or organizer marks a ticket as delivered
+  /// (`collected`/`settled` → `delivered`).
   Future<void> markTicketDelivered({
     required String eventId,
     required String ticketId,
     required String validatorId,
+    String actorRole = 'validator',
   }) async {
     final ref = _tickets(eventId).doc(ticketId);
     final snap = await ref.get();
@@ -431,7 +510,7 @@ class EventRepository {
           fromStatus: status,
           toStatus: TicketStatus.delivered,
           actorId: validatorId,
-          actorRole: 'validator',
+          actorRole: actorRole,
         ).toFirestoreMap(),
       ]),
     });
@@ -442,16 +521,31 @@ class EventRepository {
     required String eventId,
     required Iterable<String> ticketIds,
     required String collectorId,
+    required TicketSettleMode settleMode,
+    String actorRole = 'collector',
   }) async {
+    final event = await getById(eventId);
+    if (event == null) {
+      throw StateError('Evento $eventId no encontrado.');
+    }
+    final amount = event.amountForSettleMode(settleMode);
+    final note = settleMode == TicketSettleMode.full
+        ? 'Rendido ticket completo (\$${amount.toStringAsFixed(0)})'
+        : 'Rendida solo ganancia (\$${amount.toStringAsFixed(0)})';
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
       expectedStatuses: {TicketStatus.collected},
       newStatus: TicketStatus.settled,
       historyAction: TicketHistoryAction.settled,
-      actorRole: 'collector',
+      actorRole: actorRole,
       actorId: collectorId,
-      extraFields: {'collectorId': collectorId},
+      note: note,
+      extraFields: {
+        'collectorId': collectorId,
+        'settleMode': settleMode.firestoreValue,
+        'settledAmount': amount,
+      },
     );
   }
 
@@ -519,6 +613,7 @@ class EventRepository {
     required String name,
     required String product,
     required double ticketPrice,
+    required double ticketProfit,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
     required TimeOfDay pickupTo,
@@ -530,6 +625,7 @@ class EventRepository {
       'name': name,
       'product': product,
       'ticketPrice': ticketPrice,
+      'ticketProfit': ticketProfit,
       'eventDate': Timestamp.fromDate(
         DateTime(eventDate.year, eventDate.month, eventDate.day),
       ),

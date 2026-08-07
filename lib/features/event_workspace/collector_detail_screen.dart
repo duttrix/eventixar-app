@@ -75,6 +75,11 @@ class CollectorDetailScreen extends ConsumerWidget {
       return null;
     }
 
+    final totalSettled = tickets.fold<double>(
+      0,
+      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+    );
+
     return Scaffold(
       appBar: AppBar(title: Text(collector.name)),
       body: ListView(
@@ -91,7 +96,7 @@ class CollectorDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  currency.format(tickets.length * event.ticketPrice),
+                  currency.format(totalSettled),
                   style: const TextStyle(
                     color: AppColors.successText,
                     fontWeight: FontWeight.w800,
@@ -162,7 +167,31 @@ class CollectorDetailScreen extends ConsumerWidget {
                     ),
                     child: Row(
                       children: [
-                        Expanded(child: Text('Ticket #${ticket.number}')),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Ticket #${ticket.number}'),
+                              if (ticket.settleMode != null ||
+                                  ticket.settledAmount != null)
+                                Text(
+                                  [
+                                    if (ticket.settleMode != null)
+                                      ticket.settleMode!.label,
+                                    currency.format(
+                                      ticket.resolvedSettledAmount(
+                                        event.ticketPrice,
+                                      ),
+                                    ),
+                                  ].join(' · '),
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                         StatusBadge(
                           label: ticket.status.label,
                           tone: ticketStatusTone(ticket.status),

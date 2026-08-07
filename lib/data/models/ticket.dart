@@ -1,5 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// How much money was handed over when settling a ticket with a collector.
+enum TicketSettleMode {
+  /// Seller remits the full ticket price.
+  full,
+
+  /// Seller remits only the organizer's profit / commission.
+  profit,
+}
+
+extension TicketSettleModeX on TicketSettleMode {
+  String get firestoreValue => name;
+
+  String get label => switch (this) {
+        TicketSettleMode.full => 'Ticket completo',
+        TicketSettleMode.profit => 'Solo ganancia',
+      };
+
+  static TicketSettleMode fromFirestore(String? value) {
+    return TicketSettleMode.values.firstWhere(
+      (m) => m.name == value,
+      orElse: () => TicketSettleMode.full,
+    );
+  }
+}
+
 /// Life-cycle status of a single ticket within an event.
 enum TicketStatus {
   unassigned,
@@ -152,6 +177,8 @@ class Ticket {
     this.collectorId,
     this.assignedByCollaboratorId,
     this.buyerName = '',
+    this.settleMode,
+    this.settledAmount,
     List<TicketHistoryEntry>? history,
   }) : history = history ?? const [];
 
@@ -173,8 +200,18 @@ class Ticket {
   /// Who the ticket was sold / given to (filled when sharing / collecting).
   String buyerName;
 
+  /// Whether the seller remitted full price or only profit (when settled).
+  TicketSettleMode? settleMode;
+
+  /// Amount received by the collector for this ticket (when settled).
+  double? settledAmount;
+
   /// Chronological audit trail (append-only in Firestore).
   final List<TicketHistoryEntry> history;
+
+  /// Amount recorded at settlement, or [fallbackFullPrice] for legacy tickets.
+  double resolvedSettledAmount(double fallbackFullPrice) =>
+      settledAmount ?? fallbackFullPrice;
 
   /// Payload encoded in the ticket QR for validators (not a buyer deeplink).
   ///
@@ -199,6 +236,7 @@ class Ticket {
     }
     history.sort((a, b) => a.at.compareTo(b.at));
 
+    final settleModeRaw = data['settleMode'] as String?;
     return Ticket(
       id: id,
       eventId: eventId,
@@ -209,6 +247,10 @@ class Ticket {
       collectorId: data['collectorId'] as String?,
       assignedByCollaboratorId: data['assignedByCollaboratorId'] as String?,
       buyerName: (data['buyerName'] as String?) ?? '',
+      settleMode: settleModeRaw == null
+          ? null
+          : TicketSettleModeX.fromFirestore(settleModeRaw),
+      settledAmount: (data['settledAmount'] as num?)?.toDouble(),
       history: history,
     );
   }
@@ -222,6 +264,8 @@ class Ticket {
       'collectorId': collectorId,
       'assignedByCollaboratorId': assignedByCollaboratorId,
       'buyerName': buyerName,
+      if (settleMode != null) 'settleMode': settleMode!.firestoreValue,
+      if (settledAmount != null) 'settledAmount': settledAmount,
       'history': history.map((e) => e.toFirestoreMap()).toList(),
     };
   }

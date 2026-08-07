@@ -30,7 +30,15 @@ service cloud.firestore {
 
     function ticketPortalUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['status', 'buyerName', 'validatorId', 'collectorId', 'history'])
+        .hasOnly([
+          'status',
+          'buyerName',
+          'validatorId',
+          'collectorId',
+          'settleMode',
+          'settledAmount',
+          'history',
+        ])
         && portalStatusTransition();
     }
 

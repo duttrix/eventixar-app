@@ -235,6 +235,25 @@ Future<void> assignTicketRangeAction(
       );
 }
 
+Future<void> claimTicketsForSellerAction(
+  WidgetRef ref, {
+  required String eventId,
+  required Iterable<String> ticketIds,
+  required String sellerId,
+  String actorRole = 'organizer',
+  String? actorId,
+}) async {
+  final ids = ticketIds.toList(growable: false);
+  if (ids.isEmpty) return;
+  await ref.read(eventRepositoryProvider).claimTicketsForSeller(
+        eventId: eventId,
+        ticketIds: ids,
+        sellerId: sellerId,
+        actorRole: actorRole,
+        actorId: actorId,
+      );
+}
+
 Future<void> setTicketsBuyerAction(
   WidgetRef ref, {
   required String eventId,
@@ -259,6 +278,7 @@ Future<void> collectTicketsAction(
   required String eventId,
   required Iterable<String> ticketIds,
   String? actorId,
+  String actorRole = 'seller',
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
@@ -266,6 +286,7 @@ Future<void> collectTicketsAction(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
+        actorRole: actorRole,
       );
 }
 
@@ -293,6 +314,7 @@ Future<void> markTicketsReturnedAction(
   required String eventId,
   required Iterable<String> ticketIds,
   String? actorId,
+  String actorRole = 'collector',
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
@@ -300,6 +322,7 @@ Future<void> markTicketsReturnedAction(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
+        actorRole: actorRole,
       );
 }
 
@@ -308,11 +331,13 @@ Future<void> deliverTicketAction(
   required String eventId,
   required String ticketId,
   required String validatorId,
+  String actorRole = 'validator',
 }) async {
   await ref.read(eventRepositoryProvider).markTicketDelivered(
         eventId: eventId,
         ticketId: ticketId,
         validatorId: validatorId,
+        actorRole: actorRole,
       );
 }
 
@@ -321,6 +346,8 @@ Future<void> settleTicketsAction(
   required String eventId,
   required Iterable<String> ticketIds,
   required String collectorId,
+  required TicketSettleMode settleMode,
+  String actorRole = 'collector',
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
@@ -328,6 +355,8 @@ Future<void> settleTicketsAction(
         eventId: eventId,
         ticketIds: ids,
         collectorId: collectorId,
+        settleMode: settleMode,
+        actorRole: actorRole,
       );
 }
 

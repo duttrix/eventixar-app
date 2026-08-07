@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'ticket.dart';
 import 'ticket_design.dart';
 
 /// Lifecycle of an event owned by a registered organizer.
@@ -99,6 +100,7 @@ class Event {
     required this.name,
     required this.product,
     required this.ticketPrice,
+    this.ticketProfit = 0,
     required this.ticketCount,
     required this.eventDate,
     required this.pickupFrom,
@@ -128,6 +130,10 @@ class Event {
   String name;
   String product;
   double ticketPrice;
+
+  /// Monto que el vendedor rinde cuando entrega solo la ganancia.
+  double ticketProfit;
+
   int ticketCount;
   DateTime eventDate;
   TimeOfDay pickupFrom;
@@ -160,6 +166,12 @@ class Event {
 
   EventQuote get quote => EventQuote.calculate(ticketCount: ticketCount);
 
+  /// Amount the collector receives per ticket for a given settle mode.
+  double amountForSettleMode(TicketSettleMode mode) => switch (mode) {
+        TicketSettleMode.full => ticketPrice,
+        TicketSettleMode.profit => ticketProfit,
+      };
+
   bool get isPast {
     final today = DateTime.now();
     final day = DateTime(eventDate.year, eventDate.month, eventDate.day);
@@ -175,6 +187,7 @@ class Event {
       name: (data['name'] as String?) ?? '',
       product: (data['product'] as String?) ?? '',
       ticketPrice: (data['ticketPrice'] as num?)?.toDouble() ?? 0,
+      ticketProfit: (data['ticketProfit'] as num?)?.toDouble() ?? 0,
       ticketCount: (data['ticketCount'] as num?)?.toInt() ?? 0,
       eventDate: _readDate(data['eventDate']) ?? DateTime.now(),
       pickupFrom:
@@ -206,6 +219,7 @@ class Event {
       'name': name,
       'product': product,
       'ticketPrice': ticketPrice,
+      'ticketProfit': ticketProfit,
       'ticketCount': ticketCount,
       'eventDate': Timestamp.fromDate(
         DateTime(eventDate.year, eventDate.month, eventDate.day),

@@ -19,17 +19,31 @@ export '../../data/models/ticket_design.dart';
 class TicketShare {
   TicketShare._();
 
-  /// Argentine / international phone → digits for `wa.me` (no `+`).
+  /// Fixed Argentine mobile prefix for WhatsApp (`+54 9…`).
+  static const whatsAppArPrefix = '549';
+
+  /// Local AR mobile digits → full `wa.me` number (`549…`, no `+`).
+  ///
+  /// Expects the area + number only (e.g. `11 2345-6789`). Strips a leading
+  /// `0` / `54` / `549` if the user pasted a full number by mistake.
   static String? normalizeWhatsAppPhone(String raw) {
     var digits = raw.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return null;
     if (digits.startsWith('00')) digits = digits.substring(2);
+    if (digits.startsWith(whatsAppArPrefix)) {
+      digits = digits.substring(whatsAppArPrefix.length);
+    } else if (digits.startsWith('54')) {
+      digits = digits.substring(2);
+      if (digits.startsWith('9')) digits = digits.substring(1);
+    }
     if (digits.startsWith('0')) digits = digits.substring(1);
-    // Local mobile without country code (e.g. 11 2345-6789).
-    if (digits.length == 10) digits = '54$digits';
-    if (digits.length < 10) return null;
-    return digits;
+    if (digits.length < 8 || digits.length > 10) return null;
+    return '$whatsAppArPrefix$digits';
   }
+
+  /// Display form with `+`, e.g. `+5491123456789`.
+  static String formatWhatsAppPhone(String normalizedDigits) =>
+      normalizedDigits.startsWith('+') ? normalizedDigits : '+$normalizedDigits';
 
   /// Renders [TicketSharePreview] off-screen and returns a PNG.
   static Future<Uint8List> renderPng(

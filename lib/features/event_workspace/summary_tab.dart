@@ -216,16 +216,23 @@ class SummaryTab extends ConsumerWidget {
                     for (final collector in collectors)
                       Builder(
                         builder: (context) {
-                          final count = tickets
+                          final collectorTickets = tickets
                               .where((t) => t.collectorId == collector.id)
-                              .length;
+                              .toList(growable: false);
+                          final count = collectorTickets.length;
+                          final amount = collectorTickets.fold<double>(
+                            0,
+                            (sum, t) =>
+                                sum +
+                                t.resolvedSettledAmount(event.ticketPrice),
+                          );
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
                                 Expanded(child: Text(collector.name)),
                                 Text(
-                                  '$count rendidos · ${currency.format(count * event.ticketPrice)}',
+                                  '$count rendidos · ${currency.format(amount)}',
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
                                     fontWeight: FontWeight.w600,

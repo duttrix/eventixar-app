@@ -127,10 +127,10 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.summary => 'Resumen',
       EventTab.tickets => 'Tickets',
       EventTab.tracker => 'Rastreador',
-      EventTab.sellers => 'Vendedores',
+      EventTab.sellers => 'Venta',
       EventTab.coordinators => 'Coordinadores',
-      EventTab.validators => 'Validadores',
-      EventTab.collectors => 'Recaudadores',
+      EventTab.validators => 'Validación',
+      EventTab.collectors => 'Recaudación',
       EventTab.eventData => 'Datos del evento',
     };
   }

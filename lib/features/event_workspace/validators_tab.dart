@@ -7,11 +7,11 @@ import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/delete_collaborator_button.dart';
 import '../../shared/widgets/regenerate_access_button.dart';
+import 'organizer_validate_screen.dart';
 
-/// Organizer roster of validators + access sharing.
+/// Organizer hub for validation: operate yourself + optional validator roster.
 ///
-/// A validator closes the ticket/card cycle: at product pickup or at an
-/// event entrance (wedding, bingo, dinner, etc.).
+/// Validation closes the ticket cycle at product pickup or event entrance.
 class ValidatorsTab extends ConsumerWidget {
   const ValidatorsTab({super.key, required this.eventId});
 
@@ -46,18 +46,90 @@ class ValidatorsTab extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             children: [
-              Text(
-                'Cada validador recibe un acceso para leer el ticket o la tarjeta: en el retiro del producto o en la entrada del evento. Abre el link sin necesidad de cuenta.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.textSecondary),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Validá tickets vos mismo',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Acá podés escanear o buscar un ticket y marcarlo como '
+                      'validado en el retiro o en la entrada del evento, '
+                      'sin salir de tu cuenta de organizador.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                OrganizerValidateScreen(eventId: eventId),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.qr_code_scanner_outlined),
+                      label: const Text('Empezar a validar'),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Delegá con un link',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'También podés crear validadores y compartirles un link: '
+                      'abren el acceso sin registrarse y validan desde su celular.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Validadores del evento',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
               if (validators.isEmpty)
                 const Text(
-                  'Todavía no hay validadores.',
-                  style: TextStyle(color: AppColors.textMuted),
+                  'Todavía no creaste validadores. Usá Agregar para sumar uno y '
+                  'compartirle el link.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 )
               else
                 for (final validator in validators)
@@ -129,12 +201,16 @@ class ValidatorsTab extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nombre')),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Celular (WhatsApp)'),
+                decoration:
+                    const InputDecoration(labelText: 'Celular (WhatsApp)'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -156,7 +232,10 @@ class ValidatorsTab extends ConsumerWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -202,7 +281,9 @@ class ValidatorsTab extends ConsumerWidget {
                 );
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$e')),
+                );
               }
             },
             child: Text(isEdit ? 'Guardar' : 'Crear y compartir acceso'),

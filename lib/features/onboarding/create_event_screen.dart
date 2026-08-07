@@ -21,6 +21,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   final _nameController = TextEditingController();
   final _priceController = TextEditingController(text: '2000');
+  final _profitController = TextEditingController(text: '500');
   final _countController = TextEditingController(text: '100');
   final _placeController = TextEditingController();
   final _notesController = TextEditingController();
@@ -38,6 +39,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _profitController.dispose();
     _countController.dispose();
     _placeController.dispose();
     _notesController.dispose();
@@ -86,6 +88,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             name: _nameController.text.trim(),
             product: _product,
             ticketPrice: double.tryParse(_priceController.text) ?? 0,
+            ticketProfit: double.tryParse(_profitController.text) ?? 0,
             ticketCount: int.tryParse(_countController.text) ?? 0,
             eventDate: _eventDate!,
             pickupFrom: _pickupFrom,
@@ -194,22 +197,30 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                   controller: _priceController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Precio del ticket (ARS)',
+                    labelText: 'Precio del ticket',
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
-                  controller: _countController,
+                  controller: _profitController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'Cantidad de tickets',
+                    labelText: 'Ganancia',
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _countController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Cantidad de tickets',
+            ),
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           InkWell(
@@ -245,7 +256,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     if (picked != null) setState(() => _pickupFrom = picked);
                   },
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Retiro desde'),
+                    decoration: const InputDecoration(labelText: 'Hora desde'),
                     child: Text(_pickupFrom.format(context)),
                   ),
                 ),
@@ -261,7 +272,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     if (picked != null) setState(() => _pickupTo = picked);
                   },
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Retiro hasta'),
+                    decoration: const InputDecoration(labelText: 'Hora hasta'),
                     child: Text(_pickupTo.format(context)),
                   ),
                 ),

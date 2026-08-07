@@ -7,6 +7,8 @@ import '../../data/app_providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/event_workspace/collector_detail_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
+import '../../features/event_workspace/organizer_collect_screen.dart';
+import '../../features/event_workspace/organizer_validate_screen.dart';
 import '../../features/event_workspace/seller_detail_screen.dart';
 import '../../features/event_workspace/ticket_design_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -145,6 +147,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'ticket-design',
             builder: (context, state) =>
                 TicketDesignScreen(eventId: state.pathParameters['eventId']!),
+          ),
+          GoRoute(
+            path: 'validate',
+            builder: (context, state) => OrganizerValidateScreen(
+              eventId: state.pathParameters['eventId']!,
+            ),
+          ),
+          GoRoute(
+            path: 'settle',
+            builder: (context, state) => OrganizerCollectScreen(
+              eventId: state.pathParameters['eventId']!,
+            ),
           ),
           GoRoute(
             path: 'sellers/:sellerId',

@@ -18,6 +18,7 @@ class EventDataTab extends ConsumerStatefulWidget {
 class _EventDataTabState extends ConsumerState<EventDataTab> {
   late final TextEditingController _nameController;
   late final TextEditingController _priceController;
+  late final TextEditingController _profitController;
   late final TextEditingController _placeController;
   late final TextEditingController _notesController;
 
@@ -31,6 +32,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _profitController.dispose();
     _placeController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -40,6 +42,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final name = _nameController.text.trim();
     final product = _product ?? kEventProducts.first;
     final ticketPrice = double.tryParse(_priceController.text) ?? 0;
+    final ticketProfit = double.tryParse(_profitController.text) ?? 0;
     final eventDate = _eventDate ?? DateTime.now();
     final pickupFrom = _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0);
     final pickupTo = _pickupTo ?? const TimeOfDay(hour: 15, minute: 0);
@@ -52,6 +55,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
             name: name,
             product: product,
             ticketPrice: ticketPrice,
+            ticketProfit: ticketProfit,
             eventDate: eventDate,
             pickupFrom: pickupFrom,
             pickupTo: pickupTo,
@@ -85,6 +89,8 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
       _nameController = TextEditingController(text: event.name);
       _priceController =
           TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
+      _profitController =
+          TextEditingController(text: event.ticketProfit.toStringAsFixed(0));
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
       _product = event.product;
@@ -111,11 +117,30 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 onChanged: finished ? null : (v) => setState(() => _product = v),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _priceController,
-                enabled: !finished,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Precio del ticket (ARS)'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _priceController,
+                      enabled: !finished,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio del ticket',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _profitController,
+                      enabled: !finished,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Ganancia',
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               InkWell(
@@ -154,7 +179,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                               if (picked != null) setState(() => _pickupFrom = picked);
                             },
                       child: InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Retiro desde'),
+                        decoration: const InputDecoration(labelText: 'Hora desde'),
                         child: Text((_pickupFrom ?? const TimeOfDay(hour: 12, minute: 0)).format(context)),
                       ),
                     ),
@@ -172,7 +197,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                               if (picked != null) setState(() => _pickupTo = picked);
                             },
                       child: InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Retiro hasta'),
+                        decoration: const InputDecoration(labelText: 'Hora hasta'),
                         child: Text((_pickupTo ?? const TimeOfDay(hour: 15, minute: 0)).format(context)),
                       ),
                     ),

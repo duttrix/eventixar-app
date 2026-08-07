@@ -161,6 +161,18 @@ class _TicketTrackerResult extends StatelessWidget {
     return role;
   }
 
+  /// Replaces collaborator ids in free-text notes with their names.
+  String _resolveNote(String? note) {
+    if (note == null || note.trim().isEmpty) return '';
+    var text = note;
+    for (final c in collaborators) {
+      if (c.id.isNotEmpty && text.contains(c.id)) {
+        text = text.replaceAll(c.id, c.name);
+      }
+    }
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
@@ -232,6 +244,7 @@ class _TicketTrackerResult extends StatelessWidget {
                         entry: history[i],
                         actorLabel: _actorLabel(history[i]),
                         dateLabel: dateFormat.format(history[i].at),
+                        noteLabel: _resolveNote(history[i].note),
                       ),
                     ],
                   ],
@@ -285,11 +298,13 @@ class _HistoryTile extends StatelessWidget {
     required this.entry,
     required this.actorLabel,
     required this.dateLabel,
+    required this.noteLabel,
   });
 
   final TicketHistoryEntry entry;
   final String actorLabel;
   final String dateLabel;
+  final String noteLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -342,10 +357,10 @@ class _HistoryTile extends StatelessWidget {
                   ),
                 ),
               ],
-              if (entry.note != null && entry.note!.isNotEmpty) ...[
+              if (noteLabel.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
-                  entry.note!,
+                  noteLabel,
                   style: const TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 12,

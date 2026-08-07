@@ -204,6 +204,7 @@ class MockRepository extends ChangeNotifier {
     required String name,
     required String product,
     required double ticketPrice,
+    double ticketProfit = 0,
     required int ticketCount,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
@@ -221,6 +222,7 @@ class MockRepository extends ChangeNotifier {
       name: name,
       product: product,
       ticketPrice: ticketPrice,
+      ticketProfit: ticketProfit,
       ticketCount: ticketCount,
       eventDate: eventDate,
       pickupFrom: pickupFrom,
@@ -272,6 +274,7 @@ class MockRepository extends ChangeNotifier {
     required String name,
     required String product,
     required double ticketPrice,
+    required double ticketProfit,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
     required TimeOfDay pickupTo,
@@ -283,6 +286,7 @@ class MockRepository extends ChangeNotifier {
       ..name = name
       ..product = product
       ..ticketPrice = ticketPrice
+      ..ticketProfit = ticketProfit
       ..eventDate = eventDate
       ..pickupFrom = pickupFrom
       ..pickupTo = pickupTo
@@ -472,6 +476,8 @@ class MockRepository extends ChangeNotifier {
   void markTicketsSettled({
     required Iterable<String> ticketIds,
     required String collectorId,
+    required TicketSettleMode settleMode,
+    required double settledAmount,
   }) {
     for (final id in ticketIds) {
       final ticket = tickets.firstWhere((t) => t.id == id);
@@ -480,7 +486,9 @@ class MockRepository extends ChangeNotifier {
       _shiftAggregate(ticket.eventId, TicketStatus.settled, 1);
       ticket
         ..status = TicketStatus.settled
-        ..collectorId = collectorId;
+        ..collectorId = collectorId
+        ..settleMode = settleMode
+        ..settledAmount = settledAmount;
     }
     notifyListeners();
   }
