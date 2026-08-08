@@ -4,6 +4,8 @@ App Flutter: **organizador crea y habilita un evento; vendedores, validadores y 
 
 Ver el documento de producto: [WORKFLOW.md](./WORKFLOW.md).
 
+Web (privacidad, invites, landing): repo `eventixar-web` → https://eventixar.web.app
+
 ## Formato de tickets
 
 - **Compartir un ticket** → imagen PNG (WhatsApp)
