@@ -74,8 +74,6 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
   }
 
   Widget _buildBody(Event event) {
-    final quote = event.quote;
-
     if (event.paid) {
       return Scaffold(
         body: Center(
@@ -86,6 +84,34 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
         ),
       );
     }
+
+    final pricingAsync = ref.watch(eventPricingProvider);
+    final pricing = pricingAsync.asData?.value;
+    if (pricingAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Pagar y habilitar')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (pricing == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Pagar y habilitar')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Falta configurar precios en Firestore (config/eventPricing).',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final quote = EventQuote.calculate(
+      ticketCount: event.ticketCount,
+      pricing: pricing,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pagar y habilitar')),

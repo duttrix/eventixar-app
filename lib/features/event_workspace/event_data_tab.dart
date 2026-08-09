@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Edit basic event data (organizer only).
@@ -17,12 +18,12 @@ class EventDataTab extends ConsumerStatefulWidget {
 
 class _EventDataTabState extends ConsumerState<EventDataTab> {
   late final TextEditingController _nameController;
+  late final TextEditingController _productController;
   late final TextEditingController _priceController;
   late final TextEditingController _profitController;
   late final TextEditingController _placeController;
   late final TextEditingController _notesController;
 
-  String? _product;
   DateTime? _eventDate;
   TimeOfDay? _pickupFrom;
   TimeOfDay? _pickupTo;
@@ -31,6 +32,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   @override
   void dispose() {
     _nameController.dispose();
+    _productController.dispose();
     _priceController.dispose();
     _profitController.dispose();
     _placeController.dispose();
@@ -40,7 +42,13 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
-    final product = _product ?? kEventProducts.first;
+    final product = _productController.text.trim();
+    if (product.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Especificá qué se vende.')),
+      );
+      return;
+    }
     final ticketPrice = double.tryParse(_priceController.text) ?? 0;
     final ticketProfit = double.tryParse(_profitController.text) ?? 0;
     final eventDate = _eventDate ?? DateTime.now();
@@ -77,6 +85,8 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   @override
   Widget build(BuildContext context) {
     final eventAsync = ref.watch(eventProvider(widget.eventId));
+    final products =
+        ref.watch(eventProductsProvider).asData?.value ?? const <String>[];
     if (eventAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -87,13 +97,13 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final finished = event.status == EventStatus.finished;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
+      _productController = TextEditingController(text: event.product);
       _priceController =
           TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
       _profitController =
           TextEditingController(text: event.ticketProfit.toStringAsFixed(0));
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
-      _product = event.product;
       _eventDate = event.eventDate;
       _pickupFrom = event.pickupFrom;
       _pickupTo = event.pickupTo;
@@ -108,13 +118,15 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nombre')),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+              ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _product,
-                decoration: const InputDecoration(labelText: 'Qué se vende'),
-                items: kEventProducts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                onChanged: finished ? null : (v) => setState(() => _product = v),
+              ProductTypeaheadField(
+                controller: _productController,
+                suggestions: products,
+                enabled: !finished,
               ),
               const SizedBox(height: 12),
               Row(
@@ -150,8 +162,10 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _eventDate ?? DateTime.now(),
-                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                          lastDate: DateTime.now().add(const Duration(days: 730)),
+                          firstDate: DateTime.now()
+                              .subtract(const Duration(days: 365)),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 730)),
                         );
                         if (picked != null) setState(() => _eventDate = picked);
                       },
@@ -174,13 +188,20 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                           : () async {
                               final picked = await showTimePicker(
                                 context: context,
-                                initialTime: _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0),
+                                initialTime: _pickupFrom ??
+                                    const TimeOfDay(hour: 12, minute: 0),
                               );
-                              if (picked != null) setState(() => _pickupFrom = picked);
+                              if (picked != null) {
+                                setState(() => _pickupFrom = picked);
+                              }
                             },
                       child: InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Hora desde'),
-                        child: Text((_pickupFrom ?? const TimeOfDay(hour: 12, minute: 0)).format(context)),
+                        decoration:
+                            const InputDecoration(labelText: 'Hora desde'),
+                        child: Text(
+                          (_pickupFrom ?? const TimeOfDay(hour: 12, minute: 0))
+                              .format(context),
+                        ),
                       ),
                     ),
                   ),
@@ -192,13 +213,20 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                           : () async {
                               final picked = await showTimePicker(
                                 context: context,
-                                initialTime: _pickupTo ?? const TimeOfDay(hour: 15, minute: 0),
+                                initialTime: _pickupTo ??
+                                    const TimeOfDay(hour: 15, minute: 0),
                               );
-                              if (picked != null) setState(() => _pickupTo = picked);
+                              if (picked != null) {
+                                setState(() => _pickupTo = picked);
+                              }
                             },
                       child: InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Hora hasta'),
-                        child: Text((_pickupTo ?? const TimeOfDay(hour: 15, minute: 0)).format(context)),
+                        decoration:
+                            const InputDecoration(labelText: 'Hora hasta'),
+                        child: Text(
+                          (_pickupTo ?? const TimeOfDay(hour: 15, minute: 0))
+                              .format(context),
+                        ),
                       ),
                     ),
                   ),

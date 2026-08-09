@@ -41,6 +41,8 @@ class EventQuote {
 
   String get priceLabel => amount == 0 ? r'$0' : '\$${_format(amount)}';
 
+  static String formatAmount(int n) => _format(n);
+
   static String _format(int n) {
     final s = n.toString();
     final buf = StringBuffer();
@@ -51,46 +53,171 @@ class EventQuote {
     return buf.toString();
   }
 
-  /// Mock pricing by ticket volume. Team size does not affect price.
-  static EventQuote calculate({required int ticketCount}) {
-    final int base;
-    final String plan;
+  /// Pricing by ticket volume using Firestore `config/eventPricing`.
+  static EventQuote calculate({
+    required int ticketCount,
+    required EventPricingConfig pricing,
+  }) {
+    return pricing.quoteFor(ticketCount);
+  }
+}
 
-    if (ticketCount <= 50) {
-      base = 0;
-      plan = 'Free (hasta 50 tickets)';
-    } else if (ticketCount <= 100) {
-      base = 15000;
-      plan = 'Hasta 100 tickets';
-    } else if (ticketCount <= 200) {
-      base = 20000;
-      plan = 'Hasta 200 tickets';
-    } else if (ticketCount <= 300) {
-      base = 35000;
-      plan = 'Hasta 300 tickets';
-    } else {
-      base = 35000 + ((ticketCount - 300) * 80);
-      plan = 'A medida ($ticketCount tickets)';
+/// One inclusive ticket-count band from `config/eventPricing.tiers`.
+class EventPricingTier {
+  const EventPricingTier({
+    required this.min,
+    required this.max,
+    required this.price,
+    required this.label,
+  });
+
+  final int min;
+  final int max;
+  final int price;
+  final String label;
+
+  factory EventPricingTier.fromMap(Map<String, dynamic> data) {
+    return EventPricingTier(
+      min: (data['min'] as num?)?.toInt() ?? 0,
+      max: (data['max'] as num?)?.toInt() ?? 0,
+      price: (data['price'] as num?)?.toInt() ?? 0,
+      label: (data['label'] as String?)?.trim() ?? '',
+    );
+  }
+}
+
+/// Extra tickets beyond the last tier (`config/eventPricing.overage`).
+class EventPricingOverage {
+  const EventPricingOverage({
+    required this.baseMax,
+    required this.basePrice,
+    required this.pricePerTicket,
+    required this.label,
+  });
+
+  final int baseMax;
+  final int basePrice;
+  final int pricePerTicket;
+  final String label;
+
+  factory EventPricingOverage.fromMap(Map<String, dynamic> data) {
+    return EventPricingOverage(
+      baseMax: (data['baseMax'] as num?)?.toInt() ?? 0,
+      basePrice: (data['basePrice'] as num?)?.toInt() ?? 0,
+      pricePerTicket: (data['pricePerTicket'] as num?)?.toInt() ?? 0,
+      label: (data['label'] as String?)?.trim() ?? 'A medida',
+    );
+  }
+}
+
+/// Remote pricing table: Firestore `config/eventPricing`.
+class EventPricingConfig {
+  const EventPricingConfig({
+    required this.tiers,
+    this.overage,
+    this.note =
+        'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.',
+  });
+
+  final List<EventPricingTier> tiers;
+  final EventPricingOverage? overage;
+  final String note;
+
+  factory EventPricingConfig.fromFirestore(Map<String, dynamic> data) {
+    final rawTiers = data['tiers'];
+    final tiers = <EventPricingTier>[];
+    if (rawTiers is List) {
+      for (final item in rawTiers) {
+        if (item is Map<String, dynamic>) {
+          tiers.add(EventPricingTier.fromMap(item));
+        } else if (item is Map) {
+          tiers.add(
+            EventPricingTier.fromMap(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+    tiers.sort((a, b) => a.max.compareTo(b.max));
+
+    EventPricingOverage? overage;
+    final rawOverage = data['overage'];
+    if (rawOverage is Map<String, dynamic>) {
+      overage = EventPricingOverage.fromMap(rawOverage);
+    } else if (rawOverage is Map) {
+      overage = EventPricingOverage.fromMap(
+        Map<String, dynamic>.from(rawOverage),
+      );
+    }
+
+    final note = (data['note'] as String?)?.trim();
+    return EventPricingConfig(
+      tiers: tiers,
+      overage: overage,
+      note: (note == null || note.isEmpty)
+          ? 'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.'
+          : note,
+    );
+  }
+
+  EventQuote quoteFor(int ticketCount) {
+    final count = ticketCount < 0 ? 0 : ticketCount;
+
+    for (final tier in tiers) {
+      if (count >= tier.min && count <= tier.max) {
+        final label = tier.label.isEmpty
+            ? 'De ${tier.min} a ${tier.max} tickets'
+            : tier.label;
+        return EventQuote(
+          amount: tier.price,
+          label: tier.price == 0 ? 'Gratis' : 'Cotización del evento',
+          breakdown: [
+            '$label → \$${EventQuote.formatAmount(tier.price)}',
+            note,
+          ],
+        );
+      }
+    }
+
+    final overage = this.overage;
+    if (overage != null && count > overage.baseMax) {
+      final amount = overage.basePrice +
+          ((count - overage.baseMax) * overage.pricePerTicket);
+      final plan = overage.label.isEmpty
+          ? 'A medida ($count tickets)'
+          : '${overage.label} ($count tickets)';
+      return EventQuote(
+        amount: amount,
+        label: 'Cotización del evento',
+        breakdown: [
+          '$plan → \$${EventQuote.formatAmount(amount)}',
+          note,
+        ],
+      );
     }
 
     return EventQuote(
-      amount: base,
-      label: base == 0 ? 'Gratis' : 'Cotización del evento',
+      amount: 0,
+      label: 'Sin tarifa configurada',
       breakdown: [
-        '$plan → \$${_format(base)}',
-        'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.',
+        'No hay un tramo de precio para $count tickets. Revisá config/eventPricing.',
+        note,
       ],
     );
   }
 }
 
-const List<String> kEventProducts = [
-  'Locro',
-  'Empanadas',
-  'Pollo asado',
-  'Paella',
-  'Otro',
-];
+/// Catalog suggestions for “qué se vende” (Firestore `config/eventProducts`).
+/// Free text is always allowed; these are references only.
+List<String> normalizeEventProducts(Iterable<String> items) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final raw in items) {
+    final item = raw.trim();
+    if (item.isEmpty) continue;
+    if (seen.add(item)) out.add(item);
+  }
+  return out;
+}
 
 class Event {
   Event({
@@ -163,8 +290,6 @@ class Event {
 
   /// Visual style applied to shared ticket images for this event.
   TicketVisualStyle ticketDesign;
-
-  EventQuote get quote => EventQuote.calculate(ticketCount: ticketCount);
 
   /// Amount the collector receives per ticket for a given settle mode.
   double amountForSettleMode(TicketSettleMode mode) => switch (mode) {

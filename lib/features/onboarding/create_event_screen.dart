@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Multi-step create-event flow: datos → equipo → cotización → pago.
@@ -20,13 +21,13 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   bool _submitting = false;
 
   final _nameController = TextEditingController();
+  final _productController = TextEditingController();
   final _priceController = TextEditingController(text: '2000');
   final _profitController = TextEditingController(text: '500');
   final _countController = TextEditingController(text: '100');
   final _placeController = TextEditingController();
   final _notesController = TextEditingController();
 
-  String _product = kEventProducts.first;
   DateTime? _eventDate;
   TimeOfDay _pickupFrom = const TimeOfDay(hour: 12, minute: 0);
   TimeOfDay _pickupTo = const TimeOfDay(hour: 15, minute: 0);
@@ -38,6 +39,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _productController.dispose();
     _priceController.dispose();
     _profitController.dispose();
     _countController.dispose();
@@ -46,12 +48,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     super.dispose();
   }
 
-  EventQuote get _quote => EventQuote.calculate(
-        ticketCount: int.tryParse(_countController.text) ?? 0,
-      );
-
   bool get _step0Valid =>
       _nameController.text.trim().isNotEmpty &&
+      _productController.text.trim().isNotEmpty &&
       _eventDate != null &&
       (int.tryParse(_countController.text) ?? 0) > 0;
 
@@ -59,7 +58,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     if (_step == 0 && !_step0Valid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Completá nombre, fecha y cantidad de tickets.'),
+          content: Text(
+            'Completá nombre, qué se vende, fecha y cantidad de tickets.',
+          ),
         ),
       );
       return;
@@ -86,7 +87,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             ownerId: uid,
             ownerEmail: session.userEmail ?? '',
             name: _nameController.text.trim(),
-            product: _product,
+            product: _productController.text.trim(),
             ticketPrice: double.tryParse(_priceController.text) ?? 0,
             ticketProfit: double.tryParse(_profitController.text) ?? 0,
             ticketCount: int.tryParse(_countController.text) ?? 0,
@@ -167,6 +168,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       };
 
   Widget _buildDatos() {
+    final products =
+        ref.watch(eventProductsProvider).asData?.value ?? const <String>[];
+
     return SectionCard(
       title: 'Datos del evento',
       child: Column(
@@ -181,13 +185,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _product,
-            decoration: const InputDecoration(labelText: 'Qué se vende'),
-            items: kEventProducts
-                .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                .toList(),
-            onChanged: (value) => setState(() => _product = value ?? _product),
+          ProductTypeaheadField(
+            controller: _productController,
+            suggestions: products,
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           Row(
@@ -374,7 +375,31 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   Widget _buildCotizacion() {
-    final quote = _quote;
+    final pricingAsync = ref.watch(eventPricingProvider);
+    final pricing = pricingAsync.asData?.value;
+    if (pricingAsync.isLoading) {
+      return const SectionCard(
+        title: 'Cotización',
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    if (pricing == null) {
+      return const SectionCard(
+        title: 'Cotización',
+        child: Text(
+          'Falta configurar precios en Firestore (config/eventPricing).',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+
+    final quote = EventQuote.calculate(
+      ticketCount: int.tryParse(_countController.text) ?? 0,
+      pricing: pricing,
+    );
     return SectionCard(
       title: quote.label,
       child: Column(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/google_auth_service.dart';
 import '../core/session/collaborator_session_storage.dart';
+import 'firebase/catalog_repository.dart';
 import 'firebase/collaborator_repository.dart';
 import 'firebase/event_repository.dart';
 import 'firebase/user_repository.dart';
@@ -34,6 +35,20 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
 
 final collaboratorRepositoryProvider = Provider<CollaboratorRepository>((ref) {
   return CollaboratorRepository();
+});
+
+final catalogRepositoryProvider = Provider<CatalogRepository>((ref) {
+  return CatalogRepository();
+});
+
+/// “Qué se vende” options from Firestore `config/eventProducts`.
+final eventProductsProvider = StreamProvider<List<String>>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchEventProducts();
+});
+
+/// Pricing tiers from Firestore `config/eventPricing`.
+final eventPricingProvider = StreamProvider<EventPricingConfig?>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchEventPricing();
 });
 
 /// Live events owned by the signed-in organizer.
