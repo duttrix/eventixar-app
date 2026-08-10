@@ -516,6 +516,7 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void _bindAuth() {
+    _authSub?.cancel();
     final auth = _ref.read(googleAuthServiceProvider);
     final current = auth.currentUser;
     if (current != null) {
@@ -539,7 +540,8 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> _applyFirebaseUser(User user) async {
-    // A collaborator session owns this device until explicit logout.
+    // A collaborator session owns this device until explicit logout —
+    // unless we just cleared it during organizer Google sign-in.
     if (state.collaboratorToken != null) return;
     final profile = AppUser.fromAuth(user);
     state = SessionState(
@@ -557,8 +559,20 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  Future<User?> signInWithGoogle() {
-    return _ref.read(googleAuthServiceProvider).signInWithGoogle();
+  Future<User?> signInWithGoogle() async {
+    final user = await _ref.read(googleAuthServiceProvider).signInWithGoogle();
+    if (user == null) return null;
+
+    // Organizer login owns the device: drop any installed collaborator access
+    // so Google auth is not ignored by _applyFirebaseUser.
+    if (state.collaboratorToken != null) {
+      await _ref.read(collaboratorSessionStorageProvider).clear();
+      state = const SessionState();
+    }
+
+    // Apply immediately so GoRouter redirect sees userUid before /home.
+    await _applyFirebaseUser(user);
+    return user;
   }
 
   Future<void> enterAsCollaborator(

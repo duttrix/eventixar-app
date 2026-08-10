@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// Google Sign-In → Firebase Auth for organizers.
@@ -35,8 +36,10 @@ class GoogleAuthService {
       final idToken = account.authentication.idToken;
       if (idToken == null) {
         throw StateError(
-          'Google no devolvió idToken. Revisá el SHA-1 de debug en Firebase '
-          'y que el proveedor Google esté habilitado.',
+          'Google no devolvió idToken. Revisá que el SHA-1 de la firma '
+          '(debug y release) esté cargado en Firebase Console → Project '
+          'settings → Your apps → Android, y que el proveedor Google esté '
+          'habilitado.',
         );
       }
 
@@ -44,8 +47,18 @@ class GoogleAuthService {
       final result = await _auth.signInWithCredential(credential);
       return result.user;
     } on GoogleSignInException catch (e) {
+      // Credential Manager often reports config errors (missing SHA-1, wrong
+      // package) as "canceled" — indistinguishable from a real user cancel.
       if (e.code == GoogleSignInExceptionCode.canceled) {
+        debugPrint('GoogleSignIn canceled (may be config): $e');
         return null;
+      }
+      if (e.code == GoogleSignInExceptionCode.clientConfigurationError ||
+          e.code == GoogleSignInExceptionCode.providerConfigurationError) {
+        throw StateError(
+          'Configuración de Google Sign-In incompleta. Falta el SHA-1 del '
+          'keystore en Firebase o el OAuth client de Android.',
+        );
       }
       rethrow;
     }

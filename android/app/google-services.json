@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "165106453677-i6fjcikhhg579pp44lpqc0oo8k10ld7h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.eventixar.eventixar",
+            "certificate_hash": "bfc9d6616126b5b30392dbf3b2112e6048bd490f"
+          }
+        },
+        {
+          "client_id": "165106453677-iha1sojcs7fu21bfgp3kggv5qqva75aq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.eventixar.eventixar",
+            "certificate_hash": "0fc449ed35d5eba46b0183387f864ab743eed5ba"
+          }
+        },
+        {
           "client_id": "165106453677-1pv115libl5nvjtkdjkpa4lermbn7gko.apps.googleusercontent.com",
           "client_type": 3
         }

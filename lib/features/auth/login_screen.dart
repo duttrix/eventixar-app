@@ -31,7 +31,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() => _busy = false);
         return;
       }
-      context.go('/home');
+      // Session already has userUid; prefer go via redirect-safe navigation.
+      if (context.mounted) context.go('/home');
     } catch (e) {
       if (!mounted) return;
       setState(() {
