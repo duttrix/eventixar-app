@@ -88,10 +88,24 @@ Color ticketStatusBg(TicketStatus status) {
 }
 
 /// Compact summary chips: Cobrado / En poder / Devuelto / etc.
+///
+/// When [onStatusTap] is set, chips toggle a multi-select filter. Selected
+/// chips get a stronger border so the active filter is obvious.
 class TicketStatusSummary extends StatelessWidget {
-  const TicketStatusSummary({super.key, required this.tickets});
+  const TicketStatusSummary({
+    super.key,
+    required this.tickets,
+    this.selected = const {},
+    this.onStatusTap,
+    this.includePoolStatuses = false,
+  });
 
   final List<Ticket> tickets;
+  final Set<TicketStatus> selected;
+  final ValueChanged<TicketStatus>? onStatusTap;
+
+  /// When true, also shows `Sin vendedor` / `Devuelto` chips (organizer overview).
+  final bool includePoolStatuses;
 
   @override
   Widget build(BuildContext context) {
@@ -105,12 +119,16 @@ class TicketStatusSummary extends StatelessWidget {
     }
 
     final order = [
+      if (includePoolStatuses) ...[
+        TicketStatus.unassigned,
+        TicketStatus.returned,
+      ],
       TicketStatus.withSeller,
       TicketStatus.reserved,
       TicketStatus.collected,
       TicketStatus.settled,
-      TicketStatus.returned,
       TicketStatus.delivered,
+      if (!includePoolStatuses) TicketStatus.returned,
     ];
 
     return Wrap(
@@ -119,30 +137,67 @@ class TicketStatusSummary extends StatelessWidget {
       children: [
         for (final status in order)
           if ((counts[status] ?? 0) > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: ticketStatusBg(status),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '${status.label}: ${counts[status]}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: switch (status) {
-                    TicketStatus.collected => AppColors.successText,
-                    TicketStatus.settled => AppColors.accentText,
-                    TicketStatus.returned => AppColors.dangerText,
-                    TicketStatus.delivered => AppColors.accentText,
-                    TicketStatus.reserved => AppColors.accentText,
-                    TicketStatus.withSeller => AppColors.warnText,
-                    TicketStatus.unassigned => AppColors.textSecondary,
-                  },
-                ),
-              ),
+            _StatusChip(
+              status: status,
+              count: counts[status]!,
+              selected: selected.contains(status),
+              onTap: onStatusTap == null ? null : () => onStatusTap!(status),
             ),
       ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.status,
+    required this.count,
+    required this.selected,
+    this.onTap,
+  });
+
+  final TicketStatus status;
+  final int count;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = switch (status) {
+      TicketStatus.collected => AppColors.successText,
+      TicketStatus.settled => AppColors.accentText,
+      TicketStatus.returned => AppColors.dangerText,
+      TicketStatus.delivered => AppColors.accentText,
+      TicketStatus.reserved => AppColors.accentText,
+      TicketStatus.withSeller => AppColors.warnText,
+      TicketStatus.unassigned => AppColors.textSecondary,
+    };
+
+    return Material(
+      color: ticketStatusBg(status),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? AppColors.accent : Colors.transparent,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Text(
+            '${status.label}: $count',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

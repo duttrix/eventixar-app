@@ -34,6 +34,7 @@ class SellerDetailScreen extends ConsumerStatefulWidget {
 
 class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
   final Set<String> _returnIds = {};
+  final Set<TicketStatus> _statusFilters = {};
   bool _returning = false;
 
   String get eventId => widget.eventId;
@@ -149,6 +150,11 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     final selectedReturnable = _returnIds
         .where((id) => returnable.any((t) => t.id == id))
         .toSet();
+    final visibleTickets = _statusFilters.isEmpty
+        ? tickets
+        : tickets
+            .where((t) => _statusFilters.contains(t.status))
+            .toList(growable: false);
 
     return Scaffold(
       appBar: AppBar(title: Text(seller.name)),
@@ -247,7 +253,17 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           const SizedBox(height: 16),
           SectionCard(
             title: 'Estado de sus tickets',
-            child: TicketStatusSummary(tickets: tickets),
+            child: TicketStatusSummary(
+              tickets: tickets,
+              selected: _statusFilters,
+              onStatusTap: (status) => setState(() {
+                if (_statusFilters.contains(status)) {
+                  _statusFilters.remove(status);
+                } else {
+                  _statusFilters.add(status);
+                }
+              }),
+            ),
           ),
           const SizedBox(height: 16),
           SectionCard(
@@ -287,10 +303,17 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Detalle ticket por ticket',
+                    _statusFilters.isEmpty
+                        ? 'Detalle ticket por ticket'
+                        : 'Detalle (${visibleTickets.length} de ${tickets.length})',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
+                if (_statusFilters.isNotEmpty)
+                  TextButton(
+                    onPressed: () => setState(_statusFilters.clear),
+                    child: const Text('Ver todos'),
+                  ),
                 if (!finished && returnable.isNotEmpty) ...[
                   TextButton(
                     onPressed: () => setState(() {
@@ -317,8 +340,14 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               ),
             ],
             const SizedBox(height: 10),
-            for (final ticket in tickets)
-              Padding(
+            if (visibleTickets.isEmpty)
+              const Text(
+                'Ningún ticket con esos estados.',
+                style: TextStyle(color: AppColors.textMuted),
+              )
+            else
+              for (final ticket in visibleTickets)
+                Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Material(
                   color: ticketStatusBg(ticket.status),

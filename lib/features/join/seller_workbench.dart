@@ -45,6 +45,7 @@ class SellerWorkbench extends ConsumerStatefulWidget {
 class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
+  final Set<TicketStatus> _statusFilters = {};
 
   bool get _isOrganizerSelf =>
       widget.actorRole == 'organizer' &&
@@ -131,12 +132,8 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       rangesLabel: rangesLabel,
       tickets: _isOrganizerSelf
           ? allTickets
-              .where(
-                (t) =>
-                    t.status.isAssignablePool || t.sellerId == sellerId,
-              )
-              .toList()
           : allTickets.where((t) => t.sellerId == sellerId).toList(),
+      sellers: sellers,
       canGoBack: lockedId == null,
       canSelfAssign: _isOrganizerSelf,
       hasSellers: sellers.isNotEmpty,
@@ -220,22 +217,44 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     required String sellerName,
     required String rangesLabel,
     required List<Ticket> tickets,
+    required List<Collaborator> sellers,
     required bool canGoBack,
     required bool canSelfAssign,
     required bool hasSellers,
   }) {
-    final sorted = [...tickets]..sort((a, b) {
-        final byStatus = _sellerTicketSortRank(a.status)
-            .compareTo(_sellerTicketSortRank(b.status));
-        if (byStatus != 0) return byStatus;
-        return a.number.compareTo(b.number);
-      });
-    final selectableTickets = sorted
+    final sellerNames = {
+      for (final s in sellers) s.id: s.name,
+    };
+
+    bool isOperable(Ticket ticket) {
+      if (!canSelfAssign) return true;
+      // Organizer overview: only sell pool tickets or ones already claimed
+      // by the organizer — never mutate another seller's stock.
+      if (ticket.status.isAssignablePool) return true;
+      return ticket.sellerId == sellerId;
+    }
+
+    String? assignedSellerLabel(Ticket ticket) {
+      if (!canSelfAssign) return null;
+      final id = ticket.sellerId;
+      if (id == null || id == sellerId || ticket.status.isAssignablePool) {
+        return null;
+      }
+      return sellerNames[id] ?? 'Vendedor';
+    }
+
+    final sorted = [...tickets]
+      ..sort((a, b) => a.number.compareTo(b.number));
+    final visible = _statusFilters.isEmpty
+        ? sorted
+        : sorted
+            .where((t) => _statusFilters.contains(t.status))
+            .toList(growable: false);
+    final selectableTickets = visible
         .where(
           (t) =>
-              t.status.isSellable ||
-              t.status == TicketStatus.collected ||
-              (canSelfAssign && t.status.isAssignablePool),
+              isOperable(t) &&
+              (t.status.isSellable || t.status == TicketStatus.collected),
         )
         .toList(growable: false);
     final selectedTickets = selectableTickets
@@ -252,6 +271,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 onPressed: () => setState(() {
                   _selectedSeller = null;
                   _selectedIds.clear();
+                  _statusFilters.clear();
                 }),
               )
             : null,
@@ -277,7 +297,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
               children: [
                 Text(
                   canSelfAssign
-                      ? 'Tickets libres para vender'
+                      ? 'Todos los tickets'
                       : (widget.actorRole == 'organizer'
                           ? 'Tickets de $sellerName'
                           : 'Tus tickets para vender'),
@@ -295,7 +315,18 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 ],
                 if (sorted.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  TicketStatusSummary(tickets: sorted),
+                  TicketStatusSummary(
+                    tickets: sorted,
+                    selected: _statusFilters,
+                    includePoolStatuses: canSelfAssign,
+                    onStatusTap: (status) => setState(() {
+                      if (_statusFilters.contains(status)) {
+                        _statusFilters.remove(status);
+                      } else {
+                        _statusFilters.add(status);
+                      }
+                    }),
+                  ),
                 ],
               ],
             ),
@@ -337,10 +368,17 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
             children: [
               Expanded(
                 child: Text(
-                  'Tickets (${sorted.length})',
+                  _statusFilters.isEmpty
+                      ? 'Tickets (${sorted.length})'
+                      : 'Tickets (${visible.length} de ${sorted.length})',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
+              if (_statusFilters.isNotEmpty)
+                TextButton(
+                  onPressed: () => setState(_statusFilters.clear),
+                  child: const Text('Ver todos'),
+                ),
               if (selectableTickets.isNotEmpty) ...[
                 TextButton(
                   onPressed: () => setState(() {
@@ -363,13 +401,17 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
           if (sorted.isEmpty)
             Text(
               canSelfAssign
-                  ? 'No hay tickets libres en el pool. Todos están asignados '
-                      'a vendedores o ya se vendieron.'
+                  ? 'Todavía no hay tickets en este evento.'
                   : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
               style: const TextStyle(color: AppColors.textMuted),
             )
+          else if (visible.isEmpty)
+            const Text(
+              'Ningún ticket con esos estados.',
+              style: TextStyle(color: AppColors.textMuted),
+            )
           else
-            for (final ticket in sorted)
+            for (final ticket in visible)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _SellerTicketCard(
@@ -380,10 +422,14 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   selectionEnabled:
                       selectableTickets.any((t) => t.id == ticket.id),
                   showUnassignedStatus: hasSellers,
-                  canReserve: ticket.status.isSellable &&
+                  assignedSellerLabel: assignedSellerLabel(ticket),
+                  canReserve: isOperable(ticket) &&
+                      ticket.status.isSellable &&
                       ticket.status != TicketStatus.reserved,
-                  canCollect: ticket.status.isSellable,
-                  canClearReservation: ticket.status == TicketStatus.reserved,
+                  canCollect:
+                      isOperable(ticket) && ticket.status.isSellable,
+                  canClearReservation: isOperable(ticket) &&
+                      ticket.status == TicketStatus.reserved,
                   canShare: true,
                   onToggleSelect:
                       selectableTickets.any((t) => t.id == ticket.id)
@@ -442,18 +488,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       actorId: widget.actorId,
       actorRole: widget.actorRole,
     );
-  }
-
-  static int _sellerTicketSortRank(TicketStatus status) {
-    return switch (status) {
-      TicketStatus.unassigned => 0,
-      TicketStatus.returned => 1,
-      TicketStatus.withSeller => 2,
-      TicketStatus.reserved => 3,
-      TicketStatus.collected => 4,
-      TicketStatus.settled => 5,
-      TicketStatus.delivered => 6,
-    };
   }
 
   Future<void> _reserveTicket(
@@ -872,6 +906,7 @@ class _SellerTicketCard extends StatelessWidget {
     required this.onPrint,
     this.onToggleSelect,
     this.clearReservationTooltip = 'Liberar reserva',
+    this.assignedSellerLabel,
   });
 
   final Ticket ticket;
@@ -890,10 +925,12 @@ class _SellerTicketCard extends StatelessWidget {
   final VoidCallback onWhatsApp;
   final VoidCallback onPrint;
   final String clearReservationTooltip;
+  final String? assignedSellerLabel;
 
   @override
   Widget build(BuildContext context) {
     final buyer = ticket.buyerName.trim();
+    final sellerLabel = assignedSellerLabel?.trim() ?? '';
     final showStatus = ticket.status != TicketStatus.unassigned ||
         showUnassignedStatus;
 
@@ -957,6 +994,17 @@ class _SellerTicketCard extends StatelessWidget {
                             fontSize: 12,
                           ),
                         ),
+                        if (sellerLabel.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Vendedor: $sellerLabel',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                         if (buyer.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Text(

@@ -53,9 +53,9 @@ class SellersTab extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Acá ves los tickets libres del pool (sin vendedor). '
-                      'Podés compartirlos, imprimirlos o cobrarlos '
-                      'como organizador, sin pisar lo de tus vendedores.',
+                      'Vendé del pool o mirá lo que ya está con tus '
+                      'vendedores. Filtrá por estado; solo operás los libres '
+                      '(sin pisar el stock de alguien).',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,

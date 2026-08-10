@@ -146,12 +146,8 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     required Collaborator seller,
     required List<Ticket> tickets,
   }) {
-    final sorted = [...tickets]..sort((a, b) {
-        final byStatus = _collectorTicketSortRank(a.status)
-            .compareTo(_collectorTicketSortRank(b.status));
-        if (byStatus != 0) return byStatus;
-        return a.number.compareTo(b.number);
-      });
+    final sorted = [...tickets]
+      ..sort((a, b) => a.number.compareTo(b.number));
     final selectable = sorted
         .where(
           (t) =>
@@ -430,19 +426,6 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
         ],
       ),
     );
-  }
-
-  /// Order: cobrados → reservados → en poder → rendidos → devueltos → validados.
-  static int _collectorTicketSortRank(TicketStatus status) {
-    return switch (status) {
-      TicketStatus.collected => 0,
-      TicketStatus.reserved => 1,
-      TicketStatus.withSeller => 2,
-      TicketStatus.unassigned => 3,
-      TicketStatus.settled => 4,
-      TicketStatus.returned => 5,
-      TicketStatus.delivered => 6,
-    };
   }
 }
 
