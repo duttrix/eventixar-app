@@ -49,7 +49,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         title: const Text('Devolver tickets'),
         content: Text(
           'Vas a liberar ${ids.length} ticket${ids.length == 1 ? '' : 's'} '
-          'sin vender. Vuelven a “Sin asignar” y los podés dar a otro vendedor.',
+          'sin vender. Vuelven a “Sin vendedor” y los podés dar a otro vendedor.',
         ),
         actions: [
           TextButton(
@@ -81,7 +81,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         SnackBar(
           content: Text(
             '${ids.length} ticket${ids.length == 1 ? '' : 's'} '
-            'vuelve${ids.length == 1 ? '' : 'n'} al pool sin asignar.',
+            'vuelve${ids.length == 1 ? '' : 'n'} al pool sin vendedor.',
           ),
         ),
       );
@@ -128,7 +128,11 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         .toList()
       ..sort((a, b) => a.number.compareTo(b.number));
     final returnable = tickets
-        .where((t) => t.status == TicketStatus.withSeller)
+        .where(
+          (t) =>
+              t.status == TicketStatus.withSeller ||
+              t.status == TicketStatus.reserved,
+        )
         .toList(growable: false);
     final dateFormat = DateFormat('dd/MM/yyyy');
     final allTickets = ticketsAsync.requireValue;
@@ -179,7 +183,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           SectionCard(
-            title: 'Acceso',
+            title: seller.name,
             trailing: IconButton(
               tooltip: 'Editar',
               icon: const Icon(Icons.edit_outlined),
@@ -191,8 +195,6 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(seller.name, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
                 Text(
                   'Celular: ${seller.phone.isEmpty ? 'Sin celular' : seller.phone}',
                 ),
@@ -207,19 +209,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                         : AppColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Text(
-                  'El vendedor abre el link y ve sus tickets. No necesita registrarse.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
                 const SizedBox(height: 12),
-                SelectableText(
-                  token.isEmpty
-                      ? 'Generando link…'
-                      : collaboratorShareUrl(token),
-                  style: const TextStyle(fontSize: 13, color: AppColors.accent),
-                ),
-                const SizedBox(height: 10),
                 FilledButton.icon(
                   onPressed: () => AccessShare.copy(
                     context,
@@ -228,17 +218,28 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                     token: token,
                   ),
                   icon: const Icon(Icons.ios_share),
-                  label: const Text('Compartir acceso (WhatsApp)'),
+                  label: const Text('Compartir acceso'),
                 ),
-                RegenerateAccessButton(
-                  collaborator: seller,
-                  eventName: event.name,
-                ),
-                DeleteCollaboratorButton(
-                  collaborator: seller,
-                  onDeleted: () {
-                    if (context.mounted) Navigator.of(context).maybePop();
-                  },
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: RegenerateAccessButton(
+                        collaborator: seller,
+                        eventName: event.name,
+                      ),
+                    ),
+                    Expanded(
+                      child: DeleteCollaboratorButton(
+                        collaborator: seller,
+                        onDeleted: () {
+                          if (context.mounted) {
+                            Navigator.of(context).maybePop();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -311,7 +312,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             if (!finished && returnable.isNotEmpty) ...[
               const SizedBox(height: 4),
               const Text(
-                'Seleccioná tickets “En poder del vendedor” para devolverlos al pool.',
+                'Seleccioná tickets “En poder” o “Reservados” para devolverlos al pool.',
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
             ],
@@ -324,7 +325,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
-                    onTap: finished || ticket.status != TicketStatus.withSeller
+                    onTap: finished ||
+                            (ticket.status != TicketStatus.withSeller &&
+                                ticket.status != TicketStatus.reserved)
                         ? null
                         : () => setState(() {
                               if (_returnIds.contains(ticket.id)) {
@@ -350,7 +353,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                       child: Row(
                         children: [
                           if (!finished &&
-                              ticket.status == TicketStatus.withSeller)
+                              (ticket.status == TicketStatus.withSeller ||
+                                  ticket.status == TicketStatus.reserved))
                             Checkbox(
                               value: selectedReturnable.contains(ticket.id),
                               onChanged: (_) => setState(() {
@@ -498,7 +502,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             Text(
               unassigned.isEmpty
                   ? 'No hay tickets disponibles en el pool.'
-                  : '${unassigned.length} disponibles (sin asignar / devueltos) · próximo: #$nextNumber',
+                  : '${unassigned.length} disponibles (sin vendedor / devueltos) · próximo: #$nextNumber',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),

@@ -69,6 +69,7 @@ BadgeTone ticketStatusTone(TicketStatus status) {
     TicketStatus.settled => BadgeTone.success,
     TicketStatus.returned => BadgeTone.danger,
     TicketStatus.delivered => BadgeTone.info,
+    TicketStatus.reserved => BadgeTone.info,
     TicketStatus.withSeller => BadgeTone.warn,
     TicketStatus.unassigned => BadgeTone.neutral,
   };
@@ -80,6 +81,7 @@ Color ticketStatusBg(TicketStatus status) {
     TicketStatus.settled => AppColors.accentBg,
     TicketStatus.returned => AppColors.dangerBg,
     TicketStatus.delivered => AppColors.accentBg,
+    TicketStatus.reserved => AppColors.accentBg,
     TicketStatus.withSeller => AppColors.warnBg,
     TicketStatus.unassigned => AppColors.border,
   };
@@ -104,6 +106,7 @@ class TicketStatusSummary extends StatelessWidget {
 
     final order = [
       TicketStatus.withSeller,
+      TicketStatus.reserved,
       TicketStatus.collected,
       TicketStatus.settled,
       TicketStatus.returned,
@@ -132,6 +135,7 @@ class TicketStatusSummary extends StatelessWidget {
                     TicketStatus.settled => AppColors.accentText,
                     TicketStatus.returned => AppColors.dangerText,
                     TicketStatus.delivered => AppColors.accentText,
+                    TicketStatus.reserved => AppColors.accentText,
                     TicketStatus.withSeller => AppColors.warnText,
                     TicketStatus.unassigned => AppColors.textSecondary,
                   },

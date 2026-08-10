@@ -409,8 +409,70 @@ class EventRepository {
     }
   }
 
-  /// Seller marks tickets as collected (`withSeller` → `collected`).
-  Future<void> markTicketsCollected({
+  /// Reserves tickets for a buyer (`pool`/`withSeller` → `reserved`).
+  ///
+  /// Pool tickets are claimed for [sellerId] in the same write.
+  Future<void> reserveTickets({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required String buyerName,
+    required String sellerId,
+    String? actorId,
+    String actorRole = 'seller',
+  }) async {
+    final name = buyerName.trim();
+    if (name.isEmpty) {
+      throw StateError('La reserva necesita un destinatario.');
+    }
+
+    final ids = ticketIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    const chunk = 400;
+    for (var i = 0; i < ids.length; i += chunk) {
+      final slice = ids.skip(i).take(chunk).toList(growable: false);
+      final snaps = await Future.wait(
+        slice.map((id) => _tickets(eventId).doc(id).get()),
+      );
+
+      final batch = _firestore.batch();
+      for (var j = 0; j < slice.length; j++) {
+        final snap = snaps[j];
+        final data = snap.data();
+        if (!snap.exists || data == null) {
+          throw StateError('Ticket ${slice[j]} no encontrado.');
+        }
+        final status = TicketStatusX.fromFirestore(data['status'] as String?);
+        if (!status.isAssignablePool && status != TicketStatus.withSeller) {
+          throw StateError(
+            'Ticket #${data['number']} no se puede reservar.',
+          );
+        }
+        final fromPool = status.isAssignablePool;
+        batch.update(snap.reference, {
+          'status': TicketStatus.reserved.firestoreValue,
+          'buyerName': name,
+          if (fromPool) 'sellerId': sellerId,
+          if (fromPool) 'assignedByCollaboratorId': null,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.reserved,
+              fromStatus: status,
+              toStatus: TicketStatus.reserved,
+              actorId: actorId ?? sellerId,
+              actorRole: actorRole,
+              note: 'Reservado para $name',
+            ).toFirestoreMap(),
+          ]),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  /// Clears a reservation (`reserved` → `withSeller`, drops buyer).
+  Future<void> clearTicketReservations({
     required String eventId,
     required Iterable<String> ticketIds,
     String? actorId,
@@ -419,17 +481,46 @@ class EventRepository {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
-      expectedStatuses: {TicketStatus.withSeller},
+      expectedStatuses: {TicketStatus.reserved},
+      newStatus: TicketStatus.withSeller,
+      historyAction: TicketHistoryAction.reservationCleared,
+      actorRole: actorRole,
+      actorId: actorId,
+      actorIdFromField: 'sellerId',
+      note: 'Reserva liberada',
+      extraFields: {
+        'buyerName': '',
+      },
+    );
+  }
+
+  /// Seller marks tickets as collected (`withSeller`/`reserved` → `collected`).
+  Future<void> markTicketsCollected({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    String? actorId,
+    String actorRole = 'seller',
+    String? buyerName,
+  }) async {
+    final name = buyerName?.trim();
+    await _updateTicketStatuses(
+      eventId: eventId,
+      ticketIds: ticketIds,
+      expectedStatuses: {TicketStatus.withSeller, TicketStatus.reserved},
       newStatus: TicketStatus.collected,
       historyAction: TicketHistoryAction.collected,
       actorRole: actorRole,
       actorId: actorId,
       actorIdFromField: 'sellerId',
+      note: (name != null && name.isNotEmpty) ? 'Para: $name' : null,
+      extraFields: {
+        if (name != null && name.isNotEmpty) 'buyerName': name,
+      },
     );
   }
 
   /// Collector marks tickets as returned to the free pool
-  /// (`withSeller`/`collected` → `returned`) so a coordinator can reassign.
+  /// (`withSeller`/`reserved`/`collected` → `returned`) so a coordinator can reassign.
   Future<void> markTicketsReturned({
     required String eventId,
     required Iterable<String> ticketIds,
@@ -439,7 +530,11 @@ class EventRepository {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
-      expectedStatuses: {TicketStatus.withSeller, TicketStatus.collected},
+      expectedStatuses: {
+        TicketStatus.withSeller,
+        TicketStatus.reserved,
+        TicketStatus.collected,
+      },
       newStatus: TicketStatus.returned,
       historyAction: TicketHistoryAction.returned,
       actorRole: actorRole,
@@ -453,8 +548,8 @@ class EventRepository {
     );
   }
 
-  /// Organizer returns unsold tickets to the free pool (`withSeller` →
-  /// `unassigned`, clears seller + buyer). Reassignment uses the same rules.
+  /// Organizer returns unsold tickets to the free pool
+  /// (`withSeller`/`reserved` → `unassigned`, clears seller + buyer).
   Future<void> returnTicketsToPool({
     required String eventId,
     required Iterable<String> ticketIds,
@@ -464,7 +559,7 @@ class EventRepository {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
-      expectedStatuses: {TicketStatus.withSeller},
+      expectedStatuses: {TicketStatus.withSeller, TicketStatus.reserved},
       newStatus: TicketStatus.unassigned,
       historyAction: TicketHistoryAction.returnedToPool,
       actorRole: actorRole,

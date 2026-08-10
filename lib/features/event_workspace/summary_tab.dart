@@ -60,6 +60,7 @@ class SummaryTab extends ConsumerWidget {
     final hasPending = tickets.any(
       (t) =>
           t.status == TicketStatus.withSeller ||
+          t.status == TicketStatus.reserved ||
           t.status == TicketStatus.collected,
     );
 
@@ -68,6 +69,7 @@ class SummaryTab extends ConsumerWidget {
         .where((e) => e.key != TicketStatus.unassigned)
         .fold(0, (sum, e) => sum + e.value);
     final unassigned = aggregate[TicketStatus.unassigned] ?? 0;
+    final reserved = aggregate[TicketStatus.reserved] ?? 0;
     final collected = aggregate[TicketStatus.collected] ?? 0;
     final settled = aggregate[TicketStatus.settled] ?? 0;
     final delivered = aggregate[TicketStatus.delivered] ?? 0;
@@ -127,7 +129,13 @@ class SummaryTab extends ConsumerWidget {
           children: [
             StatCard(label: 'Emitidos', value: '$issued'),
             StatCard(label: 'Asignados', value: '$assigned'),
-            StatCard(label: 'Sin asignar', value: '$unassigned'),
+            if (sellers.isNotEmpty)
+              StatCard(label: 'Sin vendedor', value: '$unassigned'),
+            StatCard(
+              label: 'Reservados',
+              value: '$reserved',
+              accentColor: AppColors.accentText,
+            ),
             StatCard(
               label: 'Cobrados',
               value: '$collected',
@@ -256,7 +264,7 @@ class SummaryTab extends ConsumerWidget {
                 finished
                     ? 'Evento finalizado. La operación está en solo consulta.'
                     : hasPending
-                        ? 'Hay tickets en poder de vendedores o cobrados sin rendir.'
+                        ? 'Hay tickets en poder de vendedores, reservados o cobrados sin rendir.'
                         : 'No hay cobros pendientes de rendición. Podés finalizar cuando quieras.',
                 style: TextStyle(
                   color: finished
@@ -296,7 +304,7 @@ class SummaryTab extends ConsumerWidget {
         title: const Text('Finalizar evento'),
         content: Text(
           hasPending
-              ? 'Todavía hay tickets en poder de vendedores o cobrados sin rendir. '
+              ? 'Todavía hay tickets en poder de vendedores, reservados o cobrados sin rendir. '
                   'Si finalizás igual, el evento pasa a solo consulta.'
               : 'Vas a finalizar el evento. La operación quedará en solo consulta.',
         ),

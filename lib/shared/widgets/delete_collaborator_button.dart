@@ -6,7 +6,7 @@ import '../../data/models/collaborator.dart';
 
 /// Removes a collaborator after confirmation.
 ///
-/// Sellers: unsold tickets (`withSeller`) go back to the pool first.
+/// Sellers: unsold tickets (`withSeller` / `reserved`) go back to the pool first.
 class DeleteCollaboratorButton extends ConsumerStatefulWidget {
   const DeleteCollaboratorButton({
     super.key,
@@ -120,7 +120,7 @@ class _DeleteCollaboratorButtonState
               ),
             )
           : const Icon(Icons.delete_outline, size: 18),
-      label: Text('Eliminar $_roleLabel'),
+      label: const Text('Eliminar'),
     );
   }
 }

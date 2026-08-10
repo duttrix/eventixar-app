@@ -156,7 +156,8 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
         .where(
           (t) =>
               t.status == TicketStatus.collected ||
-              t.status == TicketStatus.withSeller,
+              t.status == TicketStatus.withSeller ||
+              t.status == TicketStatus.reserved,
         )
         .toList(growable: false);
     final selectedTickets = selectable
@@ -406,14 +407,16 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                 event: event,
                 selected: _selectedIds.contains(ticket.id),
                 selectable: ticket.status == TicketStatus.collected ||
-                    ticket.status == TicketStatus.withSeller,
+                    ticket.status == TicketStatus.withSeller ||
+                    ticket.status == TicketStatus.reserved,
                 collectorName: ticket.collectorId == null
                     ? null
                     : (ticket.collectorId == widget.actorId
                         ? widget.actorLabel
                         : null),
                 onToggle: ticket.status == TicketStatus.collected ||
-                        ticket.status == TicketStatus.withSeller
+                        ticket.status == TicketStatus.withSeller ||
+                        ticket.status == TicketStatus.reserved
                     ? () => setState(() {
                         if (_selectedIds.contains(ticket.id)) {
                           _selectedIds.remove(ticket.id);
@@ -429,15 +432,16 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     );
   }
 
-  /// Order: cobrados → en poder → rendidos → devueltos → validados.
+  /// Order: cobrados → reservados → en poder → rendidos → devueltos → validados.
   static int _collectorTicketSortRank(TicketStatus status) {
     return switch (status) {
       TicketStatus.collected => 0,
-      TicketStatus.withSeller => 1,
-      TicketStatus.unassigned => 2,
-      TicketStatus.settled => 3,
-      TicketStatus.returned => 4,
-      TicketStatus.delivered => 5,
+      TicketStatus.reserved => 1,
+      TicketStatus.withSeller => 2,
+      TicketStatus.unassigned => 3,
+      TicketStatus.settled => 4,
+      TicketStatus.returned => 5,
+      TicketStatus.delivered => 6,
     };
   }
 }

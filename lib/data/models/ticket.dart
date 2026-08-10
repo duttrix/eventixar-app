@@ -29,6 +29,7 @@ extension TicketSettleModeX on TicketSettleMode {
 enum TicketStatus {
   unassigned,
   withSeller,
+  reserved,
   collected,
   settled,
   returned,
@@ -39,9 +40,11 @@ extension TicketStatusX on TicketStatus {
   String get label {
     switch (this) {
       case TicketStatus.unassigned:
-        return 'Sin asignar';
+        return 'Sin vendedor';
       case TicketStatus.withSeller:
         return 'En poder del vendedor';
+      case TicketStatus.reserved:
+        return 'Reservado';
       case TicketStatus.collected:
         return 'Cobrado';
       case TicketStatus.settled:
@@ -59,6 +62,12 @@ extension TicketStatusX on TicketStatus {
   bool get isAssignablePool =>
       this == TicketStatus.unassigned || this == TicketStatus.returned;
 
+  /// Can be reserved or collected by a seller (pool, assigned, or already reserved).
+  bool get isSellable =>
+      isAssignablePool ||
+      this == TicketStatus.withSeller ||
+      this == TicketStatus.reserved;
+
   static TicketStatus fromFirestore(String? value) {
     return TicketStatus.values.firstWhere(
       (s) => s.name == value,
@@ -72,11 +81,13 @@ enum TicketHistoryAction {
   created,
   assigned,
   buyerSet,
+  reserved,
   collected,
   settled,
   delivered,
   returnedToPool,
   returned,
+  reservationCleared,
 }
 
 extension TicketHistoryActionX on TicketHistoryAction {
@@ -86,11 +97,13 @@ extension TicketHistoryActionX on TicketHistoryAction {
     TicketHistoryAction.created => 'Ticket generado',
     TicketHistoryAction.assigned => 'Asignado a vendedor',
     TicketHistoryAction.buyerSet => 'Comprador cargado',
+    TicketHistoryAction.reserved => 'Reservado',
     TicketHistoryAction.collected => 'Cobrado',
     TicketHistoryAction.settled => 'Rendido',
     TicketHistoryAction.delivered => 'Validado / entregado',
     TicketHistoryAction.returnedToPool => 'Devuelto al pool',
     TicketHistoryAction.returned => 'Marcado como devuelto',
+    TicketHistoryAction.reservationCleared => 'Reserva liberada',
   };
 
   static TicketHistoryAction fromFirestore(String? value) {

@@ -21,7 +21,9 @@ service cloud.firestore {
     function portalStatusTransition() {
       return request.resource.data.status == resource.data.status
         || (resource.data.status == 'withSeller'
-            && request.resource.data.status == 'collected')
+            && request.resource.data.status in ['reserved', 'collected'])
+        || (resource.data.status == 'reserved'
+            && request.resource.data.status in ['withSeller', 'collected'])
         || (resource.data.status == 'collected'
             && request.resource.data.status in ['settled', 'delivered'])
         || (resource.data.status == 'settled'
@@ -51,7 +53,7 @@ service cloud.firestore {
     }
 
     function ticketReturnToPoolUpdate() {
-      return resource.data.status == 'withSeller'
+      return resource.data.status in ['withSeller', 'reserved']
         && request.resource.data.status == 'unassigned'
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'history'])
@@ -61,7 +63,7 @@ service cloud.firestore {
     }
 
     function ticketCollectorReturnedUpdate() {
-      return resource.data.status in ['withSeller', 'collected']
+      return resource.data.status in ['withSeller', 'reserved', 'collected']
         && request.resource.data.status == 'returned'
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'collectorId', 'history'])

@@ -99,7 +99,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         sellerId = lockedId;
         sellerName = widget.actorLabel;
         rangesLabel =
-            'Tickets libres del pool (sin asignar a un vendedor).';
+            'Tickets libres del pool (sin vendedor).';
       } else {
         return const Scaffold(
           body: Center(child: Text('Vendedor no encontrado.')),
@@ -139,6 +139,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
           : allTickets.where((t) => t.sellerId == sellerId).toList(),
       canGoBack: lockedId == null,
       canSelfAssign: _isOrganizerSelf,
+      hasSellers: sellers.isNotEmpty,
     );
   }
 
@@ -171,7 +172,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
             child: Text(
               widget.actorRole == 'organizer'
                   ? 'Estás vendiendo como organizador. Elegí un vendedor '
-                      'para compartir o cobrar sus tickets.'
+                      'para reservar o cobrar sus tickets.'
                   : 'Elegí un vendedor.',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
@@ -197,6 +198,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                       else
                         'Rangos: ${s.ranges.map((r) => r.label).join(', ')}',
                       '${allTickets.where((t) => t.sellerId == s.id && t.status == TicketStatus.withSeller).length} para cobrar',
+                      '${allTickets.where((t) => t.sellerId == s.id && t.status == TicketStatus.reserved).length} reservados',
                     ].join(' · '),
                   ),
                   trailing: const Icon(Icons.chevron_right),
@@ -220,6 +222,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     required List<Ticket> tickets,
     required bool canGoBack,
     required bool canSelfAssign,
+    required bool hasSellers,
   }) {
     final sorted = [...tickets]..sort((a, b) {
         final byStatus = _sellerTicketSortRank(a.status)
@@ -230,7 +233,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     final selectableTickets = sorted
         .where(
           (t) =>
-              t.status == TicketStatus.withSeller ||
+              t.status.isSellable ||
               t.status == TicketStatus.collected ||
               (canSelfAssign && t.status.isAssignablePool),
         )
@@ -280,25 +283,18 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                           : 'Tus tickets para vender'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  rangesLabel,
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  canSelfAssign
-                      ? 'Acá ves solo tickets sin vendedor. Los que ya están '
-                          'asignados a alguien no aparecen, para que no se '
-                          'vendan dos veces. Podés cobrar y después compartir '
-                          'por WhatsApp, o al revés.'
-                      : 'Seleccioná tickets para compartir o imprimir '
-                          '(también si ya están cobrados). Compartir pide '
-                          'destinatario y WhatsApp, genera una imagen por ticket.',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
+                if (!canSelfAssign) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    rangesLabel,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
                 if (sorted.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TicketStatusSummary(tickets: sorted),
                 ],
               ],
@@ -311,13 +307,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 child: OutlinedButton.icon(
                   onPressed: !hasSelection
                       ? null
-                      : () => _prepareAndContinue(
-                            context,
-                            tickets: selectedTickets,
-                            event: event,
-                            sellerId: sellerId,
-                            action: _SharePrintAction.printPdf,
-                          ),
+                      : () => _printTickets(context, event, selectedTickets),
                   icon: const Icon(Icons.print_outlined),
                   label: Text(
                     hasSelection
@@ -331,13 +321,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 child: OutlinedButton.icon(
                   onPressed: !hasSelection
                       ? null
-                      : () => _prepareAndContinue(
-                            context,
-                            tickets: selectedTickets,
-                            event: event,
-                            sellerId: sellerId,
-                            action: _SharePrintAction.whatsapp,
-                          ),
+                      : () => _whatsappTickets(context, event, selectedTickets),
                   icon: const Icon(Icons.chat_outlined),
                   label: Text(
                     hasSelection
@@ -395,8 +379,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                       _selectedIds.contains(ticket.id),
                   selectionEnabled:
                       selectableTickets.any((t) => t.id == ticket.id),
-                  canCollect: ticket.status == TicketStatus.withSeller ||
-                      (canSelfAssign && ticket.status.isAssignablePool),
+                  showUnassignedStatus: hasSellers,
+                  canReserve: ticket.status.isSellable &&
+                      ticket.status != TicketStatus.reserved,
+                  canCollect: ticket.status.isSellable,
+                  canClearReservation: ticket.status == TicketStatus.reserved,
+                  canShare: true,
                   onToggleSelect:
                       selectableTickets.any((t) => t.id == ticket.id)
                           ? () => setState(() {
@@ -407,28 +395,29 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                               }
                             })
                           : null,
-                  onMarkCollected: () async {
-                    try {
-                      await _claimPoolTicketsIfNeeded(
-                        sellerId: sellerId,
-                        tickets: [ticket],
-                      );
-                      await collectTicketsAction(
-                        ref,
-                        eventId: event.id,
-                        ticketIds: [ticket.id],
-                        actorId: widget.actorId,
-                        actorRole: widget.actorRole,
-                      );
-                      if (!mounted) return;
-                      setState(() => _selectedIds.remove(ticket.id));
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('$e')));
-                    }
-                  },
+                  onReserve: () => _reserveTicket(
+                    context,
+                    event: event,
+                    sellerId: sellerId,
+                    ticket: ticket,
+                  ),
+                  onCollect: () => _collectTicket(
+                    context,
+                    event: event,
+                    sellerId: sellerId,
+                    ticket: ticket,
+                  ),
+                  onClearReservation: () => _clearReservation(
+                    context,
+                    event: event,
+                    ticket: ticket,
+                    returnToPool: canSelfAssign,
+                  ),
+                  clearReservationTooltip: canSelfAssign
+                      ? 'Devolver al pool'
+                      : 'Liberar reserva',
+                  onWhatsApp: () => _whatsappTickets(context, event, [ticket]),
+                  onPrint: () => _printTickets(context, event, [ticket]),
                 ),
               ),
         ],
@@ -460,184 +449,290 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       TicketStatus.unassigned => 0,
       TicketStatus.returned => 1,
       TicketStatus.withSeller => 2,
-      TicketStatus.collected => 3,
-      TicketStatus.settled => 4,
-      TicketStatus.delivered => 5,
+      TicketStatus.reserved => 3,
+      TicketStatus.collected => 4,
+      TicketStatus.settled => 5,
+      TicketStatus.delivered => 6,
     };
   }
 
-  Future<void> _prepareAndContinue(
+  Future<void> _reserveTicket(
     BuildContext context, {
-    required List<Ticket> tickets,
     required Event event,
     required String sellerId,
-    required _SharePrintAction action,
+    required Ticket ticket,
   }) async {
-    final result = await showDialog<_SharePrintFormResult>(
-      context: context,
-      builder: (dialogContext) =>
-          _SharePrintFormDialog(tickets: tickets, action: action),
+    final buyerName = await _askBuyerName(
+      context,
+      title: 'Reservar ticket #${ticket.number}',
+      requiredName: true,
+      initialName: ticket.buyerName,
     );
-
-    if (result == null || !context.mounted) return;
+    if (buyerName == null || !context.mounted) return;
 
     try {
-      await _claimPoolTicketsIfNeeded(sellerId: sellerId, tickets: tickets);
+      await reserveTicketsAction(
+        ref,
+        eventId: event.id,
+        ticketIds: [ticket.id],
+        buyerName: buyerName,
+        sellerId: sellerId,
+        actorId: widget.actorId,
+        actorRole: widget.actorRole,
+      );
+      if (!mounted) return;
+      setState(() => _selectedIds.remove(ticket.id));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _collectTicket(
+    BuildContext context, {
+    required Event event,
+    required String sellerId,
+    required Ticket ticket,
+  }) async {
+    String? buyerName = ticket.buyerName.trim().isEmpty
+        ? null
+        : ticket.buyerName.trim();
+
+    if (buyerName == null) {
+      final result = await _askBuyerName(
+        context,
+        title: 'Cobrar ticket #${ticket.number}',
+        requiredName: false,
+        initialName: '',
+        confirmLabel: 'Cobrar',
+      );
+      if (result == null || !context.mounted) return;
+      buyerName = result.trim().isEmpty ? null : result.trim();
+    }
+
+    try {
+      await _claimPoolTicketsIfNeeded(sellerId: sellerId, tickets: [ticket]);
+      await collectTicketsAction(
+        ref,
+        eventId: event.id,
+        ticketIds: [ticket.id],
+        actorId: widget.actorId,
+        actorRole: widget.actorRole,
+        buyerName: buyerName,
+      );
+      if (!mounted) return;
+      setState(() => _selectedIds.remove(ticket.id));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _clearReservation(
+    BuildContext context, {
+    required Event event,
+    required Ticket ticket,
+    required bool returnToPool,
+  }) async {
+    try {
+      if (returnToPool) {
+        // Organizer selling from the pool: undoing a reserve puts the ticket
+        // back in the free pool, not "with seller" (confusing for self-sell).
+        await returnTicketsToPoolAction(
+          ref,
+          eventId: event.id,
+          ticketIds: [ticket.id],
+          actorId: widget.actorId,
+          actorRole: widget.actorRole,
+        );
+      } else {
+        await clearTicketReservationsAction(
+          ref,
+          eventId: event.id,
+          ticketIds: [ticket.id],
+          actorId: widget.actorId,
+          actorRole: widget.actorRole,
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _printTickets(
+    BuildContext context,
+    Event event,
+    List<Ticket> tickets,
+  ) async {
+    final details = await _askShareDetails(
+      context,
+      title: tickets.length == 1
+          ? 'Imprimir ticket #${tickets.first.number}'
+          : 'Imprimir ${tickets.length} tickets',
+      askPhone: false,
+      initialBuyerName: _sharedBuyerHint(tickets),
+      confirmLabel: 'Imprimir',
+    );
+    if (details == null || !context.mounted) return;
+
+    final toPrint = await _applyOptionalBuyer(
+      context,
+      event: event,
+      tickets: tickets,
+      buyerName: details.buyerName,
+    );
+    if (toPrint == null || !context.mounted) return;
+
+    try {
+      await TicketPdf.printTickets(event: event, tickets: toPrint);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo generar el PDF: $e')),
+      );
+    }
+  }
+
+  Future<void> _whatsappTickets(
+    BuildContext context,
+    Event event,
+    List<Ticket> tickets,
+  ) async {
+    final details = await _askShareDetails(
+      context,
+      title: tickets.length == 1
+          ? 'WhatsApp ticket #${tickets.first.number}'
+          : 'WhatsApp ${tickets.length} tickets',
+      askPhone: true,
+      initialBuyerName: _sharedBuyerHint(tickets),
+      confirmLabel: 'Generar e ir a WhatsApp',
+    );
+    if (details == null || !context.mounted) return;
+
+    final toShare = await _applyOptionalBuyer(
+      context,
+      event: event,
+      tickets: tickets,
+      buyerName: details.buyerName,
+    );
+    if (toShare == null || !context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Elegí WhatsApp y enviá a ${details.phone}. Solo van las imágenes.',
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+    try {
+      await TicketShare.shareImages(
+        context,
+        tickets: toShare,
+        event: event,
+        style: event.ticketDesign,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
+      );
+    }
+  }
+
+  String _sharedBuyerHint(List<Ticket> tickets) {
+    final names = tickets
+        .map((t) => t.buyerName.trim())
+        .where((n) => n.isNotEmpty)
+        .toSet();
+    return names.length == 1 ? names.first : '';
+  }
+
+  /// Persists optional buyer when provided; returns tickets ready to share/print.
+  Future<List<Ticket>?> _applyOptionalBuyer(
+    BuildContext context, {
+    required Event event,
+    required List<Ticket> tickets,
+    required String buyerName,
+  }) async {
+    final name = buyerName.trim();
+    if (name.isEmpty) return tickets;
+
+    try {
       await setTicketsBuyerAction(
         ref,
         eventId: event.id,
         ticketIds: tickets.map((t) => t.id),
-        buyerName: result.buyerName,
+        buyerName: name,
         actorId: widget.actorId,
         actorRole: widget.actorRole,
       );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      return;
-    }
-
-    if (!context.mounted) return;
-    setState(() {
-      _selectedIds.removeAll(tickets.map((ticket) => ticket.id));
-    });
-
-    final updated = [
-      for (final ticket in tickets)
-        Ticket(
-          id: ticket.id,
-          eventId: ticket.eventId,
-          number: ticket.number,
-          status: ticket.status,
-          sellerId: ticket.sellerId,
-          validatorId: ticket.validatorId,
-          collectorId: ticket.collectorId,
-          buyerName: result.buyerName,
-        ),
-    ];
-
-    if (action == _SharePrintAction.whatsapp) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Elegí WhatsApp y enviá a ${result.buyerName} (${result.phone}). '
-              'Solo van las imágenes.',
-            ),
-            duration: const Duration(seconds: 4),
+      return [
+        for (final ticket in tickets)
+          Ticket(
+            id: ticket.id,
+            eventId: ticket.eventId,
+            number: ticket.number,
+            status: ticket.status,
+            sellerId: ticket.sellerId,
+            validatorId: ticket.validatorId,
+            collectorId: ticket.collectorId,
+            assignedByCollaboratorId: ticket.assignedByCollaboratorId,
+            buyerName: name,
+            settleMode: ticket.settleMode,
+            settledAmount: ticket.settledAmount,
+            history: ticket.history,
           ),
-        );
-      }
-      try {
-        await TicketShare.shareImages(
-          context,
-          tickets: updated,
-          event: event,
-          style: event.ticketDesign,
-        );
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
-        );
-      }
-    } else if (context.mounted) {
-      try {
-        await TicketPdf.printTickets(event: event, tickets: updated);
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo generar el PDF: $e')),
-        );
-      }
+      ];
+    } catch (e) {
+      if (!context.mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return null;
     }
   }
-}
 
-enum _SharePrintAction { whatsapp, printPdf }
-
-class _SharePrintFormResult {
-  const _SharePrintFormResult({
-    required this.buyerName,
-    this.phone = '',
-  });
-
-  final String buyerName;
-  final String phone;
-}
-
-class _SharePrintFormDialog extends StatefulWidget {
-  const _SharePrintFormDialog({required this.tickets, required this.action});
-
-  final List<Ticket> tickets;
-  final _SharePrintAction action;
-
-  @override
-  State<_SharePrintFormDialog> createState() => _SharePrintFormDialogState();
-}
-
-class _SharePrintFormDialogState extends State<_SharePrintFormDialog> {
-  late final TextEditingController _buyerController;
-  late final TextEditingController _phoneController;
-
-  bool get _isWhatsApp => widget.action == _SharePrintAction.whatsapp;
-
-  @override
-  void initState() {
-    super.initState();
-    _buyerController = TextEditingController();
-    _phoneController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _buyerController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_isWhatsApp ? 'Enviar por WhatsApp' : 'Antes de imprimir'),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: SingleChildScrollView(
+  Future<_ShareDetails?> _askShareDetails(
+    BuildContext context, {
+    required String title,
+    required bool askPhone,
+    String initialBuyerName = '',
+    String confirmLabel = 'Continuar',
+  }) {
+    return showModalBottomSheet<_ShareDetails>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final buyerController =
+            TextEditingController(text: initialBuyerName);
+        final phoneController = TextEditingController();
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                _isWhatsApp
-                    ? 'Se van a generar ${widget.tickets.length} '
-                        'imagen${widget.tickets.length == 1 ? '' : 'es'} '
-                        '(una por ticket). El comprador solo recibe las fotos.'
-                    : 'Ingresá el destinatario para todos los tickets seleccionados.',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Tickets: ${widget.tickets.map((ticket) => '#${ticket.number}').join(', ')}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
               const SizedBox(height: 12),
               TextField(
-                controller: _buyerController,
+                controller: buyerController,
+                autofocus: true,
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
-                  labelText: 'Destinatario',
+                  labelText: 'Destinatario (opcional)',
                   hintText: 'Ej. Juan Pérez',
                   isDense: true,
                 ),
               ),
-              if (_isWhatsApp) ...[
+              if (askPhone) ...[
                 const SizedBox(height: 12),
                 TextField(
-                  controller: _phoneController,
+                  controller: phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'WhatsApp',
@@ -653,50 +748,110 @@ class _SharePrintFormDialogState extends State<_SharePrintFormDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  String phone = '';
+                  if (askPhone) {
+                    final normalized = TicketShare.normalizeWhatsAppPhone(
+                      phoneController.text,
+                    );
+                    if (normalized == null) {
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Ingresá un número válido (ej. 11 2345-6789).',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    phone = TicketShare.formatWhatsAppPhone(normalized);
+                  }
+                  Navigator.pop(
+                    sheetContext,
+                    _ShareDetails(
+                      buyerName: buyerController.text.trim(),
+                      phone: phone,
+                    ),
+                  );
+                },
+                child: Text(confirmLabel),
+              ),
             ],
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final buyerName = _buyerController.text.trim();
-            if (buyerName.isEmpty) return;
-            final localPhone = _phoneController.text.trim();
-            final normalized = _isWhatsApp
-                ? TicketShare.normalizeWhatsAppPhone(localPhone)
-                : null;
-            if (_isWhatsApp && normalized == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Ingresá un número válido (ej. 11 2345-6789).',
-                  ),
-                ),
-              );
-              return;
-            }
-            Navigator.pop(
-              context,
-              _SharePrintFormResult(
-                buyerName: buyerName,
-                phone: normalized == null
-                    ? localPhone
-                    : TicketShare.formatWhatsAppPhone(normalized),
-              ),
-            );
-          },
-          child: Text(
-            _isWhatsApp ? 'Generar e ir a WhatsApp' : 'Continuar e imprimir',
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
+
+  Future<String?> _askBuyerName(
+    BuildContext context, {
+    required String title,
+    required bool requiredName,
+    String initialName = '',
+    String confirmLabel = 'Confirmar',
+  }) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final controller = TextEditingController(text: initialName);
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: requiredName
+                      ? 'Destinatario'
+                      : 'Destinatario (opcional)',
+                  hintText: 'Ej. Juan Pérez',
+                  isDense: true,
+                ),
+                onSubmitted: (value) {
+                  final name = value.trim();
+                  if (requiredName && name.isEmpty) return;
+                  Navigator.pop(sheetContext, name);
+                },
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  final name = controller.text.trim();
+                  if (requiredName && name.isEmpty) return;
+                  Navigator.pop(sheetContext, name);
+                },
+                child: Text(confirmLabel),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShareDetails {
+  const _ShareDetails({
+    required this.buyerName,
+    this.phone = '',
+  });
+
+  final String buyerName;
+  final String phone;
 }
 
 class _SellerTicketCard extends StatelessWidget {
@@ -705,23 +860,42 @@ class _SellerTicketCard extends StatelessWidget {
     required this.event,
     required this.selected,
     required this.selectionEnabled,
+    required this.showUnassignedStatus,
+    required this.canReserve,
     required this.canCollect,
-    required this.onMarkCollected,
+    required this.canClearReservation,
+    required this.canShare,
+    required this.onReserve,
+    required this.onCollect,
+    required this.onClearReservation,
+    required this.onWhatsApp,
+    required this.onPrint,
     this.onToggleSelect,
+    this.clearReservationTooltip = 'Liberar reserva',
   });
 
   final Ticket ticket;
   final Event event;
   final bool selected;
   final bool selectionEnabled;
+  final bool showUnassignedStatus;
+  final bool canReserve;
   final bool canCollect;
+  final bool canClearReservation;
+  final bool canShare;
   final VoidCallback? onToggleSelect;
-  final VoidCallback onMarkCollected;
+  final VoidCallback onReserve;
+  final VoidCallback onCollect;
+  final VoidCallback onClearReservation;
+  final VoidCallback onWhatsApp;
+  final VoidCallback onPrint;
+  final String clearReservationTooltip;
 
   @override
   Widget build(BuildContext context) {
     final buyer = ticket.buyerName.trim();
-    final showStatus = ticket.status != TicketStatus.withSeller || buyer.isEmpty;
+    final showStatus = ticket.status != TicketStatus.unassigned ||
+        showUnassignedStatus;
 
     return Material(
       color: AppColors.card,
@@ -735,72 +909,115 @@ class _SellerTicketCard extends StatelessWidget {
           ),
           color: selected ? AppColors.accentBg.withValues(alpha: 0.35) : null,
         ),
-        padding: const EdgeInsets.fromLTRB(6, 12, 10, 12),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(6, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Checkbox(
-              value: selected,
-              onChanged:
-                  selectionEnabled ? (_) => onToggleSelect?.call() : null,
-              visualDensity: VisualDensity.compact,
-            ),
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onToggleSelect,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ticket #${ticket.number}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (buyer.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'Para: $buyer',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: selected,
+                  onChanged:
+                      selectionEnabled ? (_) => onToggleSelect?.call() : null,
+                  visualDensity: VisualDensity.compact,
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onToggleSelect,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Ticket #${ticket.number}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            if (showStatus) ...[
+                              const SizedBox(width: 8),
+                              StatusBadge(
+                                label: ticket.status.label,
+                                tone: ticketStatusTone(ticket.status),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                    ],
-                    if (showStatus || ticket.status.isAssignablePool) ...[
-                      const SizedBox(height: 6),
-                      StatusBadge(
-                        label: ticket.status.label,
-                        tone: ticketStatusTone(ticket.status),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (canCollect)
-              FilledButton(
-                onPressed: onMarkCollected,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                        const SizedBox(height: 2),
+                        Text(
+                          '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (buyer.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Para: $buyer',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  minimumSize: const Size(0, 40),
                 ),
-                child: const Text('Cobrar'),
+                if (canShare) ...[
+                  IconButton(
+                    tooltip: 'WhatsApp',
+                    onPressed: onWhatsApp,
+                    icon: const Icon(Icons.chat_outlined, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: 'Imprimir',
+                    onPressed: onPrint,
+                    icon: const Icon(Icons.print_outlined, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ],
+            ),
+            if (canReserve || canCollect || canClearReservation) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (canReserve)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onReserve,
+                        child: const Text('Reservar'),
+                      ),
+                    ),
+                  if (canReserve && canCollect) const SizedBox(width: 8),
+                  if (canCollect)
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: onCollect,
+                        child: const Text('Cobrar'),
+                      ),
+                    ),
+                  if (canClearReservation) ...[
+                    if (canCollect) const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: clearReservationTooltip,
+                      onPressed: onClearReservation,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ],
               ),
+            ],
           ],
         ),
       ),

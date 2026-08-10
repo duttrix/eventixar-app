@@ -218,7 +218,8 @@ Future<void> deleteCollaboratorAction(
         .where(
           (t) =>
               t.sellerId == collaborator.id &&
-              t.status == TicketStatus.withSeller,
+              (t.status == TicketStatus.withSeller ||
+                  t.status == TicketStatus.reserved),
         )
         .map((t) => t.id);
     await ref.read(eventRepositoryProvider).returnTicketsToPool(
@@ -288,7 +289,28 @@ Future<void> setTicketsBuyerAction(
       );
 }
 
-Future<void> collectTicketsAction(
+Future<void> reserveTicketsAction(
+  WidgetRef ref, {
+  required String eventId,
+  required Iterable<String> ticketIds,
+  required String buyerName,
+  required String sellerId,
+  String? actorId,
+  String actorRole = 'seller',
+}) async {
+  final ids = ticketIds.toList(growable: false);
+  if (ids.isEmpty) return;
+  await ref.read(eventRepositoryProvider).reserveTickets(
+        eventId: eventId,
+        ticketIds: ids,
+        buyerName: buyerName,
+        sellerId: sellerId,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+}
+
+Future<void> clearTicketReservationsAction(
   WidgetRef ref, {
   required String eventId,
   required Iterable<String> ticketIds,
@@ -297,11 +319,30 @@ Future<void> collectTicketsAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
+  await ref.read(eventRepositoryProvider).clearTicketReservations(
+        eventId: eventId,
+        ticketIds: ids,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+}
+
+Future<void> collectTicketsAction(
+  WidgetRef ref, {
+  required String eventId,
+  required Iterable<String> ticketIds,
+  String? actorId,
+  String actorRole = 'seller',
+  String? buyerName,
+}) async {
+  final ids = ticketIds.toList(growable: false);
+  if (ids.isEmpty) return;
   await ref.read(eventRepositoryProvider).markTicketsCollected(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
         actorRole: actorRole,
+        buyerName: buyerName,
       );
 }
 

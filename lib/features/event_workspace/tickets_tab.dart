@@ -47,6 +47,9 @@ class TicketsTab extends ConsumerWidget {
         return AsyncBody(
           value: ref.watch(eventTicketAggregateProvider(eventId)),
           builder: (context, aggregate) {
+            final sellers =
+                ref.watch(eventSellersProvider(eventId)).valueOrNull ??
+                    const [];
             final total = aggregate.values.fold(0, (sum, n) => sum + n);
             final issued = total == 0 ? event.ticketCount : total;
 
@@ -65,20 +68,22 @@ class TicketsTab extends ConsumerWidget {
                   child: Column(
                     children: [
                       for (final status in TicketStatus.values)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(status.label)),
-                              Text(
-                                '${aggregate[status] ?? 0}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                        if (status != TicketStatus.unassigned ||
+                            sellers.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(child: Text(status.label)),
+                                Text(
+                                  '${aggregate[status] ?? 0}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
                       const Divider(height: 20),
                       Row(
                         children: [

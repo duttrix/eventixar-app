@@ -260,12 +260,14 @@ class MockRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// True if any ticket is still with a seller or sold but not yet settled with a collector.
+  /// True if any ticket is still with a seller, reserved, or sold but not settled.
   bool hasPendingSettlementTickets(String eventId) {
     return tickets.any(
       (t) =>
           t.eventId == eventId &&
-          (t.status == TicketStatus.withSeller || t.status == TicketStatus.collected),
+          (t.status == TicketStatus.withSeller ||
+              t.status == TicketStatus.reserved ||
+              t.status == TicketStatus.collected),
     );
   }
 
@@ -657,6 +659,7 @@ class MockRepository extends ChangeNotifier {
     ticketAggregate['ev1'] = {
       TicketStatus.unassigned: 130,
       TicketStatus.withSeller: 48,
+      TicketStatus.reserved: 0,
       TicketStatus.collected: 4,
       TicketStatus.settled: 4,
       TicketStatus.returned: 4,
@@ -668,6 +671,7 @@ class MockRepository extends ChangeNotifier {
     ticketAggregate['ev3'] = {
       TicketStatus.unassigned: 0,
       TicketStatus.withSeller: 0,
+      TicketStatus.reserved: 0,
       TicketStatus.collected: 10,
       TicketStatus.settled: 10,
       TicketStatus.returned: 5,
