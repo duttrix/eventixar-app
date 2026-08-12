@@ -19,6 +19,17 @@ class EventRepository {
   CollectionReference<Map<String, dynamic>> _tickets(String eventId) =>
       _events.doc(eventId).collection('tickets');
 
+  CollectionReference<Map<String, dynamic>> _collaborators(String eventId) =>
+      _events.doc(eventId).collection('collaborators');
+
+  Future<String?> _collaboratorName(String eventId, String? collaboratorId) async {
+    if (collaboratorId == null || collaboratorId.isEmpty) return null;
+    final snap = await _collaborators(eventId).doc(collaboratorId).get();
+    final name = (snap.data()?['name'] as String?)?.trim();
+    if (name == null || name.isEmpty) return null;
+    return name;
+  }
+
   Stream<List<Event>> watchForOwner(String ownerId) {
     return _events
         .where('ownerId', isEqualTo: ownerId)
@@ -233,12 +244,15 @@ class EventRepository {
     );
 
     final sellerSnap =
-        await _events.doc(eventId).collection('collaborators').doc(sellerId).get();
+        await _collaborators(eventId).doc(sellerId).get();
     final sellerName =
         (sellerSnap.data()?['name'] as String?)?.trim() ?? '';
     final sellerLabel = sellerName.isNotEmpty
         ? sellerName
         : (sellerSnap.exists ? 'vendedor $sellerId' : 'Organizador');
+    final actorName = assignedByCollaboratorId != null
+        ? await _collaboratorName(eventId, assignedByCollaboratorId)
+        : null;
 
     // Chunk ticket updates to stay under Firestore's batch limit.
     const chunk = 400;
@@ -255,6 +269,7 @@ class EventRepository {
           actorId: assignedByCollaboratorId,
           actorRole:
               assignedByCollaboratorId != null ? 'coordinator' : 'organizer',
+          actorName: actorName,
           note: 'Asignado a $sellerLabel',
         );
         batch.update(doc.reference, {
@@ -292,12 +307,14 @@ class EventRepository {
     if (ids.isEmpty) return;
 
     final sellerSnap =
-        await _events.doc(eventId).collection('collaborators').doc(sellerId).get();
+        await _collaborators(eventId).doc(sellerId).get();
     final sellerName =
         (sellerSnap.data()?['name'] as String?)?.trim() ?? '';
     final sellerLabel = sellerName.isNotEmpty
         ? sellerName
         : (sellerSnap.exists ? 'vendedor $sellerId' : 'Organizador');
+    final resolvedActorId = actorId ?? sellerId;
+    final actorName = await _collaboratorName(eventId, resolvedActorId);
 
     const chunk = 400;
     for (var i = 0; i < ids.length; i += chunk) {
@@ -329,8 +346,9 @@ class EventRepository {
               action: TicketHistoryAction.assigned,
               fromStatus: status,
               toStatus: TicketStatus.withSeller,
-              actorId: actorId ?? sellerId,
+              actorId: resolvedActorId,
               actorRole: actorRole,
+              actorName: actorName,
               note: 'Asignado a $sellerLabel',
             ).toFirestoreMap(),
           ]),
@@ -354,6 +372,8 @@ class EventRepository {
       throw StateError('Ticket no encontrado.');
     }
     final status = TicketStatusX.fromFirestore(data['status'] as String?);
+    final resolvedActorId = actorId ?? data['sellerId'] as String?;
+    final actorName = await _collaboratorName(eventId, resolvedActorId);
     await snap.reference.update({
       'buyerName': name,
       'history': FieldValue.arrayUnion([
@@ -362,8 +382,9 @@ class EventRepository {
           action: TicketHistoryAction.buyerSet,
           fromStatus: status,
           toStatus: status,
-          actorId: actorId ?? data['sellerId'] as String?,
+          actorId: resolvedActorId,
           actorRole: actorRole ?? 'seller',
+          actorName: actorName,
           note: name.isEmpty ? 'Comprador borrado' : 'Para: $name',
         ).toFirestoreMap(),
       ]),
@@ -380,6 +401,15 @@ class EventRepository {
     final name = buyerName.trim();
     const chunk = 400;
     final ids = ticketIds.toList(growable: false);
+    final knownNames = <String, String?>{};
+    Future<String?> nameFor(String? id) async {
+      if (id == null || id.isEmpty) return null;
+      if (knownNames.containsKey(id)) return knownNames[id];
+      final resolved = await _collaboratorName(eventId, id);
+      knownNames[id] = resolved;
+      return resolved;
+    }
+
     for (var i = 0; i < ids.length; i += chunk) {
       final slice = ids.skip(i).take(chunk).toList(growable: false);
       final snaps = await Future.wait(
@@ -390,6 +420,8 @@ class EventRepository {
         final data = snap.data();
         if (!snap.exists || data == null) continue;
         final status = TicketStatusX.fromFirestore(data['status'] as String?);
+        final resolvedActorId = actorId ?? data['sellerId'] as String?;
+        final actorDisplayName = await nameFor(resolvedActorId);
         batch.update(snap.reference, {
           'buyerName': name,
           'history': FieldValue.arrayUnion([
@@ -398,8 +430,9 @@ class EventRepository {
               action: TicketHistoryAction.buyerSet,
               fromStatus: status,
               toStatus: status,
-              actorId: actorId ?? data['sellerId'] as String?,
+              actorId: resolvedActorId,
               actorRole: actorRole ?? 'seller',
+              actorName: actorDisplayName,
               note: name.isEmpty ? 'Comprador borrado' : 'Para: $name',
             ).toFirestoreMap(),
           ]),
@@ -427,6 +460,9 @@ class EventRepository {
 
     final ids = ticketIds.toList(growable: false);
     if (ids.isEmpty) return;
+
+    final resolvedActorId = actorId ?? sellerId;
+    final actorDisplayName = await _collaboratorName(eventId, resolvedActorId);
 
     const chunk = 400;
     for (var i = 0; i < ids.length; i += chunk) {
@@ -460,8 +496,9 @@ class EventRepository {
               action: TicketHistoryAction.reserved,
               fromStatus: status,
               toStatus: TicketStatus.reserved,
-              actorId: actorId ?? sellerId,
+              actorId: resolvedActorId,
               actorRole: actorRole,
+              actorName: actorDisplayName,
               note: 'Reservado para $name',
             ).toFirestoreMap(),
           ]),
@@ -609,6 +646,7 @@ class EventRepository {
         .toList(growable: false);
     if (sold.isEmpty) return;
 
+    final actorDisplayName = await _collaboratorName(eventId, actorId);
     const chunk = 400;
     for (var i = 0; i < sold.length; i += chunk) {
       final slice = sold.skip(i).take(chunk);
@@ -625,6 +663,7 @@ class EventRepository {
               toStatus: ticket.status,
               actorId: actorId,
               actorRole: actorRole,
+              actorName: actorDisplayName,
               note: 'Vendedor eliminado',
             ).toFirestoreMap(),
           ]),
@@ -657,6 +696,7 @@ class EventRepository {
         'El ticket no figura como cobrado. Revisá con el organizador.',
       );
     }
+    final actorDisplayName = await _collaboratorName(eventId, validatorId);
     await ref.update({
       'status': TicketStatus.delivered.firestoreValue,
       'validatorId': validatorId,
@@ -668,12 +708,15 @@ class EventRepository {
           toStatus: TicketStatus.delivered,
           actorId: validatorId,
           actorRole: actorRole,
+          actorName: actorDisplayName,
         ).toFirestoreMap(),
       ]),
     });
   }
 
-  /// Collector settles tickets (`collected` → `settled`).
+  /// Collector settles tickets
+  /// (`withSeller`/`reserved`/`collected` → `settled`).
+  /// Rendido implica vendido aunque el vendedor no haya marcado cobrado.
   Future<void> markTicketsSettled({
     required String eventId,
     required Iterable<String> ticketIds,
@@ -692,7 +735,11 @@ class EventRepository {
     await _updateTicketStatuses(
       eventId: eventId,
       ticketIds: ticketIds,
-      expectedStatuses: {TicketStatus.collected},
+      expectedStatuses: {
+        TicketStatus.withSeller,
+        TicketStatus.reserved,
+        TicketStatus.collected,
+      },
       newStatus: TicketStatus.settled,
       historyAction: TicketHistoryAction.settled,
       actorRole: actorRole,
@@ -721,6 +768,19 @@ class EventRepository {
     final ids = ticketIds.toList(growable: false);
     if (ids.isEmpty) return;
 
+    final knownNames = <String, String?>{};
+    if (actorId != null) {
+      knownNames[actorId] = await _collaboratorName(eventId, actorId);
+    }
+
+    Future<String?> nameFor(String? id) async {
+      if (id == null || id.isEmpty) return null;
+      if (knownNames.containsKey(id)) return knownNames[id];
+      final resolved = await _collaboratorName(eventId, id);
+      knownNames[id] = resolved;
+      return resolved;
+    }
+
     const chunk = 400;
     for (var i = 0; i < ids.length; i += chunk) {
       final slice = ids.skip(i).take(chunk).toList(growable: false);
@@ -745,6 +805,7 @@ class EventRepository {
             (actorIdFromField == null
                 ? null
                 : data[actorIdFromField] as String?);
+        final actorDisplayName = await nameFor(resolvedActorId);
         batch.update(snap.reference, {
           'status': newStatus.firestoreValue,
           ...extraFields,
@@ -756,6 +817,7 @@ class EventRepository {
               toStatus: newStatus,
               actorId: resolvedActorId,
               actorRole: actorRole,
+              actorName: actorDisplayName,
               note: note,
             ).toFirestoreMap(),
           ]),

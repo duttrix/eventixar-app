@@ -9,16 +9,21 @@ class StatCard extends StatelessWidget {
     required this.label,
     required this.value,
     this.accentColor = AppColors.text,
+    this.large = false,
   });
 
   final String label;
   final String value;
   final Color accentColor;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: large ? 14 : 10,
+        vertical: large ? 16 : 10,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(10),
@@ -35,21 +40,21 @@ class StatCard extends StatelessWidget {
               value,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 24,
+                fontSize: large ? 32 : 24,
                 fontWeight: FontWeight.w800,
                 color: accentColor,
                 height: 1.05,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: large ? 6 : 4),
             Text(
               label,
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 12,
+                fontSize: large ? 13 : 12,
                 fontWeight: FontWeight.w600,
                 height: 1.15,
               ),

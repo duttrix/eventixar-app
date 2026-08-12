@@ -123,6 +123,7 @@ class TicketHistoryEntry {
     this.toStatus,
     this.actorId,
     this.actorRole,
+    this.actorName,
     this.note,
   });
 
@@ -137,6 +138,9 @@ class TicketHistoryEntry {
   /// `organizer` | `seller` | `validator` | `collector` | `coordinator`
   final String? actorRole;
 
+  /// Display name captured at write time (survives deleted collaborators).
+  final String? actorName;
+
   final String? note;
 
   String get actorRoleLabel => switch (actorRole) {
@@ -147,7 +151,6 @@ class TicketHistoryEntry {
     'coordinator' => 'Coordinador',
     _ => actorRole ?? 'Sistema',
   };
-
   factory TicketHistoryEntry.fromFirestore(Map<String, dynamic> data) {
     return TicketHistoryEntry(
       at: data['at'] is Timestamp
@@ -162,11 +165,13 @@ class TicketHistoryEntry {
           : TicketStatusX.fromFirestore(data['toStatus'] as String?),
       actorId: data['actorId'] as String?,
       actorRole: data['actorRole'] as String?,
+      actorName: (data['actorName'] as String?)?.trim(),
       note: data['note'] as String?,
     );
   }
 
   Map<String, dynamic> toFirestoreMap() {
+    final name = actorName?.trim();
     return {
       'at': Timestamp.fromDate(at),
       'action': action.firestoreValue,
@@ -174,6 +179,7 @@ class TicketHistoryEntry {
       if (toStatus != null) 'toStatus': toStatus!.firestoreValue,
       if (actorId != null) 'actorId': actorId,
       if (actorRole != null) 'actorRole': actorRole,
+      if (name != null && name.isNotEmpty) 'actorName': name,
       if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
     };
   }

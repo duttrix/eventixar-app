@@ -57,8 +57,8 @@ class CollaboratorRepository {
   }
 
   Future<List<Collaborator>> listForEvent(String eventId) async {
-    final snap = await _collaborators(eventId).orderBy('createdAt').get();
-    return snap.docs
+    final snap = await _collaborators(eventId).get();
+    final list = snap.docs
         .map(
           (doc) => Collaborator.fromFirestore(
             id: doc.id,
@@ -67,20 +67,38 @@ class CollaboratorRepository {
           ),
         )
         .toList();
+    list.sort((a, b) {
+      final aAt = a.createdAt;
+      final bAt = b.createdAt;
+      if (aAt == null && bAt == null) return 0;
+      if (aAt == null) return 1;
+      if (bAt == null) return -1;
+      return aAt.compareTo(bAt);
+    });
+    return list;
   }
 
   Stream<List<Collaborator>> watchForEvent(String eventId) {
-    return _collaborators(eventId).orderBy('createdAt').snapshots().map(
-          (snap) => snap.docs
-              .map(
-                (doc) => Collaborator.fromFirestore(
-                  id: doc.id,
-                  eventId: eventId,
-                  data: doc.data(),
-                ),
-              )
-              .toList(),
-        );
+    return _collaborators(eventId).snapshots().map((snap) {
+      final list = snap.docs
+          .map(
+            (doc) => Collaborator.fromFirestore(
+              id: doc.id,
+              eventId: eventId,
+              data: doc.data(),
+            ),
+          )
+          .toList();
+      list.sort((a, b) {
+        final aAt = a.createdAt;
+        final bAt = b.createdAt;
+        if (aAt == null && bAt == null) return 0;
+        if (aAt == null) return 1;
+        if (bAt == null) return -1;
+        return aAt.compareTo(bAt);
+      });
+      return list;
+    });
   }
 
   Future<Collaborator> create({

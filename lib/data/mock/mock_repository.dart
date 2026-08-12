@@ -463,11 +463,13 @@ class MockRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Recaudador cobranza al vendedor: solo tickets cobrados → rendidos.
+  /// Recaudador: en poder / reservado / cobrado → rendido.
   void markSettled(String ticketId, {required String collectorId}) {
     final ticket = tickets.firstWhere((t) => t.id == ticketId);
-    if (ticket.status == TicketStatus.collected) {
-      _shiftAggregate(ticket.eventId, TicketStatus.collected, -1);
+    if (ticket.status == TicketStatus.withSeller ||
+        ticket.status == TicketStatus.reserved ||
+        ticket.status == TicketStatus.collected) {
+      _shiftAggregate(ticket.eventId, ticket.status, -1);
       _shiftAggregate(ticket.eventId, TicketStatus.settled, 1);
       ticket.status = TicketStatus.settled;
     }
@@ -483,8 +485,12 @@ class MockRepository extends ChangeNotifier {
   }) {
     for (final id in ticketIds) {
       final ticket = tickets.firstWhere((t) => t.id == id);
-      if (ticket.status != TicketStatus.collected) continue;
-      _shiftAggregate(ticket.eventId, TicketStatus.collected, -1);
+      if (ticket.status != TicketStatus.withSeller &&
+          ticket.status != TicketStatus.reserved &&
+          ticket.status != TicketStatus.collected) {
+        continue;
+      }
+      _shiftAggregate(ticket.eventId, ticket.status, -1);
       _shiftAggregate(ticket.eventId, TicketStatus.settled, 1);
       ticket
         ..status = TicketStatus.settled

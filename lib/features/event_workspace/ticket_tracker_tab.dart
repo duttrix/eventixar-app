@@ -100,35 +100,43 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
           ),
         ),
         const SizedBox(height: 16),
-        if (_searchedNumber != null)
-          ticketsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('No se pudieron cargar tickets: $e'),
-            data: (tickets) {
-              Ticket? ticket;
-              for (final t in tickets) {
-                if (t.number == _searchedNumber) {
-                  ticket = t;
-                  break;
+        if (_searchedNumber != null) ...[
+          if (ticketsAsync.isLoading || collabsAsync.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (ticketsAsync.hasError || collabsAsync.hasError)
+            Text(
+              'No se pudieron cargar datos: '
+              '${ticketsAsync.error ?? collabsAsync.error}',
+            )
+          else ...[
+            Builder(
+              builder: (context) {
+                final tickets = ticketsAsync.requireValue;
+                final collaborators = collabsAsync.requireValue;
+                Ticket? ticket;
+                for (final t in tickets) {
+                  if (t.number == _searchedNumber) {
+                    ticket = t;
+                    break;
+                  }
                 }
-              }
-              if (ticket == null) {
-                return SectionCard(
-                  title: 'Resultado',
-                  child: Text(
-                    'No hay ticket #$_searchedNumber en este evento.',
-                    style: const TextStyle(color: AppColors.textMuted),
-                  ),
+                if (ticket == null) {
+                  return SectionCard(
+                    title: 'Resultado',
+                    child: Text(
+                      'No hay ticket #$_searchedNumber en este evento.',
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  );
+                }
+                return _TicketTrackerResult(
+                  ticket: ticket,
+                  collaborators: collaborators,
                 );
-              }
-              final collaborators =
-                  collabsAsync.valueOrNull ?? const <Collaborator>[];
-              return _TicketTrackerResult(
-                ticket: ticket,
-                collaborators: collaborators,
-              );
-            },
-          ),
+              },
+            ),
+          ],
+        ],
       ],
     );
   }
@@ -151,14 +159,27 @@ class _TicketTrackerResult extends StatelessWidget {
     return null;
   }
 
+  String _personName(String? id) {
+    final person = _byId(id);
+    final name = person?.name.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return '';
+  }
+
   String _actorLabel(TicketHistoryEntry entry) {
-    final person = _byId(entry.actorId);
     final role = entry.actorRoleLabel;
-    if (person != null) return '$role · ${person.name}';
-    if (entry.actorId != null && entry.actorId!.isNotEmpty) {
-      return '$role · ${entry.actorId}';
-    }
+    final stored = entry.actorName?.trim();
+    if (stored != null && stored.isNotEmpty) return '$role · $stored';
+    final lookedUp = _personName(entry.actorId);
+    if (lookedUp.isNotEmpty) return '$role · $lookedUp';
     return role;
+  }
+
+  String _fieldPersonLabel(String? id, {required String emptyLabel}) {
+    if (id == null || id.isEmpty) return emptyLabel;
+    final name = _personName(id);
+    if (name.isNotEmpty) return name;
+    return 'Sin nombre';
   }
 
   /// Replaces collaborator ids in free-text notes with their names.
@@ -176,10 +197,6 @@ class _TicketTrackerResult extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final seller = _byId(ticket.sellerId);
-    final validator = _byId(ticket.validatorId);
-    final collector = _byId(ticket.collectorId);
-    final assignedBy = _byId(ticket.assignedByCollaboratorId);
     final history = [...ticket.history]
       ..sort((a, b) => b.at.compareTo(a.at));
 
@@ -198,15 +215,19 @@ class _TicketTrackerResult extends StatelessWidget {
               const SizedBox(height: 12),
               _InfoRow(
                 label: 'Vendedor actual',
-                value: seller?.name ??
-                    (ticket.sellerId == null ? '—' : ticket.sellerId!),
+                value: _fieldPersonLabel(
+                  ticket.sellerId,
+                  emptyLabel: '—',
+                ),
               ),
               _InfoRow(
                 label: 'Asignado por',
-                value: assignedBy?.name ??
-                    (ticket.assignedByCollaboratorId == null
-                        ? 'Organizador / sin dato'
-                        : ticket.assignedByCollaboratorId!),
+                value: ticket.assignedByCollaboratorId == null
+                    ? 'Organizador / sin dato'
+                    : _fieldPersonLabel(
+                        ticket.assignedByCollaboratorId,
+                        emptyLabel: 'Organizador / sin dato',
+                      ),
               ),
               _InfoRow(
                 label: 'Comprador',
@@ -216,13 +237,17 @@ class _TicketTrackerResult extends StatelessWidget {
               ),
               _InfoRow(
                 label: 'Recaudador',
-                value: collector?.name ??
-                    (ticket.collectorId == null ? '—' : ticket.collectorId!),
+                value: _fieldPersonLabel(
+                  ticket.collectorId,
+                  emptyLabel: '—',
+                ),
               ),
               _InfoRow(
                 label: 'Validador',
-                value: validator?.name ??
-                    (ticket.validatorId == null ? '—' : ticket.validatorId!),
+                value: _fieldPersonLabel(
+                  ticket.validatorId,
+                  emptyLabel: '—',
+                ),
               ),
             ],
           ),

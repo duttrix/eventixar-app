@@ -16,6 +16,8 @@ class SummaryTab extends ConsumerWidget {
 
   final String eventId;
 
+  static const Color _assignedBlue = Color(0xFF2F6FED);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
@@ -49,11 +51,6 @@ class SummaryTab extends ConsumerWidget {
         .where((c) => c.role == CollaboratorRole.collector)
         .toList();
 
-    final aggregate = {for (final s in TicketStatus.values) s: 0};
-    for (final ticket in tickets) {
-      aggregate[ticket.status] = (aggregate[ticket.status] ?? 0) + 1;
-    }
-
     final currency =
         NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
     final finished = event.status == EventStatus.finished;
@@ -64,98 +61,125 @@ class SummaryTab extends ConsumerWidget {
           t.status == TicketStatus.collected,
     );
 
-    final issued = tickets.isEmpty ? event.ticketCount : tickets.length;
-    final assigned = aggregate.entries
-        .where((e) => e.key != TicketStatus.unassigned)
-        .fold(0, (sum, e) => sum + e.value);
-    final unassigned = aggregate[TicketStatus.unassigned] ?? 0;
-    final reserved = aggregate[TicketStatus.reserved] ?? 0;
-    final collected = aggregate[TicketStatus.collected] ?? 0;
-    final settled = aggregate[TicketStatus.settled] ?? 0;
-    final delivered = aggregate[TicketStatus.delivered] ?? 0;
-    final soldCount = collected + settled + delivered;
-    final estimatedRevenue = soldCount * event.ticketPrice;
+    final total = tickets.isEmpty ? event.ticketCount : tickets.length;
+    var inPool = 0;
+    var reserved = 0;
+    var collected = 0;
+    var settled = 0;
+    var delivered = 0;
+    for (final ticket in tickets) {
+      switch (ticket.status) {
+        case TicketStatus.unassigned:
+        case TicketStatus.returned:
+          inPool++;
+        case TicketStatus.reserved:
+          reserved++;
+        case TicketStatus.collected:
+          collected++;
+        case TicketStatus.settled:
+          settled++;
+        case TicketStatus.delivered:
+          delivered++;
+        case TicketStatus.withSeller:
+          break;
+      }
+    }
+    final assigned = total - inPool;
+    final cobradas = collected + settled + delivered;
+    final noCobradas = total - cobradas;
+    final rendidas = settled + delivered;
+    final noRendidas = collected;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.accentBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.trending_up, color: AppColors.accentText),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Recaudación estimada',
-                      style: TextStyle(color: AppColors.accentText, fontSize: 12),
-                    ),
-                    Text(
-                      currency.format(estimatedRevenue),
-                      style: const TextStyle(
-                        color: AppColors.accentText,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 22,
-                      ),
-                    ),
-                    Text(
-                      'Según $soldCount tickets cobrados / rendidos / validados',
-                      style: const TextStyle(
-                        color: AppColors.accentText,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 1.45,
+        _FunnelSection(
+          title: 'Distribución',
           children: [
-            StatCard(label: 'Emitidos', value: '$issued'),
-            StatCard(label: 'Asignados', value: '$assigned'),
-            if (sellers.isNotEmpty)
-              StatCard(label: 'Sin vendedor', value: '$unassigned'),
-            StatCard(
-              label: 'Reservados',
-              value: '$reserved',
-              accentColor: AppColors.accentText,
+            Expanded(
+              child: StatCard(
+                label: 'Asignadas',
+                value: '$assigned',
+                accentColor: _assignedBlue,
+                large: true,
+              ),
             ),
-            StatCard(
-              label: 'Cobrados',
-              value: '$collected',
-              accentColor: AppColors.successText,
-            ),
-            StatCard(
-              label: 'Rendidos',
-              value: '$settled',
-              accentColor: AppColors.accentText,
-            ),
-            StatCard(
-              label: 'Validados',
-              value: '$delivered',
-              accentColor: AppColors.accentText,
+            const SizedBox(width: 8),
+            Expanded(
+              child: StatCard(
+                label: 'En pool',
+                value: '$inPool',
+                accentColor: AppColors.textSecondary,
+                large: true,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
+        _FunnelSection(
+          title: 'Cobro',
+          children: [
+            Expanded(
+              child: StatCard(
+                label: 'Cobradas',
+                value: '$cobradas',
+                accentColor: AppColors.successText,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: StatCard(
+                label: 'No cobradas',
+                value: '$noCobradas',
+                accentColor: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: StatCard(
+                label: 'Reservadas',
+                value: '$reserved',
+                accentColor: AppColors.warnText,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _FunnelSection(
+          title: 'Rendición',
+          children: [
+            Expanded(
+              child: StatCard(
+                label: 'Rendidas',
+                value: '$rendidas',
+                accentColor: AppColors.accentText,
+                large: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: StatCard(
+                label: 'No rendidas',
+                value: '$noRendidas',
+                accentColor: AppColors.warnText,
+                large: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'DESEMPEÑO',
+          style: TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 10),
         SectionCard(
-          title: 'Desempeño por vendedor',
+          title: 'Vendedores',
           child: sellers.isEmpty
               ? const Text(
                   'Todavía no hay vendedores.',
@@ -182,9 +206,9 @@ class SummaryTab extends ConsumerWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         SectionCard(
-          title: 'Desempeño por validador',
+          title: 'Validadores',
           child: validators.isEmpty
               ? const Text(
                   'Todavía no hay validadores.',
@@ -211,9 +235,9 @@ class SummaryTab extends ConsumerWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         SectionCard(
-          title: 'Desempeño por recaudador',
+          title: 'Recaudadores',
           child: collectors.isEmpty
               ? const Text(
                   'Todavía no hay recaudadores.',
@@ -337,5 +361,40 @@ class SummaryTab extends ConsumerWidget {
         SnackBar(content: Text('No se pudo finalizar: $e')),
       );
     }
+  }
+}
+
+class _FunnelSection extends StatelessWidget {
+  const _FunnelSection({
+    required this.title,
+    required this.children,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 10),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
+        ),
+      ],
+    );
   }
 }

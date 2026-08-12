@@ -21,9 +21,9 @@ service cloud.firestore {
     function portalStatusTransition() {
       return request.resource.data.status == resource.data.status
         || (resource.data.status == 'withSeller'
-            && request.resource.data.status in ['reserved', 'collected'])
+            && request.resource.data.status in ['reserved', 'collected', 'settled'])
         || (resource.data.status == 'reserved'
-            && request.resource.data.status in ['withSeller', 'collected'])
+            && request.resource.data.status in ['withSeller', 'collected', 'settled'])
         || (resource.data.status == 'collected'
             && request.resource.data.status in ['settled', 'delivered'])
         || (resource.data.status == 'settled'

@@ -38,6 +38,12 @@ class CollectorWorkbench extends ConsumerStatefulWidget {
 class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
+  final Set<TicketStatus> _statusFilters = {};
+
+  static bool _isSettleable(TicketStatus status) =>
+      status == TicketStatus.collected ||
+      status == TicketStatus.withSeller ||
+      status == TicketStatus.reserved;
 
   @override
   Widget build(BuildContext context) {
@@ -98,8 +104,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             child: Text(
               widget.actorRole == 'organizer'
                   ? 'Estás rindiendo como organizador. Elegí un vendedor.'
-                  : 'Elegí un vendedor para rendir lo cobrado o devolver tickets '
-                      'al pool (para que un coordinador los reasigne).',
+                  : 'Elegí un vendedor para rendir tickets (en poder, '
+                      'reservados o cobrados) o devolverlos al pool '
+                      '(para que un coordinador los reasigne).',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ),
@@ -119,7 +126,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                     .where(
                       (t) =>
                           t.sellerId == seller.id &&
-                          t.status == TicketStatus.collected,
+                          (t.status == TicketStatus.collected ||
+                              t.status == TicketStatus.withSeller ||
+                              t.status == TicketStatus.reserved),
                     )
                     .length,
                 settled: allTickets
@@ -133,6 +142,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                 onTap: () => setState(() {
                   _selectedSeller = seller;
                   _selectedIds.clear();
+                  _statusFilters.clear();
                 }),
               ),
         ],
@@ -148,20 +158,20 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
   }) {
     final sorted = [...tickets]
       ..sort((a, b) => a.number.compareTo(b.number));
-    final selectable = sorted
+    final visible = _statusFilters.isEmpty
+        ? sorted
+        : sorted
+            .where((t) => _statusFilters.contains(t.status))
+            .toList(growable: false);
+    final selectableVisible = visible
+        .where((t) => _isSettleable(t.status))
+        .toList(growable: false);
+    final selectedTickets = sorted
         .where(
-          (t) =>
-              t.status == TicketStatus.collected ||
-              t.status == TicketStatus.withSeller ||
-              t.status == TicketStatus.reserved,
+          (t) => _isSettleable(t.status) && _selectedIds.contains(t.id),
         )
         .toList(growable: false);
-    final selectedTickets = selectable
-        .where((t) => _selectedIds.contains(t.id))
-        .toList(growable: false);
-    final selectedCollected = selectedTickets
-        .where((t) => t.status == TicketStatus.collected)
-        .toList(growable: false);
+    final selectedToSettle = selectedTickets;
     final fullAmount = event.ticketPrice;
     final profitAmount = event.ticketProfit;
 
@@ -173,6 +183,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
           onPressed: () => setState(() {
             _selectedSeller = null;
             _selectedIds.clear();
+            _statusFilters.clear();
           }),
         ),
         actions: [
@@ -196,16 +207,43 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Seleccioná tickets cobrados o en poder del vendedor. '
-                  'Podés rendir lo cobrado, o marcar como devuelto para que '
-                  'vuelvan al pool y el coordinador los reasigne.',
+                  'Seleccioná tickets en poder del vendedor, reservados o '
+                  'cobrados. Rendirlos los marca como vendidos (aunque el '
+                  'vendedor no haya cobrado en la app). Devolverlos los '
+                  'manda al pool para reasignar.',
                   style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 10),
-                TicketStatusSummary(tickets: sorted),
+                if (sorted.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  TicketStatusSummary(
+                    tickets: sorted,
+                    selected: _statusFilters,
+                    onStatusTap: (status) => setState(() {
+                      if (_statusFilters.contains(status)) {
+                        _statusFilters.remove(status);
+                        if (_isSettleable(status)) {
+                          _selectedIds.removeWhere(
+                            (id) => tickets.any(
+                              (t) => t.id == id && t.status == status,
+                            ),
+                          );
+                        }
+                      } else {
+                        _statusFilters.add(status);
+                        if (_isSettleable(status)) {
+                          _selectedIds.addAll(
+                            tickets
+                                .where((t) => t.status == status)
+                                .map((t) => t.id),
+                          );
+                        }
+                      }
+                    }),
+                  ),
+                ],
               ],
             ),
           ),
@@ -214,7 +252,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: selectedCollected.isEmpty
+                  onPressed: selectedToSettle.isEmpty
                       ? null
                       : () async {
                           final mode = await showDialog<TicketSettleMode>(
@@ -226,8 +264,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
-                                    'Vas a rendir ${selectedCollected.length} ticket'
-                                    '${selectedCollected.length == 1 ? '' : 's'}.',
+                                    'Vas a rendir ${selectedToSettle.length} ticket'
+                                    '${selectedToSettle.length == 1 ? '' : 's'} '
+                                    '(quedan como vendidos).',
                                   ),
                                   const SizedBox(height: 16),
                                   FilledButton(
@@ -237,7 +276,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                                     ),
                                     child: Text(
                                       'Ticket completo · '
-                                      '\$${(selectedCollected.length * fullAmount).toStringAsFixed(0)}',
+                                      '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -248,7 +287,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                                     ),
                                     child: Text(
                                       'Solo ganancia · '
-                                      '\$${(selectedCollected.length * profitAmount).toStringAsFixed(0)}',
+                                      '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
                                     ),
                                   ),
                                 ],
@@ -267,7 +306,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                             await settleTicketsAction(
                               ref,
                               eventId: event.id,
-                              ticketIds: selectedCollected.map((t) => t.id),
+                              ticketIds: selectedToSettle.map((t) => t.id),
                               collectorId: widget.actorId,
                               settleMode: mode,
                               actorRole: widget.actorRole,
@@ -276,16 +315,16 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                             setState(() {
                               _selectedIds.removeWhere(
                                 (id) =>
-                                    selectedCollected.any((t) => t.id == id),
+                                    selectedToSettle.any((t) => t.id == id),
                               );
                             });
                             final unit = event.amountForSettleMode(mode);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'Rendiste ${selectedCollected.length} tickets '
+                                  'Rendiste ${selectedToSettle.length} tickets '
                                   '(${mode.label.toLowerCase()} · '
-                                  '\$${(selectedCollected.length * unit).toStringAsFixed(0)}).',
+                                  '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
                                 ),
                               ),
                             );
@@ -298,9 +337,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                         },
                   icon: const Icon(Icons.fact_check_outlined),
                   label: Text(
-                    selectedCollected.isEmpty
-                        ? 'Rendir cobrados'
-                        : 'Rendir (${selectedCollected.length})',
+                    selectedToSettle.isEmpty
+                        ? 'Rendir'
+                        : 'Rendir (${selectedToSettle.length})',
                   ),
                 ),
               ),
@@ -371,58 +410,75 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
               ),
             ],
           ),
-          if (selectable.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _statusFilters.isEmpty
+                      ? 'Tickets (${sorted.length})'
+                      : 'Tickets (${visible.length} de ${sorted.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              if (_statusFilters.isNotEmpty)
                 TextButton(
                   onPressed: () => setState(() {
-                    _selectedIds
-                      ..clear()
-                      ..addAll(selectable.map((t) => t.id));
+                    _statusFilters.clear();
+                  }),
+                  child: const Text('Ver todos'),
+                ),
+              if (selectableVisible.isNotEmpty) ...[
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectedIds.addAll(selectableVisible.map((t) => t.id));
                   }),
                   child: const Text('Todos'),
                 ),
                 TextButton(
                   onPressed: selectedTickets.isEmpty
                       ? null
-                      : () => setState(_selectedIds.clear),
+                      : () => setState(() {
+                          _selectedIds.removeWhere(
+                            (id) => selectableVisible.any((t) => t.id == id),
+                          );
+                        }),
                   child: const Text('Ninguno'),
                 ),
               ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          Text('Tickets', style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
           const SizedBox(height: 10),
-          for (final ticket in sorted)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _CollectorTicketCard(
-                ticket: ticket,
-                event: event,
-                selected: _selectedIds.contains(ticket.id),
-                selectable: ticket.status == TicketStatus.collected ||
-                    ticket.status == TicketStatus.withSeller ||
-                    ticket.status == TicketStatus.reserved,
-                collectorName: ticket.collectorId == null
-                    ? null
-                    : (ticket.collectorId == widget.actorId
-                        ? widget.actorLabel
-                        : null),
-                onToggle: ticket.status == TicketStatus.collected ||
-                        ticket.status == TicketStatus.withSeller ||
-                        ticket.status == TicketStatus.reserved
-                    ? () => setState(() {
-                        if (_selectedIds.contains(ticket.id)) {
-                          _selectedIds.remove(ticket.id);
-                        } else {
-                          _selectedIds.add(ticket.id);
-                        }
-                      })
-                    : null,
+          if (visible.isEmpty)
+            const Text(
+              'Ningún ticket con esos estados.',
+              style: TextStyle(color: AppColors.textMuted),
+            )
+          else
+            for (final ticket in visible)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _CollectorTicketCard(
+                  ticket: ticket,
+                  event: event,
+                  selected: _selectedIds.contains(ticket.id),
+                  selectable: _isSettleable(ticket.status),
+                  collectorName: ticket.collectorId == null
+                      ? null
+                      : (ticket.collectorId == widget.actorId
+                          ? widget.actorLabel
+                          : null),
+                  onToggle: _isSettleable(ticket.status)
+                      ? () => setState(() {
+                          if (_selectedIds.contains(ticket.id)) {
+                            _selectedIds.remove(ticket.id);
+                          } else {
+                            _selectedIds.add(ticket.id);
+                          }
+                        })
+                      : null,
+                ),
               ),
-            ),
         ],
       ),
     );
@@ -452,7 +508,7 @@ class _CollectorSellerCard extends StatelessWidget {
         subtitle: Text(
           [
             if (seller.notes.isNotEmpty) seller.notes,
-            '$pending cobrados · $settled rendidos',
+            '$pending pendientes · $settled rendidos',
           ].join(' · '),
         ),
         trailing: StatusBadge(
