@@ -54,8 +54,7 @@ class SellersTab extends ConsumerWidget {
                     const SizedBox(height: 8),
                     const Text(
                       'Vendé del pool o mirá lo que ya está con tus '
-                      'vendedores. Filtrá por estado; solo operás los libres '
-                      '(sin pisar el stock de alguien).',
+                      'vendedores. Filtrá por estado; solo operás los libres.',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,
@@ -78,48 +77,32 @@ class SellersTab extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Delegá con un link',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'También podés crear vendedores, asignarles rangos y '
-                      'compartirles un link: abren el acceso sin registrarse y '
-                      'venden desde su celular.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 20),
               Text(
-                'Vendedores del evento',
+                sellers.isEmpty
+                    ? 'Vendedores'
+                    : 'Vendedores (${sellers.length})',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (sellers.isEmpty)
-                const Text(
-                  'Todavía no creaste vendedores. Usá Agregar para sumar uno, '
-                  'asignarle rangos y compartirle el link.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Text(
+                    'También podés crear vendedores, asignarles rangos y '
+                    'compartirles un link: abren el acceso sin registrarse y '
+                    'venden desde su celular.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                  ),
                 )
               else
                 for (final seller in sellers)
@@ -131,63 +114,63 @@ class SellersTab extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                        child: Builder(
+                          builder: (context) {
+                            final sellerTickets = tickets
+                                .where((t) => t.sellerId == seller.id)
+                                .toList();
+                            final numbersLabel = sellerTickets.isEmpty
+                                ? 'Sin tickets'
+                                : compactTicketNumbersLabel(
+                                    sellerTickets.map((t) => t.number),
+                                  );
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        seller.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            seller.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            [
+                                              numbersLabel,
+                                              if (seller.notes.isNotEmpty)
+                                                seller.notes,
+                                            ].join(' · '),
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        [
-                                          if (seller.ranges.isEmpty)
-                                            'Sin rangos'
-                                          else
-                                            'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
-                                          if (seller.notes.isNotEmpty)
-                                            seller.notes,
-                                        ].join(' · '),
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ],
+                                ),
+                                if (sellerTickets.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: TicketStatusSummary(
+                                      tickets: sellerTickets,
+                                    ),
                                   ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: AppColors.textMuted,
-                                ),
                               ],
-                            ),
-                            Builder(
-                              builder: (context) {
-                                final sellerTickets = tickets
-                                    .where((t) => t.sellerId == seller.id)
-                                    .toList();
-                                if (sellerTickets.isEmpty) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: TicketStatusSummary(
-                                    tickets: sellerTickets,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),

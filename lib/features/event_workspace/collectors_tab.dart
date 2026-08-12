@@ -61,18 +61,7 @@ class CollectorsTab extends ConsumerWidget {
                             fontWeight: FontWeight.w700,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Acá podés elegir un vendedor, ver lo que cobró y marcar '
-                      'la rendición (ticket completo o solo ganancia), o devolver '
-                      'tickets al pool, sin salir de tu cuenta de organizador.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: () {
                         Navigator.of(context).push(
@@ -88,46 +77,15 @@ class CollectorsTab extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Delegá con un link',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'También podés crear recaudadores y compartirles un link: '
-                      'abren el acceso sin registrarse y rinden desde su celular.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 20),
               Text(
-                'Recaudadores del evento',
+                'Recaudadores',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (collectors.isEmpty)
                 const Text(
-                  'Todavía no creaste recaudadores. Usá Agregar para sumar uno y '
-                  'compartirle el link.',
+                  'Usá Agregar para crear uno y compartirle el acceso con un link.',
                   style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                 )
               else

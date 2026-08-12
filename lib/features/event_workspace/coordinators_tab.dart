@@ -46,22 +46,36 @@ class CoordinatorsTab extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             children: [
-              Text(
-                'El coordinador gestiona los vendedores del evento: crear, '
-                'asignar rangos, compartir accesos y devolver tickets al pool. '
-                'Abre el link sin necesidad de cuenta.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.textSecondary),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Text(
+                  coordinators.isEmpty
+                      ? 'El coordinador gestiona los vendedores del evento: crear, '
+                          'asignar rangos, compartir accesos y devolver tickets al pool. '
+                          'Abre el link sin necesidad de cuenta. Usá Agregar para '
+                          'crear uno y compartirle el acceso.'
+                      : 'El coordinador gestiona los vendedores del evento: crear, '
+                          'asignar rangos, compartir accesos y devolver tickets al pool. '
+                          'Abre el link sin necesidad de cuenta.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-              if (coordinators.isEmpty)
-                const Text(
-                  'Todavía no hay coordinadores.',
-                  style: TextStyle(color: AppColors.textMuted),
-                )
-              else
+              if (coordinators.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Text(
+                  'Coordinadores (${coordinators.length})',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
                 for (final coordinator in coordinators)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -105,6 +119,7 @@ class CoordinatorsTab extends ConsumerWidget {
                       ),
                     ),
                   ),
+              ],
             ],
           );
         },

@@ -283,3 +283,23 @@ class Ticket {
     };
   }
 }
+
+/// Compact label of current ticket numbers, e.g. `#1–12, #20`.
+String compactTicketNumbersLabel(Iterable<int> numbers) {
+  final sorted = numbers.toSet().toList()..sort();
+  if (sorted.isEmpty) return '';
+  final parts = <String>[];
+  var start = sorted.first;
+  var prev = sorted.first;
+  for (var i = 1; i < sorted.length; i++) {
+    final n = sorted[i];
+    if (n == prev + 1) {
+      prev = n;
+      continue;
+    }
+    parts.add(start == prev ? '#$start' : '#$start–$prev');
+    start = prev = n;
+  }
+  parts.add(start == prev ? '#$start' : '#$start–$prev');
+  return parts.join(', ');
+}

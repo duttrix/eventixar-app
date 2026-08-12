@@ -102,63 +102,63 @@ class CoordinatorPortalScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                        child: Builder(
+                          builder: (context) {
+                            final sellerTickets = tickets
+                                .where((t) => t.sellerId == seller.id)
+                                .toList();
+                            final numbersLabel = sellerTickets.isEmpty
+                                ? 'Sin tickets'
+                                : compactTicketNumbersLabel(
+                                    sellerTickets.map((t) => t.number),
+                                  );
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        seller.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            seller.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            [
+                                              numbersLabel,
+                                              if (seller.notes.isNotEmpty)
+                                                seller.notes,
+                                            ].join(' · '),
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        [
-                                          if (seller.ranges.isEmpty)
-                                            'Sin rangos'
-                                          else
-                                            'Rangos: ${seller.ranges.map((r) => r.label).join(', ')}',
-                                          if (seller.notes.isNotEmpty)
-                                            seller.notes,
-                                        ].join(' · '),
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ],
+                                ),
+                                if (sellerTickets.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: TicketStatusSummary(
+                                      tickets: sellerTickets,
+                                    ),
                                   ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: AppColors.textMuted,
-                                ),
                               ],
-                            ),
-                            Builder(
-                              builder: (context) {
-                                final sellerTickets = tickets
-                                    .where((t) => t.sellerId == seller.id)
-                                    .toList();
-                                if (sellerTickets.isEmpty) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: TicketStatusSummary(
-                                    tickets: sellerTickets,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),

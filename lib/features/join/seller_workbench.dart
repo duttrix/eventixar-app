@@ -80,7 +80,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     final lockedId = widget.lockedSellerId;
     String? sellerId;
     var sellerName = widget.actorLabel;
-    var rangesLabel = 'Todavía no hay rangos asignados.';
 
     if (lockedId != null) {
       Collaborator? found;
@@ -93,14 +92,9 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       if (found != null) {
         sellerId = found.id;
         sellerName = found.name;
-        rangesLabel = found.ranges.isEmpty
-            ? 'Todavía no hay rangos asignados.'
-            : 'Rangos: ${found.ranges.map((r) => r.label).join(', ')}';
       } else if (_isOrganizerSelf) {
         sellerId = lockedId;
         sellerName = widget.actorLabel;
-        rangesLabel =
-            'Tickets libres del pool (sin vendedor).';
       } else {
         return const Scaffold(
           body: Center(child: Text('Vendedor no encontrado.')),
@@ -110,9 +104,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       final s = _selectedSeller!;
       sellerId = s.id;
       sellerName = s.name;
-      rangesLabel = s.ranges.isEmpty
-          ? 'Todavía no hay rangos asignados.'
-          : 'Rangos: ${s.ranges.map((r) => r.label).join(', ')}';
     }
 
     if (sellerId == null) {
@@ -129,7 +120,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       event: event,
       sellerId: sellerId,
       sellerName: sellerName,
-      rangesLabel: rangesLabel,
       tickets: _isOrganizerSelf
           ? allTickets
           : allTickets.where((t) => t.sellerId == sellerId).toList(),
@@ -190,10 +180,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   title: Text(s.name),
                   subtitle: Text(
                     [
-                      if (s.ranges.isEmpty)
-                        'Sin rangos'
-                      else
-                        'Rangos: ${s.ranges.map((r) => r.label).join(', ')}',
+                      () {
+                        final sellerTickets = allTickets
+                            .where((t) => t.sellerId == s.id)
+                            .toList();
+                        if (sellerTickets.isEmpty) return 'Sin tickets';
+                        return compactTicketNumbersLabel(
+                          sellerTickets.map((t) => t.number),
+                        );
+                      }(),
                       '${allTickets.where((t) => t.sellerId == s.id && t.status == TicketStatus.withSeller).length} para cobrar',
                       '${allTickets.where((t) => t.sellerId == s.id && t.status == TicketStatus.reserved).length} reservados',
                     ].join(' · '),
@@ -215,7 +210,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     required Event event,
     required String sellerId,
     required String sellerName,
-    required String rangesLabel,
     required List<Ticket> tickets,
     required List<Collaborator> sellers,
     required bool canGoBack,
@@ -303,10 +297,10 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                           : 'Tus tickets para vender'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if (!canSelfAssign) ...[
+                if (!canSelfAssign && sorted.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    rangesLabel,
+                    compactTicketNumbersLabel(sorted.map((t) => t.number)),
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,

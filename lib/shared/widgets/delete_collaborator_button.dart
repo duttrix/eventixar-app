@@ -41,9 +41,9 @@ class _DeleteCollaboratorButtonState
         title: Text('Eliminar $_roleLabel'),
         content: Text(
           isSeller
-              ? 'Vas a eliminar a ${person.name}. Los tickets que todavía '
-                  'tiene sin vender vuelven al pool para reasignar. Los ya '
-                  'vendidos o rendidos se mantienen. Su link deja de funcionar.'
+              ? 'Vas a eliminar a ${person.name}. Los tickets sin vender '
+                  'vuelven al pool. Los ya cobrados se mantienen. '
+                  'Su link deja de funcionar.'
               : 'Vas a eliminar a ${person.name}. Su link deja de funcionar '
                   'de inmediato.',
         ),

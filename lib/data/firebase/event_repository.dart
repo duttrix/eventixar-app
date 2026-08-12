@@ -572,6 +572,68 @@ class EventRepository {
     );
   }
 
+  /// When deleting a seller: unsold tickets go back to the pool; sold ones
+  /// keep their status but drop the seller link.
+  Future<void> releaseTicketsFromSeller({
+    required String eventId,
+    required String sellerId,
+    String? actorId,
+    String actorRole = 'organizer',
+  }) async {
+    final tickets = await listTickets(eventId);
+    final owned =
+        tickets.where((t) => t.sellerId == sellerId).toList(growable: false);
+    if (owned.isEmpty) return;
+
+    final toPool = owned
+        .where(
+          (t) =>
+              t.status == TicketStatus.withSeller ||
+              t.status == TicketStatus.reserved,
+        )
+        .map((t) => t.id);
+    await returnTicketsToPool(
+      eventId: eventId,
+      ticketIds: toPool,
+      actorId: actorId,
+      actorRole: actorRole,
+    );
+
+    final sold = owned
+        .where(
+          (t) =>
+              t.status == TicketStatus.collected ||
+              t.status == TicketStatus.settled ||
+              t.status == TicketStatus.delivered,
+        )
+        .toList(growable: false);
+    if (sold.isEmpty) return;
+
+    const chunk = 400;
+    for (var i = 0; i < sold.length; i += chunk) {
+      final slice = sold.skip(i).take(chunk);
+      final batch = _firestore.batch();
+      for (final ticket in slice) {
+        batch.update(_tickets(eventId).doc(ticket.id), {
+          'sellerId': null,
+          'assignedByCollaboratorId': null,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.returnedToPool,
+              fromStatus: ticket.status,
+              toStatus: ticket.status,
+              actorId: actorId,
+              actorRole: actorRole,
+              note: 'Vendedor eliminado',
+            ).toFirestoreMap(),
+          ]),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   /// Validator or organizer marks a ticket as delivered
   /// (`collected`/`settled` → `delivered`).
   Future<void> markTicketDelivered({

@@ -20,11 +20,11 @@ import 'sellers_tab.dart';
 enum EventTab {
   summary,
   tickets,
-  tracker,
   sellers,
-  coordinators,
   validators,
+  coordinators,
   collectors,
+  tracker,
   eventData,
 }
 
@@ -56,8 +56,8 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.tickets => TicketsTab(eventId: widget.eventId),
       EventTab.tracker => TicketTrackerTab(eventId: widget.eventId),
       EventTab.sellers => SellersTab(eventId: widget.eventId),
-      EventTab.coordinators => CoordinatorsTab(eventId: widget.eventId),
       EventTab.validators => ValidatorsTab(eventId: widget.eventId),
+      EventTab.coordinators => CoordinatorsTab(eventId: widget.eventId),
       EventTab.collectors => CollectorsTab(eventId: widget.eventId),
       EventTab.eventData => EventDataTab(eventId: widget.eventId),
     };
@@ -115,8 +115,8 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.tickets => Icons.confirmation_number_outlined,
       EventTab.tracker => Icons.timeline_outlined,
       EventTab.sellers => Icons.groups_outlined,
-      EventTab.coordinators => Icons.supervisor_account_outlined,
       EventTab.validators => Icons.qr_code_scanner_outlined,
+      EventTab.coordinators => Icons.supervisor_account_outlined,
       EventTab.collectors => Icons.account_balance_wallet_outlined,
       EventTab.eventData => Icons.event_note_outlined,
     };
@@ -128,8 +128,8 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.tickets => 'Tickets',
       EventTab.tracker => 'Rastreador',
       EventTab.sellers => 'Venta',
-      EventTab.coordinators => 'Coordinadores',
       EventTab.validators => 'Validación',
+      EventTab.coordinators => 'Coordinadores',
       EventTab.collectors => 'Recaudación',
       EventTab.eventData => 'Datos del evento',
     };

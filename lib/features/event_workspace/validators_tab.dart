@@ -89,47 +89,31 @@ class ValidatorsTab extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Delegá con un link',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'También podés crear validadores y compartirles un link: '
-                      'abren el acceso sin registrarse y validan desde su celular.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 20),
               Text(
-                'Validadores del evento',
+                validators.isEmpty
+                    ? 'Validadores'
+                    : 'Validadores (${validators.length})',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (validators.isEmpty)
-                const Text(
-                  'Todavía no creaste validadores. Usá Agregar para sumar uno y '
-                  'compartirle el link.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Text(
+                    'También podés crear validadores y compartirles un link: '
+                    'abren el acceso sin registrarse y validan desde su celular.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                  ),
                 )
               else
                 for (final validator in validators)

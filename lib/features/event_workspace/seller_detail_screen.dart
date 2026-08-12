@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
@@ -120,10 +119,20 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
 
     final event = eventAsync.requireValue;
     final finished = event.status == EventStatus.finished;
-    final seller = collabsAsync.requireValue.firstWhere(
-      (c) => c.id == sellerId,
-      orElse: () => throw StateError('Vendedor no encontrado'),
-    );
+    Collaborator? match;
+    for (final c in collabsAsync.requireValue) {
+      if (c.id == sellerId) {
+        match = c;
+        break;
+      }
+    }
+    if (match == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final seller = match;
     final tickets = ticketsAsync.requireValue
         .where((t) => t.sellerId == sellerId)
         .toList()
@@ -135,7 +144,6 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               t.status == TicketStatus.reserved,
         )
         .toList(growable: false);
-    final dateFormat = DateFormat('dd/MM/yyyy');
     final allTickets = ticketsAsync.requireValue;
     final token = ref
             .watch(
@@ -250,62 +258,56 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Estado de sus tickets',
-            child: TicketStatusSummary(
-              tickets: tickets,
-              selected: _statusFilters,
-              onStatusTap: (status) => setState(() {
-                if (_statusFilters.contains(status)) {
-                  _statusFilters.remove(status);
-                } else {
-                  _statusFilters.add(status);
-                }
-              }),
+          if (tickets.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: Text(
+                'Este vendedor no tiene tickets ahora. Asigná un rango '
+                'con el botón de abajo.',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 16),
+            SectionCard(
+              title: 'Estado de sus tickets',
+              child: TicketStatusSummary(
+                tickets: tickets,
+                selected: _statusFilters,
+                onStatusTap: (status) => setState(() {
+                  if (_statusFilters.contains(status)) {
+                    _statusFilters.remove(status);
+                    if (status == TicketStatus.withSeller ||
+                        status == TicketStatus.reserved) {
+                      _returnIds.removeWhere(
+                        (id) => tickets.any(
+                          (t) => t.id == id && t.status == status,
+                        ),
+                      );
+                    }
+                  } else {
+                    _statusFilters.add(status);
+                    if (!finished &&
+                        (status == TicketStatus.withSeller ||
+                            status == TicketStatus.reserved)) {
+                      _returnIds.addAll(
+                        tickets
+                            .where((t) => t.status == status)
+                            .map((t) => t.id),
+                      );
+                    }
+                  }
+                }),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Rangos asignados',
-            child: seller.ranges.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      'Asigná un rango (ej. 1 a 50). El vendedor los ve al instante en su acceso.',
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Rango')),
-                        DataColumn(label: Text('Cantidad')),
-                        DataColumn(label: Text('Fecha')),
-                      ],
-                      rows: [
-                        for (final range in seller.ranges)
-                          DataRow(
-                            cells: [
-                              DataCell(Text(range.label)),
-                              DataCell(Text('${range.count}')),
-                              DataCell(Text(dateFormat.format(range.date))),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-          ),
-          if (tickets.isNotEmpty) ...[
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
                   child: Text(
                     _statusFilters.isEmpty
-                        ? 'Detalle ticket por ticket'
-                        : 'Detalle (${visibleTickets.length} de ${tickets.length})',
+                        ? 'Tickets (${tickets.length})'
+                        : 'Tickets (${visibleTickets.length} de ${tickets.length})',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -314,31 +316,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                     onPressed: () => setState(_statusFilters.clear),
                     child: const Text('Ver todos'),
                   ),
-                if (!finished && returnable.isNotEmpty) ...[
-                  TextButton(
-                    onPressed: () => setState(() {
-                      _returnIds
-                        ..clear()
-                        ..addAll(returnable.map((t) => t.id));
-                    }),
-                    child: const Text('Todos en poder'),
-                  ),
-                  TextButton(
-                    onPressed: selectedReturnable.isEmpty
-                        ? null
-                        : () => setState(_returnIds.clear),
-                    child: const Text('Ninguno'),
-                  ),
-                ],
               ],
             ),
-            if (!finished && returnable.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              const Text(
-                'Seleccioná tickets “En poder” o “Reservados” para devolverlos al pool.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-              ),
-            ],
             const SizedBox(height: 10),
             if (visibleTickets.isEmpty)
               const Text(

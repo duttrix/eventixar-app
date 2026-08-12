@@ -44,9 +44,20 @@ class CollectorDetailScreen extends ConsumerWidget {
     }
 
     final event = eventAsync.requireValue;
-    final collector = collabsAsync.requireValue.firstWhere(
-      (c) => c.id == collectorId,
-    );
+    Collaborator? match;
+    for (final c in collabsAsync.requireValue) {
+      if (c.id == collectorId) {
+        match = c;
+        break;
+      }
+    }
+    if (match == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final collector = match;
     final tickets = ticketsAsync.requireValue
         .where((t) => t.collectorId == collectorId)
         .toList()
