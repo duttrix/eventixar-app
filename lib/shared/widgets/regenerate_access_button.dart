@@ -65,7 +65,7 @@ class _RegenerateAccessButtonState
         collaboratorId: person.id,
       );
       if (!mounted) return;
-      await AccessShare.copy(
+      await AccessShare.share(
         context,
         updated,
         eventName: widget.eventName,

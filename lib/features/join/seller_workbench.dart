@@ -27,6 +27,7 @@ class SellerWorkbench extends ConsumerStatefulWidget {
     this.actorRole = 'seller',
     this.showLogout = false,
     this.lockedSellerId,
+    this.embedded = false,
   });
 
   final String eventId;
@@ -37,6 +38,9 @@ class SellerWorkbench extends ConsumerStatefulWidget {
 
   /// When set, skips the seller picker (collaborator portal).
   final String? lockedSellerId;
+
+  /// When true, renders without its own [Scaffold]/[AppBar] (workspace tab).
+  final bool embedded;
 
   @override
   ConsumerState<SellerWorkbench> createState() => _SellerWorkbenchState();
@@ -61,11 +65,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     if (eventAsync.isLoading ||
         sellersAsync.isLoading ||
         ticketsAsync.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return _wrap(const Center(child: CircularProgressIndicator()));
     }
     if (eventAsync.hasError || sellersAsync.hasError || ticketsAsync.hasError) {
-      return Scaffold(
-        body: Center(
+      return _wrap(
+        Center(
           child: Text(
             '${eventAsync.error ?? sellersAsync.error ?? ticketsAsync.error}',
           ),
@@ -96,9 +100,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         sellerId = lockedId;
         sellerName = widget.actorLabel;
       } else {
-        return const Scaffold(
-          body: Center(child: Text('Vendedor no encontrado.')),
-        );
+        return _wrap(const Center(child: Text('Vendedor no encontrado.')));
       }
     } else if (_selectedSeller != null) {
       final s = _selectedSeller!;
@@ -130,28 +132,19 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     );
   }
 
+  Widget _wrap(Widget body, {PreferredSizeWidget? appBar}) {
+    if (widget.embedded) return body;
+    return Scaffold(appBar: appBar, body: body);
+  }
+
   Widget _buildSellerPicker(
     BuildContext context, {
     required Event event,
     required List<Collaborator> sellers,
     required List<Ticket> allTickets,
   }) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.actorLabel),
-        actions: [
-          if (widget.showLogout)
-            IconButton(
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-            ),
-        ],
-      ),
-      body: ListView(
+    return _wrap(
+      ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SectionCard(
@@ -200,6 +193,20 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   }),
                 ),
               ),
+        ],
+      ),
+      appBar: AppBar(
+        title: Text(widget.actorLabel),
+        actions: [
+          if (widget.showLogout)
+            IconButton(
+              tooltip: 'Cerrar sesión',
+              onPressed: () async {
+                await ref.read(sessionProvider.notifier).logout();
+                if (context.mounted) context.go('/login');
+              },
+              icon: const Icon(Icons.logout),
+            ),
         ],
       ),
     );
@@ -256,36 +263,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         .toList(growable: false);
     final hasSelection = selectedTickets.isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(sellerName),
-        leading: canGoBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() {
-                  _selectedSeller = null;
-                  _selectedIds.clear();
-                  _statusFilters.clear();
-                }),
-              )
-            : null,
-        actions: [
-          if (widget.showLogout)
-            IconButton(
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-            ),
-        ],
-      ),
-      body: ListView(
+    return _wrap(
+      ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SectionCard(
-            title: event.name,
+            title: widget.embedded ? 'Operar tickets' : event.name,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -336,22 +319,22 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   icon: const Icon(Icons.print_outlined),
                   label: Text(
                     hasSelection
-                        ? 'Imprimir lote (${selectedTickets.length})'
-                        : 'Imprimir lote',
+                        ? 'Imprimir (${selectedTickets.length})'
+                        : 'Imprimir',
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: !hasSelection
                       ? null
-                      : () => _whatsappTickets(context, event, selectedTickets),
-                  icon: const Icon(Icons.chat_outlined),
+                      : () => _shareTickets(context, event, selectedTickets),
+                  icon: const Icon(AccessShare.shareIcon),
                   label: Text(
                     hasSelection
-                        ? 'WhatsApp (${selectedTickets.length})'
-                        : 'WhatsApp',
+                        ? 'Compartir (${selectedTickets.length})'
+                        : 'Compartir',
                   ),
                 ),
               ),
@@ -456,10 +439,34 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   clearReservationTooltip: canSelfAssign
                       ? 'Devolver al pool'
                       : 'Liberar reserva',
-                  onWhatsApp: () => _whatsappTickets(context, event, [ticket]),
+                  onShare: () => _shareTickets(context, event, [ticket]),
                   onPrint: () => _printTickets(context, event, [ticket]),
                 ),
               ),
+        ],
+      ),
+      appBar: AppBar(
+        title: Text(sellerName),
+        leading: canGoBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() {
+                  _selectedSeller = null;
+                  _selectedIds.clear();
+                  _statusFilters.clear();
+                }),
+              )
+            : null,
+        actions: [
+          if (widget.showLogout)
+            IconButton(
+              tooltip: 'Cerrar sesión',
+              onPressed: () async {
+                await ref.read(sessionProvider.notifier).logout();
+                if (context.mounted) context.go('/login');
+              },
+              icon: const Icon(Icons.logout),
+            ),
         ],
       ),
     );
@@ -598,7 +605,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       title: tickets.length == 1
           ? 'Imprimir ticket #${tickets.first.number}'
           : 'Imprimir ${tickets.length} tickets',
-      askPhone: false,
       initialBuyerName: _sharedBuyerHint(tickets),
       confirmLabel: 'Imprimir',
     );
@@ -622,7 +628,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     }
   }
 
-  Future<void> _whatsappTickets(
+  Future<void> _shareTickets(
     BuildContext context,
     Event event,
     List<Ticket> tickets,
@@ -630,11 +636,10 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     final details = await _askShareDetails(
       context,
       title: tickets.length == 1
-          ? 'WhatsApp ticket #${tickets.first.number}'
-          : 'WhatsApp ${tickets.length} tickets',
-      askPhone: true,
+          ? 'Compartir ticket #${tickets.first.number}'
+          : 'Compartir ${tickets.length} tickets',
       initialBuyerName: _sharedBuyerHint(tickets),
-      confirmLabel: 'Generar e ir a WhatsApp',
+      confirmLabel: 'Compartir',
     );
     if (details == null || !context.mounted) return;
 
@@ -646,14 +651,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     );
     if (toShare == null || !context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Elegí WhatsApp y enviá a ${details.phone}. Solo van las imágenes.',
-        ),
-        duration: const Duration(seconds: 4),
-      ),
-    );
     try {
       await TicketShare.shareImages(
         context,
@@ -723,7 +720,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Future<_ShareDetails?> _askShareDetails(
     BuildContext context, {
     required String title,
-    required bool askPhone,
     String initialBuyerName = '',
     String confirmLabel = 'Continuar',
   }) {
@@ -733,7 +729,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       builder: (sheetContext) {
         final buyerController =
             TextEditingController(text: initialBuyerName);
-        final phoneController = TextEditingController();
         return Padding(
           padding: EdgeInsets.only(
             left: 20,
@@ -757,50 +752,13 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   isDense: true,
                 ),
               ),
-              if (askPhone) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'WhatsApp',
-                    hintText: '11 2345-6789',
-                    helperText: 'Sin 0 ni código de país',
-                    prefixText: '+549 ',
-                    prefixStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                      fontSize: 16,
-                    ),
-                    isDense: true,
-                  ),
-                ),
-              ],
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () {
-                  String phone = '';
-                  if (askPhone) {
-                    final normalized = TicketShare.normalizeWhatsAppPhone(
-                      phoneController.text,
-                    );
-                    if (normalized == null) {
-                      ScaffoldMessenger.of(sheetContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Ingresá un número válido (ej. 11 2345-6789).',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    phone = TicketShare.formatWhatsAppPhone(normalized);
-                  }
                   Navigator.pop(
                     sheetContext,
                     _ShareDetails(
                       buyerName: buyerController.text.trim(),
-                      phone: phone,
                     ),
                   );
                 },
@@ -875,11 +833,9 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
 class _ShareDetails {
   const _ShareDetails({
     required this.buyerName,
-    this.phone = '',
   });
 
   final String buyerName;
-  final String phone;
 }
 
 class _SellerTicketCard extends StatelessWidget {
@@ -896,7 +852,7 @@ class _SellerTicketCard extends StatelessWidget {
     required this.onReserve,
     required this.onCollect,
     required this.onClearReservation,
-    required this.onWhatsApp,
+    required this.onShare,
     required this.onPrint,
     this.onToggleSelect,
     this.clearReservationTooltip = 'Liberar reserva',
@@ -916,7 +872,7 @@ class _SellerTicketCard extends StatelessWidget {
   final VoidCallback onReserve;
   final VoidCallback onCollect;
   final VoidCallback onClearReservation;
-  final VoidCallback onWhatsApp;
+  final VoidCallback onShare;
   final VoidCallback onPrint;
   final String clearReservationTooltip;
   final String? assignedSellerLabel;
@@ -1016,9 +972,9 @@ class _SellerTicketCard extends StatelessWidget {
                 ),
                 if (canShare) ...[
                   IconButton(
-                    tooltip: 'WhatsApp',
-                    onPressed: onWhatsApp,
-                    icon: const Icon(Icons.chat_outlined, size: 20),
+                    tooltip: 'Compartir',
+                    onPressed: onShare,
+                    icon: const Icon(AccessShare.shareIcon, size: 20),
                     visualDensity: VisualDensity.compact,
                   ),
                   IconButton(

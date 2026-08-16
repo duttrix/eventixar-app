@@ -13,7 +13,7 @@ extension TicketSettleModeX on TicketSettleMode {
   String get firestoreValue => name;
 
   String get label => switch (this) {
-        TicketSettleMode.full => 'Ticket completo',
+        TicketSettleMode.full => 'Rendido',
         TicketSettleMode.profit => 'Solo ganancia',
       };
 
@@ -231,6 +231,12 @@ class Ticket {
   /// Amount recorded at settlement, or [fallbackFullPrice] for legacy tickets.
   double resolvedSettledAmount(double fallbackFullPrice) =>
       settledAmount ?? fallbackFullPrice;
+
+  /// Badge / list label; for settled tickets distinguishes full vs profit only.
+  String get statusDisplayLabel {
+    if (status != TicketStatus.settled) return status.label;
+    return settleMode?.label ?? 'Rendido';
+  }
 
   /// Payload encoded in the ticket QR for validators (not a buyer deeplink).
   ///

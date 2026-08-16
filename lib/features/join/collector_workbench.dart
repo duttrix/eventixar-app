@@ -606,8 +606,8 @@ class _CollectorTicketCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 6),
                     StatusBadge(
-                      label: ticket.status.label,
-                      tone: ticketStatusTone(ticket.status),
+                      label: ticket.statusDisplayLabel,
+                      tone: ticketTone(ticket),
                     ),
                   ],
                 ),

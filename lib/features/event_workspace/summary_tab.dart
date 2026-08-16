@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
@@ -24,14 +24,18 @@ class SummaryTab extends ConsumerWidget {
     final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
     final collabsAsync = ref.watch(eventCollaboratorsProvider(eventId));
 
-    if (eventAsync.isLoading || ticketsAsync.isLoading || collabsAsync.isLoading) {
+    if (eventAsync.isLoading ||
+        ticketsAsync.isLoading ||
+        collabsAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (eventAsync.hasError) {
       return Center(child: Text('No se pudo cargar: ${eventAsync.error}'));
     }
     if (ticketsAsync.hasError) {
-      return Center(child: Text('No se pudo cargar tickets: ${ticketsAsync.error}'));
+      return Center(
+        child: Text('No se pudo cargar tickets: ${ticketsAsync.error}'),
+      );
     }
     if (collabsAsync.hasError) {
       return Center(
@@ -42,8 +46,9 @@ class SummaryTab extends ConsumerWidget {
     final event = eventAsync.requireValue;
     final tickets = ticketsAsync.requireValue;
     final collaborators = collabsAsync.requireValue;
-    final sellers =
-        collaborators.where((c) => c.role == CollaboratorRole.seller).toList();
+    final sellers = collaborators
+        .where((c) => c.role == CollaboratorRole.seller)
+        .toList();
     final validators = collaborators
         .where((c) => c.role == CollaboratorRole.validator)
         .toList();
@@ -51,8 +56,6 @@ class SummaryTab extends ConsumerWidget {
         .where((c) => c.role == CollaboratorRole.collector)
         .toList();
 
-    final currency =
-        NumberFormat.currency(locale: 'es_AR', symbol: r'$', decimalDigits: 0);
     final finished = event.status == EventStatus.finished;
     final hasPending = tickets.any(
       (t) =>
@@ -264,7 +267,7 @@ class SummaryTab extends ConsumerWidget {
                               children: [
                                 Expanded(child: Text(collector.name)),
                                 Text(
-                                  '$count rendidos · ${currency.format(amount)}',
+                                  '$count rendidos · ${formatMoney(amount)}',
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
                                     fontWeight: FontWeight.w600,
@@ -288,24 +291,21 @@ class SummaryTab extends ConsumerWidget {
                 finished
                     ? 'Evento finalizado. La operación está en solo consulta.'
                     : hasPending
-                        ? 'Hay tickets en poder de vendedores, reservados o cobrados sin rendir.'
-                        : 'No hay cobros pendientes de rendición. Podés finalizar cuando quieras.',
+                    ? 'Hay tickets en poder de vendedores, reservados o cobrados sin rendir.'
+                    : 'No hay cobros pendientes de rendición. Podés finalizar cuando quieras.',
                 style: TextStyle(
                   color: finished
                       ? AppColors.successText
                       : hasPending
-                          ? AppColors.warnText
-                          : AppColors.textSecondary,
+                      ? AppColors.warnText
+                      : AppColors.textSecondary,
                 ),
               ),
               if (!finished) ...[
                 const SizedBox(height: 14),
                 FilledButton.icon(
-                  onPressed: () => _confirmFinish(
-                    context,
-                    ref,
-                    hasPending: hasPending,
-                  ),
+                  onPressed: () =>
+                      _confirmFinish(context, ref, hasPending: hasPending),
                   icon: const Icon(Icons.flag_outlined),
                   label: const Text('Finalizar evento'),
                 ),
@@ -329,7 +329,7 @@ class SummaryTab extends ConsumerWidget {
         content: Text(
           hasPending
               ? 'Todavía hay tickets en poder de vendedores, reservados o cobrados sin rendir. '
-                  'Si finalizás igual, el evento pasa a solo consulta.'
+                    'Si finalizás igual, el evento pasa a solo consulta.'
               : 'Vas a finalizar el evento. La operación quedará en solo consulta.',
         ),
         actions: [
@@ -357,18 +357,15 @@ class SummaryTab extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo finalizar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo finalizar: $e')));
     }
   }
 }
 
 class _FunnelSection extends StatelessWidget {
-  const _FunnelSection({
-    required this.title,
-    required this.children,
-  });
+  const _FunnelSection({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;

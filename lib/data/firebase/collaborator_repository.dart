@@ -19,7 +19,7 @@ class CollaboratorLocation {
 /// Firestore access for event collaborators + invite tokens.
 class CollaboratorRepository {
   CollaboratorRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -136,10 +136,7 @@ class CollaboratorRepository {
       'role': role.firestoreValue,
       'createdAt': now,
     });
-    batch.set(_access(eventId).doc(ref.id), {
-      'token': token,
-      'createdAt': now,
-    });
+    batch.set(_access(eventId).doc(ref.id), {'token': token, 'createdAt': now});
     await batch.commit();
     return collaborator;
   }
@@ -167,6 +164,60 @@ class CollaboratorRepository {
       id: snap.id,
       eventId: eventId,
       data: data,
+    );
+  }
+
+  /// Links a seller to a coordinator, or clears the link when [coordinatorId] is null.
+  Future<Collaborator> setSellerCoordinator({
+    required String eventId,
+    required String sellerId,
+    required String? coordinatorId,
+  }) async {
+    final ref = _collaborators(eventId).doc(sellerId);
+    final snap = await ref.get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Vendedor $sellerId no encontrado.');
+    }
+    final seller = Collaborator.fromFirestore(
+      id: snap.id,
+      eventId: eventId,
+      data: data,
+    );
+    if (seller.role != CollaboratorRole.seller) {
+      throw StateError('Solo se puede asignar un vendedor a un coordinador.');
+    }
+
+    if (coordinatorId != null) {
+      final coordSnap = await _collaborators(eventId).doc(coordinatorId).get();
+      final coordData = coordSnap.data();
+      if (!coordSnap.exists || coordData == null) {
+        throw StateError('Coordinador no encontrado.');
+      }
+      final coordinator = Collaborator.fromFirestore(
+        id: coordSnap.id,
+        eventId: eventId,
+        data: coordData,
+      );
+      if (coordinator.role != CollaboratorRole.coordinator) {
+        throw StateError('El colaborador elegido no es un coordinador.');
+      }
+    }
+
+    await ref.update({
+      'createdByCoordinatorId': coordinatorId ?? FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    final refreshed = await ref.get();
+    final refreshedData = refreshed.data();
+    if (!refreshed.exists || refreshedData == null) {
+      throw StateError('Vendedor $sellerId no encontrado.');
+    }
+    return Collaborator.fromFirestore(
+      id: refreshed.id,
+      eventId: eventId,
+      data: refreshedData,
     );
   }
 
@@ -207,7 +258,9 @@ class CollaboratorRepository {
     if (location == null) return null;
 
     final eventId = location.eventId;
-    final snap = await _collaborators(eventId).doc(location.collaboratorId).get();
+    final snap = await _collaborators(
+      eventId,
+    ).doc(location.collaboratorId).get();
     final data = snap.data();
     if (!snap.exists || data == null) return null;
 
@@ -233,7 +286,8 @@ class CollaboratorRepository {
 
     // Collaborators created before tokens moved to /access still carry the
     // legacy inline field; drop it so the old link really stops working.
-    final oldToken = (await accessRef.get()).data()?['token'] as String? ??
+    final oldToken =
+        (await accessRef.get()).data()?['token'] as String? ??
         data['token'] as String?;
     final newToken = _generateToken();
     final now = FieldValue.serverTimestamp();
@@ -252,11 +306,8 @@ class CollaboratorRepository {
     batch.set(accessRef, {'token': newToken, 'createdAt': now});
     await batch.commit();
 
-    return Collaborator.fromFirestore(
-      id: snap.id,
-      eventId: eventId,
-      data: data,
-    )..token = newToken;
+    return Collaborator.fromFirestore(id: snap.id, eventId: eventId, data: data)
+      ..token = newToken;
   }
 
   /// Removes the collaborator, their invite token and access mirror.

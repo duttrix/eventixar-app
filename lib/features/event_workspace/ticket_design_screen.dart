@@ -8,9 +8,16 @@ import '../../shared/widgets/ticket_share.dart';
 
 /// Customize ticket look for an event. Saved on the event document.
 class TicketDesignScreen extends ConsumerStatefulWidget {
-  const TicketDesignScreen({super.key, required this.eventId});
+  const TicketDesignScreen({
+    super.key,
+    required this.eventId,
+    this.embedded = false,
+  });
 
   final String eventId;
+
+  /// When true, no local [AppBar] (shown inside workspace tab).
+  final bool embedded;
 
   @override
   ConsumerState<TicketDesignScreen> createState() => _TicketDesignScreenState();
@@ -20,7 +27,7 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
   TicketVisualStyle _style = TicketVisualStyle.classic;
   String _templateId = 'custom';
   bool _hydrated = false;
-  bool _saving = false;
+  int _saveGeneration = 0;
 
   static const _primarySwatches = <Color>[
     Color(0xFF0C1F1C),
@@ -62,25 +69,30 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
         a.typography == b.typography;
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
-    setState(() => _saving = true);
+  void _apply({
+    required TicketVisualStyle style,
+    required String templateId,
+  }) {
+    setState(() {
+      _style = style;
+      _templateId = templateId;
+    });
+    _persist(style);
+  }
+
+  Future<void> _persist(TicketVisualStyle style) async {
+    final generation = ++_saveGeneration;
     try {
       await ref
           .read(eventRepositoryProvider)
-          .updateTicketDesign(widget.eventId, _style);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Diseño guardado en el evento.')),
-      );
-      Navigator.of(context).maybePop();
+          .updateTicketDesign(widget.eventId, style);
+      // Ignore stale responses if the user kept tapping.
+      if (!mounted || generation != _saveGeneration) return;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _saveGeneration) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar: $e')),
+        SnackBar(content: Text('No se pudo guardar el diseño: $e')),
       );
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -89,13 +101,15 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
     final eventAsync = ref.watch(eventProvider(widget.eventId));
     final event = eventAsync.valueOrNull;
     if (event == null) {
+      final loading = Center(
+        child: eventAsync.hasError
+            ? Text('${eventAsync.error}')
+            : const CircularProgressIndicator(),
+      );
+      if (widget.embedded) return loading;
       return Scaffold(
         appBar: AppBar(title: const Text('Diseño del ticket')),
-        body: Center(
-          child: eventAsync.hasError
-              ? Text('${eventAsync.error}')
-              : const CircularProgressIndicator(),
-        ),
+        body: loading,
       );
     }
     _hydrateFrom(event.ticketDesign);
@@ -108,114 +122,110 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
       buyerName: 'Ejemplo',
     );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Diseño del ticket'),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? 'Guardando…' : 'Guardar'),
+    final body = ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        TicketSharePreview(
+          ticket: previewTicket,
+          event: event,
+          style: _style,
+        ),
+        const SizedBox(height: 24),
+        Text('Personalizar', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        const Text(
+          'Los cambios se guardan solos y se aplican a las imágenes que '
+          'comparte el vendedor.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+        ),
+        const SizedBox(height: 16),
+        _sectionLabel('Plantilla'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _templateChip('classic', 'Clásico', TicketVisualStyle.classic),
+            _templateChip('festive', 'Festivo', TicketVisualStyle.festive),
+            _templateChip('dark', 'Oscuro', TicketVisualStyle.dark),
+            _templateChip(
+              'institutional',
+              'Institucional',
+              TicketVisualStyle.institutional,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _sectionLabel('Color principal'),
+        const SizedBox(height: 8),
+        _swatchRow(
+          colors: _primarySwatches,
+          selected: _style.primary,
+          onPick: (c) => _apply(
+            templateId: 'custom',
+            style: _style.copyWith(primary: c),
           ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: [
-          TicketSharePreview(
-            ticket: previewTicket,
-            event: event,
-            style: _style,
+        ),
+        const SizedBox(height: 16),
+        _sectionLabel('Color acento'),
+        const SizedBox(height: 8),
+        _swatchRow(
+          colors: _accentSwatches,
+          selected: _style.accent,
+          onPick: (c) => _apply(
+            templateId: 'custom',
+            style: _style.copyWith(accent: c),
           ),
-          const SizedBox(height: 24),
-          Text('Personalizar', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text(
-            'Este diseño se aplica a las imágenes que comparte el vendedor.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          _sectionLabel('Plantilla'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _templateChip('classic', 'Clásico', TicketVisualStyle.classic),
-              _templateChip('festive', 'Festivo', TicketVisualStyle.festive),
-              _templateChip('dark', 'Oscuro', TicketVisualStyle.dark),
-              _templateChip(
-                'institutional',
-                'Institucional',
-                TicketVisualStyle.institutional,
+        ),
+        const SizedBox(height: 20),
+        _sectionLabel('Fondo'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final mode in TicketBackgroundMode.values)
+              ChoiceChip(
+                label: Text(switch (mode) {
+                  TicketBackgroundMode.solid => 'Sólido',
+                  TicketBackgroundMode.gradient => 'Degradé',
+                  TicketBackgroundMode.image => 'Imagen (demo)',
+                }),
+                selected: _style.backgroundMode == mode,
+                onSelected: (_) => _apply(
+                  templateId: 'custom',
+                  style: _style.copyWith(backgroundMode: mode),
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _sectionLabel('Color principal'),
-          const SizedBox(height: 8),
-          _swatchRow(
-            colors: _primarySwatches,
-            selected: _style.primary,
-            onPick: (c) => setState(() {
-              _templateId = 'custom';
-              _style = _style.copyWith(primary: c);
-            }),
-          ),
-          const SizedBox(height: 16),
-          _sectionLabel('Color acento'),
-          const SizedBox(height: 8),
-          _swatchRow(
-            colors: _accentSwatches,
-            selected: _style.accent,
-            onPick: (c) => setState(() {
-              _templateId = 'custom';
-              _style = _style.copyWith(accent: c);
-            }),
-          ),
-          const SizedBox(height: 20),
-          _sectionLabel('Fondo'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final mode in TicketBackgroundMode.values)
-                ChoiceChip(
-                  label: Text(switch (mode) {
-                    TicketBackgroundMode.solid => 'Sólido',
-                    TicketBackgroundMode.gradient => 'Degradé',
-                    TicketBackgroundMode.image => 'Imagen (demo)',
-                  }),
-                  selected: _style.backgroundMode == mode,
-                  onSelected: (_) => setState(() {
-                    _templateId = 'custom';
-                    _style = _style.copyWith(backgroundMode: mode);
-                  }),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _sectionLabel('Tipografía'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final t in TicketTypographyStyle.values)
+              ChoiceChip(
+                label: Text(switch (t) {
+                  TicketTypographyStyle.system => 'Sistema',
+                  TicketTypographyStyle.featured => 'Destacada',
+                  TicketTypographyStyle.compact => 'Compacta',
+                }),
+                selected: _style.typography == t,
+                onSelected: (_) => _apply(
+                  templateId: 'custom',
+                  style: _style.copyWith(typography: t),
                 ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          _sectionLabel('Tipografía'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final t in TicketTypographyStyle.values)
-                ChoiceChip(
-                  label: Text(switch (t) {
-                    TicketTypographyStyle.system => 'Sistema',
-                    TicketTypographyStyle.featured => 'Destacada',
-                    TicketTypographyStyle.compact => 'Compacta',
-                  }),
-                  selected: _style.typography == t,
-                  onSelected: (_) => setState(() {
-                    _templateId = 'custom';
-                    _style = _style.copyWith(typography: t);
-                  }),
-                ),
-            ],
-          ),
-        ],
-      ),
+              ),
+          ],
+        ),
+      ],
+    );
+
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Diseño del ticket')),
+      body: body,
     );
   }
 
@@ -234,10 +244,7 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: _templateId == id,
-      onSelected: (_) => setState(() {
-        _templateId = id;
-        _style = style;
-      }),
+      onSelected: (_) => _apply(templateId: id, style: style),
     );
   }
 

@@ -3,18 +3,28 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import 'duttrix_brand.dart';
 
+/// Drawer row: either a tappable item or a non-interactive section label.
 class ShellNavItem {
   const ShellNavItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
-  });
+  }) : isSection = false;
+
+  const ShellNavItem.section(this.label)
+      : icon = Icons.circle,
+        selected = false,
+        onTap = _noop,
+        isSection = true;
+
+  static void _noop() {}
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool isSection;
 }
 
 /// Shared scaffold + drawer for the event workspace (tabs).
@@ -65,24 +75,9 @@ class AppShell extends StatelessWidget {
                   color: AppColors.textMuted,
                 ),
               ),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
-        actions: [
-          if (onHome != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                onPressed: onHome,
-                icon: const Icon(Icons.home_outlined, size: 18),
-                label: const Text('Mis eventos'),
-              ),
-            ),
-        ],
       ),
       drawer: hasDrawer
           ? Drawer(
@@ -95,28 +90,73 @@ class AppShell extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         children: [
                           for (final item in items)
-                            ListTile(
-                              leading: Icon(
-                                item.icon,
-                                color: item.selected ? AppColors.accent : AppColors.textSecondary,
-                              ),
-                              title: Text(
-                                item.label,
-                                style: TextStyle(
-                                  color: item.selected ? AppColors.accent : AppColors.text,
-                                  fontWeight: item.selected ? FontWeight.w700 : FontWeight.w500,
+                            if (item.isSection)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  6,
                                 ),
+                                child: Text(
+                                  item.label.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.6,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              )
+                            else
+                              ListTile(
+                                leading: Icon(
+                                  item.icon,
+                                  color: item.selected
+                                      ? AppColors.accent
+                                      : AppColors.textSecondary,
+                                ),
+                                title: Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    color: item.selected
+                                        ? AppColors.accent
+                                        : AppColors.text,
+                                    fontWeight: item.selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                selected: item.selected,
+                                selectedTileColor: AppColors.accentBg,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  item.onTap();
+                                },
                               ),
-                              selected: item.selected,
-                              selectedTileColor: AppColors.accentBg,
-                              onTap: () {
-                                Navigator.pop(context);
-                                item.onTap();
-                              },
-                            ),
                         ],
                       ),
                     ),
+                    if (onHome != null) ...[
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.home_outlined,
+                          color: AppColors.textSecondary,
+                        ),
+                        title: const Text(
+                          'Volver a mis eventos',
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          onHome!();
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -74,8 +74,8 @@ final eventTicketsProvider = StreamProvider.family<List<Ticket>, String>((
 
 final eventCollaboratorsProvider =
     StreamProvider.family<List<Collaborator>, String>((ref, eventId) {
-  return ref.watch(collaboratorRepositoryProvider).watchForEvent(eventId);
-});
+      return ref.watch(collaboratorRepositoryProvider).watchForEvent(eventId);
+    });
 
 AsyncValue<List<Collaborator>> _collaboratorsWithRole(
   Ref ref,
@@ -89,74 +89,82 @@ AsyncValue<List<Collaborator>> _collaboratorsWithRole(
 
 final eventSellersProvider =
     Provider.family<AsyncValue<List<Collaborator>>, String>((ref, eventId) {
-  return _collaboratorsWithRole(ref, eventId, CollaboratorRole.seller);
-});
+      return _collaboratorsWithRole(ref, eventId, CollaboratorRole.seller);
+    });
 
 final eventValidatorsProvider =
     Provider.family<AsyncValue<List<Collaborator>>, String>((ref, eventId) {
-  return _collaboratorsWithRole(ref, eventId, CollaboratorRole.validator);
-});
+      return _collaboratorsWithRole(ref, eventId, CollaboratorRole.validator);
+    });
 
 final eventCollectorsProvider =
     Provider.family<AsyncValue<List<Collaborator>>, String>((ref, eventId) {
-  return _collaboratorsWithRole(ref, eventId, CollaboratorRole.collector);
-});
+      return _collaboratorsWithRole(ref, eventId, CollaboratorRole.collector);
+    });
 
 final eventCoordinatorsProvider =
     Provider.family<AsyncValue<List<Collaborator>>, String>((ref, eventId) {
-  return _collaboratorsWithRole(ref, eventId, CollaboratorRole.coordinator);
-});
+      return _collaboratorsWithRole(ref, eventId, CollaboratorRole.coordinator);
+    });
 
 final eventTicketAggregateProvider =
     Provider.family<AsyncValue<Map<TicketStatus, int>>, String>((ref, eventId) {
-  return ref.watch(eventTicketsProvider(eventId)).whenData((tickets) {
-    final counts = {for (final s in TicketStatus.values) s: 0};
-    for (final ticket in tickets) {
-      counts[ticket.status] = (counts[ticket.status] ?? 0) + 1;
-    }
-    return counts;
-  });
-});
+      return ref.watch(eventTicketsProvider(eventId)).whenData((tickets) {
+        final counts = {for (final s in TicketStatus.values) s: 0};
+        for (final ticket in tickets) {
+          counts[ticket.status] = (counts[ticket.status] ?? 0) + 1;
+        }
+        return counts;
+      });
+    });
 
 /// Invite token for one collaborator (works for organizer and portals).
 final collaboratorAccessTokenProvider =
     FutureProvider.family<String, ({String eventId, String collaboratorId})>((
-  ref,
-  args,
-) async {
-  return await ref.read(collaboratorRepositoryProvider).getAccessToken(
-            eventId: args.eventId,
-            collaboratorId: args.collaboratorId,
-          ) ??
-      '';
-});
+      ref,
+      args,
+    ) async {
+      return await ref
+              .read(collaboratorRepositoryProvider)
+              .getAccessToken(
+                eventId: args.eventId,
+                collaboratorId: args.collaboratorId,
+              ) ??
+          '';
+    });
 
 /// collaboratorId → invite token. Owner lists the access subcollection.
 final eventAccessTokensProvider =
     StreamProvider.family<Map<String, String>, String>((ref, eventId) {
-  return ref.watch(collaboratorRepositoryProvider).watchAccessTokens(eventId);
-});
+      return ref
+          .watch(collaboratorRepositoryProvider)
+          .watchAccessTokens(eventId);
+    });
 
 /// Event + collaborator ids behind an invite token.
 final collaboratorLocationProvider =
     FutureProvider.family<CollaboratorLocation?, String>((ref, token) {
-  return ref.watch(collaboratorRepositoryProvider).resolveToken(token);
-});
+      return ref.watch(collaboratorRepositoryProvider).resolveToken(token);
+    });
 
 /// Live collaborator behind an invite token. Emits `null` when the token was
 /// revoked or the collaborator no longer exists.
 final collaboratorByTokenProvider =
     StreamProvider.family<Collaborator?, String>((ref, token) async* {
-  final location = await ref.watch(collaboratorLocationProvider(token).future);
-  if (location == null) {
-    yield null;
-    return;
-  }
-  yield* ref.watch(collaboratorRepositoryProvider).watchOne(
-        eventId: location.eventId,
-        collaboratorId: location.collaboratorId,
+      final location = await ref.watch(
+        collaboratorLocationProvider(token).future,
       );
-});
+      if (location == null) {
+        yield null;
+        return;
+      }
+      yield* ref
+          .watch(collaboratorRepositoryProvider)
+          .watchOne(
+            eventId: location.eventId,
+            collaboratorId: location.collaboratorId,
+          );
+    });
 
 Future<Collaborator> inviteCollaborator(
   WidgetRef ref, {
@@ -167,7 +175,9 @@ Future<Collaborator> inviteCollaborator(
   String notes = '',
   String? createdByCoordinatorId,
 }) {
-  return ref.read(collaboratorRepositoryProvider).create(
+  return ref
+      .read(collaboratorRepositoryProvider)
+      .create(
         eventId: eventId,
         role: role,
         name: name,
@@ -185,12 +195,28 @@ Future<Collaborator> saveCollaborator(
   required String phone,
   String notes = '',
 }) {
-  return ref.read(collaboratorRepositoryProvider).update(
+  return ref
+      .read(collaboratorRepositoryProvider)
+      .update(
         eventId: eventId,
         collaboratorId: collaboratorId,
         name: name,
         phone: phone,
         notes: notes,
+      );
+}
+
+/// Assigns a seller to a coordinator, or clears the link when [coordinatorId] is null.
+Future<Collaborator> setSellerCoordinatorAction(
+  WidgetRef ref, {
+  required String eventId,
+  required String sellerId,
+  required String? coordinatorId,
+}) {
+  return ref.read(collaboratorRepositoryProvider).setSellerCoordinator(
+        eventId: eventId,
+        sellerId: sellerId,
+        coordinatorId: coordinatorId,
       );
 }
 
@@ -200,10 +226,9 @@ Future<Collaborator> regenerateCollaboratorToken(
   required String eventId,
   required String collaboratorId,
 }) {
-  return ref.read(collaboratorRepositoryProvider).regenerateToken(
-        eventId: eventId,
-        collaboratorId: collaboratorId,
-      );
+  return ref
+      .read(collaboratorRepositoryProvider)
+      .regenerateToken(eventId: eventId, collaboratorId: collaboratorId);
 }
 
 /// Deletes a collaborator. Seller tickets still unsold go back to the pool;
@@ -214,16 +239,14 @@ Future<void> deleteCollaboratorAction(
   required Collaborator collaborator,
 }) async {
   if (collaborator.role == CollaboratorRole.seller) {
-    await ref.read(eventRepositoryProvider).releaseTicketsFromSeller(
-          eventId: eventId,
-          sellerId: collaborator.id,
-        );
+    await ref
+        .read(eventRepositoryProvider)
+        .releaseTicketsFromSeller(eventId: eventId, sellerId: collaborator.id);
   }
 
-  await ref.read(collaboratorRepositoryProvider).delete(
-        eventId: eventId,
-        collaboratorId: collaborator.id,
-      );
+  await ref
+      .read(collaboratorRepositoryProvider)
+      .delete(eventId: eventId, collaboratorId: collaborator.id);
 }
 
 Future<void> assignTicketRangeAction(
@@ -234,7 +257,9 @@ Future<void> assignTicketRangeAction(
   required int to,
   String? assignedByCollaboratorId,
 }) async {
-  await ref.read(eventRepositoryProvider).assignTicketRange(
+  await ref
+      .read(eventRepositoryProvider)
+      .assignTicketRange(
         eventId: eventId,
         sellerId: sellerId,
         from: from,
@@ -253,7 +278,9 @@ Future<void> claimTicketsForSellerAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).claimTicketsForSeller(
+  await ref
+      .read(eventRepositoryProvider)
+      .claimTicketsForSeller(
         eventId: eventId,
         ticketIds: ids,
         sellerId: sellerId,
@@ -272,7 +299,9 @@ Future<void> setTicketsBuyerAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).updateTicketsBuyer(
+  await ref
+      .read(eventRepositoryProvider)
+      .updateTicketsBuyer(
         eventId: eventId,
         ticketIds: ids,
         buyerName: buyerName,
@@ -292,7 +321,9 @@ Future<void> reserveTicketsAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).reserveTickets(
+  await ref
+      .read(eventRepositoryProvider)
+      .reserveTickets(
         eventId: eventId,
         ticketIds: ids,
         buyerName: buyerName,
@@ -311,7 +342,9 @@ Future<void> clearTicketReservationsAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).clearTicketReservations(
+  await ref
+      .read(eventRepositoryProvider)
+      .clearTicketReservations(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
@@ -329,7 +362,9 @@ Future<void> collectTicketsAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).markTicketsCollected(
+  await ref
+      .read(eventRepositoryProvider)
+      .markTicketsCollected(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
@@ -348,7 +383,9 @@ Future<void> returnTicketsToPoolAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).returnTicketsToPool(
+  await ref
+      .read(eventRepositoryProvider)
+      .returnTicketsToPool(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
@@ -366,7 +403,9 @@ Future<void> markTicketsReturnedAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).markTicketsReturned(
+  await ref
+      .read(eventRepositoryProvider)
+      .markTicketsReturned(
         eventId: eventId,
         ticketIds: ids,
         actorId: actorId,
@@ -381,7 +420,9 @@ Future<void> deliverTicketAction(
   required String validatorId,
   String actorRole = 'validator',
 }) async {
-  await ref.read(eventRepositoryProvider).markTicketDelivered(
+  await ref
+      .read(eventRepositoryProvider)
+      .markTicketDelivered(
         eventId: eventId,
         ticketId: ticketId,
         validatorId: validatorId,
@@ -399,7 +440,9 @@ Future<void> settleTicketsAction(
 }) async {
   final ids = ticketIds.toList(growable: false);
   if (ids.isEmpty) return;
-  await ref.read(eventRepositoryProvider).markTicketsSettled(
+  await ref
+      .read(eventRepositoryProvider)
+      .markTicketsSettled(
         eventId: eventId,
         ticketIds: ids,
         collectorId: collectorId,
@@ -449,8 +492,9 @@ class SessionState {
       userUid: userUid,
       displayName: displayName,
       photoUrl: photoUrl,
-      currentEventId:
-          clearCurrentEventId ? null : (currentEventId ?? this.currentEventId),
+      currentEventId: clearCurrentEventId
+          ? null
+          : (currentEventId ?? this.currentEventId),
       collaboratorToken: collaboratorToken,
       collaboratorRole: collaboratorRole ?? this.collaboratorRole,
       isRestoring: isRestoring,
@@ -618,7 +662,8 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> logout() async {
-    final hadFirebaseUser = state.userUid != null ||
+    final hadFirebaseUser =
+        state.userUid != null ||
         _ref.read(googleAuthServiceProvider).currentUser != null;
     await _ref.read(collaboratorSessionStorageProvider).clear();
     state = const SessionState();

@@ -72,8 +72,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         eventId: eventId,
         ticketIds: ids,
         actorId: widget.actingCoordinatorId,
-        actorRole:
-            widget.actingCoordinatorId != null ? 'coordinator' : 'organizer',
+        actorRole: widget.actingCoordinatorId != null
+            ? 'coordinator'
+            : 'organizer',
       );
       if (!mounted) return;
       setState(() => _returnIds.clear());
@@ -87,9 +88,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo devolver: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo devolver: $e')));
     } finally {
       if (mounted) setState(() => _returning = false);
     }
@@ -133,10 +134,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final seller = match;
-    final tickets = ticketsAsync.requireValue
-        .where((t) => t.sellerId == sellerId)
-        .toList()
-      ..sort((a, b) => a.number.compareTo(b.number));
+    final tickets =
+        ticketsAsync.requireValue.where((t) => t.sellerId == sellerId).toList()
+          ..sort((a, b) => a.number.compareTo(b.number));
     final returnable = tickets
         .where(
           (t) =>
@@ -145,7 +145,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         )
         .toList(growable: false);
     final allTickets = ticketsAsync.requireValue;
-    final token = ref
+    final token =
+        ref
             .watch(
               collaboratorAccessTokenProvider((
                 eventId: eventId,
@@ -161,8 +162,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     final visibleTickets = _statusFilters.isEmpty
         ? tickets
         : tickets
-            .where((t) => _statusFilters.contains(t.status))
-            .toList(growable: false);
+              .where((t) => _statusFilters.contains(t.status))
+              .toList(growable: false);
 
     return Scaffold(
       appBar: AppBar(title: Text(seller.name)),
@@ -225,7 +226,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: () => AccessShare.copy(
+                  onPressed: () => AccessShare.share(
                     context,
                     seller,
                     eventName: event.name,
@@ -327,86 +328,89 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             else
               for (final ticket in visibleTickets)
                 Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Material(
-                  color: ticketStatusBg(ticket.status),
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: ticketStatusBg(ticket.status),
                     borderRadius: BorderRadius.circular(10),
-                    onTap: finished ||
-                            (ticket.status != TicketStatus.withSeller &&
-                                ticket.status != TicketStatus.reserved)
-                        ? null
-                        : () => setState(() {
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap:
+                          finished ||
+                              (ticket.status != TicketStatus.withSeller &&
+                                  ticket.status != TicketStatus.reserved)
+                          ? null
+                          : () => setState(() {
                               if (_returnIds.contains(ticket.id)) {
                                 _returnIds.remove(ticket.id);
                               } else {
                                 _returnIds.add(ticket.id);
                               }
                             }),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: selectedReturnable.contains(ticket.id)
-                              ? AppColors.accent
-                              : AppColors.border,
-                          width: selectedReturnable.contains(ticket.id) ? 1.5 : 1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          if (!finished &&
-                              (ticket.status == TicketStatus.withSeller ||
-                                  ticket.status == TicketStatus.reserved))
-                            Checkbox(
-                              value: selectedReturnable.contains(ticket.id),
-                              onChanged: (_) => setState(() {
-                                if (_returnIds.contains(ticket.id)) {
-                                  _returnIds.remove(ticket.id);
-                                } else {
-                                  _returnIds.add(ticket.id);
-                                }
-                              }),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ticket #${ticket.number}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                if (ticket.buyerName.isNotEmpty) ...[
-                                  const SizedBox(height: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selectedReturnable.contains(ticket.id)
+                                ? AppColors.accent
+                                : AppColors.border,
+                            width: selectedReturnable.contains(ticket.id)
+                                ? 1.5
+                                : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (!finished &&
+                                (ticket.status == TicketStatus.withSeller ||
+                                    ticket.status == TicketStatus.reserved))
+                              Checkbox(
+                                value: selectedReturnable.contains(ticket.id),
+                                onChanged: (_) => setState(() {
+                                  if (_returnIds.contains(ticket.id)) {
+                                    _returnIds.remove(ticket.id);
+                                  } else {
+                                    _returnIds.add(ticket.id);
+                                  }
+                                }),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    'Para: ${ticket.buyerName}',
+                                    'Ticket #${ticket.number}',
                                     style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                                  if (ticket.buyerName.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Para: ${ticket.buyerName}',
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-                          StatusBadge(
-                            label: ticket.status.label,
-                            tone: ticketStatusTone(ticket.status),
-                          ),
-                        ],
+                            StatusBadge(
+                              label: ticket.status.label,
+                              tone: ticketStatusTone(ticket.status),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
           ],
         ],
       ),
@@ -434,8 +438,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration:
-                    const InputDecoration(labelText: 'Celular (WhatsApp)'),
+                decoration: const InputDecoration(
+                  labelText: 'Celular (WhatsApp)',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -475,9 +480,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                 );
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('$e')));
               }
             },
             child: const Text('Guardar'),
@@ -487,15 +492,13 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     );
   }
 
-  void _showAddAssignmentDialog(
-    BuildContext context,
-    List<Ticket> allTickets,
-  ) {
-    final unassigned = allTickets
-        .where((t) => t.status.isAssignablePool)
-        .map((t) => t.number)
-        .toList()
-      ..sort();
+  void _showAddAssignmentDialog(BuildContext context, List<Ticket> allTickets) {
+    final unassigned =
+        allTickets
+            .where((t) => t.status.isAssignablePool)
+            .map((t) => t.number)
+            .toList()
+          ..sort();
     final nextNumber = unassigned.isEmpty ? 1 : unassigned.first;
     final fromController = TextEditingController(text: '$nextNumber');
     final toController = TextEditingController();
@@ -568,9 +571,9 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                       );
                     } catch (e) {
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$e')),
-                      );
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('$e')));
                     }
                   },
             child: const Text('Asignar'),

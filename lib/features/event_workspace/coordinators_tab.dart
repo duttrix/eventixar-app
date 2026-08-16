@@ -5,13 +5,12 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/delete_collaborator_button.dart';
-import '../../shared/widgets/regenerate_access_button.dart';
+import '../../shared/widgets/bottom_system_inset.dart';
+import 'coordinator_detail_screen.dart';
 
-/// Organizer roster of coordinators + access sharing.
+/// Organizer roster of coordinators.
 ///
-/// A coordinator manages all sellers: create, assign ranges, share links,
-/// return tickets to the pool and delete.
+/// Each coordinator creates and manages sellers via their invite link.
 class CoordinatorsTab extends ConsumerWidget {
   const CoordinatorsTab({super.key, required this.eventId});
 
@@ -21,30 +20,30 @@ class CoordinatorsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
     final coordinatorsAsync = ref.watch(eventCoordinatorsProvider(eventId));
+    final sellersAsync = ref.watch(eventSellersProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: eventAsync.hasValue
-            ? () => _showEditor(
-                  context,
-                  ref,
-                  eventName: eventAsync.requireValue.name,
-                )
-            : null,
-        icon: const Icon(Icons.person_add_alt_1_outlined),
-        label: const Text('Agregar'),
+      floatingActionButton: BottomSystemInset(
+        child: FloatingActionButton.extended(
+          onPressed: eventAsync.hasValue
+              ? () => _showCreateDialog(
+                    context,
+                    ref,
+                    eventName: eventAsync.requireValue.name,
+                  )
+              : null,
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          label: const Text('Agregar'),
+        ),
       ),
       body: coordinatorsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
         data: (coordinators) {
-          final eventName = eventAsync.valueOrNull?.name ?? '';
-          final tokens =
-              ref.watch(eventAccessTokensProvider(eventId)).valueOrNull ??
-                  const <String, String>{};
+          final sellers = sellersAsync.valueOrNull ?? const <Collaborator>[];
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            padding: listPaddingWithFab(context),
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
@@ -53,73 +52,111 @@ class CoordinatorsTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Text(
-                  coordinators.isEmpty
-                      ? 'El coordinador gestiona los vendedores del evento: crear, '
-                          'asignar rangos, compartir accesos y devolver tickets al pool. '
-                          'Abre el link sin necesidad de cuenta. Usá Agregar para '
-                          'crear uno y compartirle el acceso.'
-                      : 'El coordinador gestiona los vendedores del evento: crear, '
-                          'asignar rangos, compartir accesos y devolver tickets al pool. '
-                          'Abre el link sin necesidad de cuenta.',
-                  style: const TextStyle(
+                child: const Text(
+                  'Los coordinadores crean vendedores, les asignan tickets y '
+                  'comparten accesos desde su celular, sin cuenta. Abrí cada '
+                  'uno para ver sus vendedores o gestionar el acceso.',
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 14,
                     height: 1.35,
                   ),
                 ),
               ),
-              if (coordinators.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Text(
-                  'Coordinadores (${coordinators.length})',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
+              const SizedBox(height: 20),
+              Text(
+                coordinators.isEmpty
+                    ? 'Coordinadores'
+                    : 'Coordinadores (${coordinators.length})',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (coordinators.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Text(
+                    'Usá Agregar para crear un coordinador y compartirle el link.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                      height: 1.35,
+                    ),
+                  ),
+                )
+              else
                 for (final coordinator in coordinators)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      title: Text(coordinator.name),
-                      subtitle: Text(
-                        [
-                          if (coordinator.phone.isNotEmpty) coordinator.phone,
-                          if (coordinator.notes.isNotEmpty) coordinator.notes,
-                        ].join(' · '),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Compartir acceso',
-                            onPressed: () => AccessShare.copy(
-                              context,
-                              coordinator,
-                              eventName: eventName,
-                              token: tokens[coordinator.id] ?? '',
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => CoordinatorDetailScreen(
+                              eventId: eventId,
+                              coordinatorId: coordinator.id,
                             ),
-                            icon: const Icon(Icons.ios_share),
                           ),
-                          RegenerateAccessButton(
-                            collaborator: coordinator,
-                            eventName: eventName,
-                            compact: true,
-                          ),
-                          DeleteCollaboratorButton(
-                            collaborator: coordinator,
-                            compact: true,
-                          ),
-                        ],
-                      ),
-                      onTap: () => _showEditor(
-                        context,
-                        ref,
-                        eventName: eventName,
-                        existing: coordinator,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                        child: Builder(
+                          builder: (context) {
+                            final sellerCount = sellers
+                                .where(
+                                  (s) =>
+                                      s.createdByCoordinatorId ==
+                                      coordinator.id,
+                                )
+                                .length;
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        coordinator.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        [
+                                          sellerCount == 0
+                                              ? 'Sin vendedores'
+                                              : '$sellerCount vendedor'
+                                                  '${sellerCount == 1 ? '' : 'es'}',
+                                          if (coordinator.notes.isNotEmpty)
+                                            coordinator.notes,
+                                        ].join(' · '),
+                                        style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: AppColors.textMuted,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
-              ],
             ],
           );
         },
@@ -127,21 +164,18 @@ class CoordinatorsTab extends ConsumerWidget {
     );
   }
 
-  void _showEditor(
+  void _showCreateDialog(
     BuildContext context,
     WidgetRef ref, {
     required String eventName,
-    Collaborator? existing,
   }) {
-    final isEdit = existing != null;
-    final nameController = TextEditingController(text: existing?.name ?? '');
-    final phoneController = TextEditingController(text: existing?.phone ?? '');
-    final notesController = TextEditingController(text: existing?.notes ?? '');
+    final nameController = TextEditingController();
+    final notesController = TextEditingController();
 
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isEdit ? 'Editar coordinador' : 'Nuevo coordinador'),
+        title: const Text('Nuevo coordinador'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -152,14 +186,6 @@ class CoordinatorsTab extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Celular (WhatsApp)',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
                 controller: notesController,
                 maxLines: 2,
                 decoration: const InputDecoration(
@@ -167,13 +193,11 @@ class CoordinatorsTab extends ConsumerWidget {
                   hintText: 'Ej. Zona norte',
                 ),
               ),
-              if (!isEdit) ...[
-                const SizedBox(height: 12),
-                const Text(
-                  'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                ),
-              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -186,44 +210,32 @@ class CoordinatorsTab extends ConsumerWidget {
             onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
-              final phone = phoneController.text.trim();
-              final notes = notesController.text.trim();
-
               try {
-                if (isEdit) {
-                  await saveCollaborator(
-                    ref,
-                    eventId: eventId,
-                    collaboratorId: existing.id,
-                    name: name,
-                    phone: phone,
-                    notes: notes,
-                  );
-                  if (!dialogContext.mounted) return;
-                  Navigator.pop(dialogContext);
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Coordinador actualizado.')),
-                  );
-                  return;
-                }
-
                 final c = await inviteCollaborator(
                   ref,
                   eventId: eventId,
                   role: CollaboratorRole.coordinator,
                   name: name,
-                  phone: phone,
-                  notes: notes,
+                  phone: '',
+                  notes: notesController.text.trim(),
                 );
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
                 if (!context.mounted) return;
-                AccessShare.copy(
+                await AccessShare.share(
                   context,
                   c,
                   eventName: eventName,
                   token: c.token,
+                );
+                if (!context.mounted) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CoordinatorDetailScreen(
+                      eventId: eventId,
+                      coordinatorId: c.id,
+                    ),
+                  ),
                 );
               } catch (e) {
                 if (!context.mounted) return;
@@ -232,7 +244,7 @@ class CoordinatorsTab extends ConsumerWidget {
                 );
               }
             },
-            child: Text(isEdit ? 'Guardar' : 'Crear y compartir acceso'),
+            child: const Text('Crear y compartir acceso'),
           ),
         ],
       ),

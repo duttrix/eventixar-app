@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
@@ -9,6 +10,8 @@ import 'status_badge.dart';
 /// Shared copy + actions for sharing collaborator access links.
 class AccessShare {
   AccessShare._();
+
+  static const IconData shareIcon = Icons.ios_share;
 
   static String messageFor(
     Collaborator person, {
@@ -36,6 +39,24 @@ class AccessShare {
     };
   }
 
+  static Future<void> share(
+    BuildContext context,
+    Collaborator person, {
+    required String eventName,
+    required String token,
+  }) async {
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Todavía no se pudo leer el link de acceso.'),
+        ),
+      );
+      return;
+    }
+    final text = messageFor(person, eventName: eventName, token: token);
+    await Share.share(text);
+  }
+
   static Future<void> copy(
     BuildContext context,
     Collaborator person, {
@@ -56,7 +77,7 @@ class AccessShare {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Acceso de ${person.name} (${person.role.label}) listo para enviar por WhatsApp.',
+          'Acceso de ${person.name} (${person.role.label}) listo para enviar.',
         ),
       ),
     );
@@ -75,6 +96,15 @@ BadgeTone ticketStatusTone(TicketStatus status) {
   };
 }
 
+/// Tone for a ticket row/badge, including settle-mode nuance.
+BadgeTone ticketTone(Ticket ticket) {
+  if (ticket.status == TicketStatus.settled &&
+      ticket.settleMode == TicketSettleMode.profit) {
+    return BadgeTone.warn;
+  }
+  return ticketStatusTone(ticket.status);
+}
+
 Color ticketStatusBg(TicketStatus status) {
   return switch (status) {
     TicketStatus.collected => AppColors.successBg,
@@ -85,6 +115,15 @@ Color ticketStatusBg(TicketStatus status) {
     TicketStatus.withSeller => AppColors.warnBg,
     TicketStatus.unassigned => AppColors.border,
   };
+}
+
+/// Background for a ticket row, including settle-mode nuance.
+Color ticketBg(Ticket ticket) {
+  if (ticket.status == TicketStatus.settled &&
+      ticket.settleMode == TicketSettleMode.profit) {
+    return AppColors.warnBg;
+  }
+  return ticketStatusBg(ticket.status);
 }
 
 /// Compact summary chips: Cobrado / En poder / Devuelto / etc.

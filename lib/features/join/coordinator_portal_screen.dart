@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
 
 /// Coordinator portal: manage all sellers for an event (no organizer account).
@@ -34,7 +33,6 @@ class CoordinatorPortalScreen extends ConsumerWidget {
     final eventId = coordinator.eventId;
     final eventAsync = ref.watch(eventProvider(eventId));
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
-    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
     final eventName = eventAsync.valueOrNull?.name ?? '';
 
     return Scaffold(
@@ -66,7 +64,6 @@ class CoordinatorPortalScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
         data: (sellers) {
-          final tickets = ticketsAsync.valueOrNull ?? const <Ticket>[];
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             children: [
@@ -80,10 +77,9 @@ class CoordinatorPortalScreen extends ConsumerWidget {
               Text(
                 'Podés crear vendedores, asignar rangos, compartir accesos y '
                 'devolver tickets al pool.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.textSecondary),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 16),
               if (sellers.isEmpty)
@@ -95,71 +91,17 @@ class CoordinatorPortalScreen extends ConsumerWidget {
                 for (final seller in sellers)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
+                    child: ListTile(
+                      title: Text(seller.name),
+                      subtitle: seller.notes.isEmpty
+                          ? null
+                          : Text(seller.notes),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textMuted,
+                      ),
                       onTap: () => context.push(
                         '/coordinator/$token/sellers/${seller.id}',
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                        child: Builder(
-                          builder: (context) {
-                            final sellerTickets = tickets
-                                .where((t) => t.sellerId == seller.id)
-                                .toList();
-                            final numbersLabel = sellerTickets.isEmpty
-                                ? 'Sin tickets'
-                                : compactTicketNumbersLabel(
-                                    sellerTickets.map((t) => t.number),
-                                  );
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            seller.name,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            [
-                                              numbersLabel,
-                                              if (seller.notes.isNotEmpty)
-                                                seller.notes,
-                                            ].join(' · '),
-                                            style: const TextStyle(
-                                              color: AppColors.textMuted,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ],
-                                ),
-                                if (sellerTickets.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 10),
-                                    child: TicketStatusSummary(
-                                      tickets: sellerTickets,
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
                       ),
                     ),
                   ),
@@ -243,9 +185,9 @@ class CoordinatorPortalScreen extends ConsumerWidget {
                 context.push('/coordinator/$token/sellers/${seller.id}');
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('$e')));
               }
             },
             child: const Text('Crear y compartir'),

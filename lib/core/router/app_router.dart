@@ -6,11 +6,13 @@ import '../../data/models/collaborator.dart';
 import '../../data/app_providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/event_workspace/collector_detail_screen.dart';
+import '../../features/event_workspace/coordinator_detail_screen.dart';
 import '../../features/event_workspace/event_workspace_screen.dart';
 import '../../features/event_workspace/organizer_collect_screen.dart';
 import '../../features/event_workspace/organizer_validate_screen.dart';
 import '../../features/event_workspace/seller_detail_screen.dart';
 import '../../features/event_workspace/ticket_design_screen.dart';
+import '../../features/event_workspace/validator_detail_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/join/coordinator_portal_screen.dart';
 import '../../features/join/join_screens.dart';
@@ -36,7 +38,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     onException: (context, state, router) {
       final mapped = DeepLinkMapper.locationFromUri(state.uri);
-      router.go(mapped ?? '/login');
+      if (mapped != null) {
+        router.go(mapped);
+        return;
+      }
+      // Avoid bouncing organizers to login/home on navigation mismatches.
+      assert(() {
+        // ignore: avoid_print
+        print('GoRouter exception: ${state.error} uri=${state.uri}');
+        return true;
+      }());
     },
     redirect: (context, state) {
       // Cold/warm start from Android/iOS may feed the full deep link URI into
@@ -165,6 +176,20 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => SellerDetailScreen(
               eventId: state.pathParameters['eventId']!,
               sellerId: state.pathParameters['sellerId']!,
+            ),
+          ),
+          GoRoute(
+            path: 'validators/:validatorId',
+            builder: (context, state) => ValidatorDetailScreen(
+              eventId: state.pathParameters['eventId']!,
+              validatorId: state.pathParameters['validatorId']!,
+            ),
+          ),
+          GoRoute(
+            path: 'coordinators/:coordinatorId',
+            builder: (context, state) => CoordinatorDetailScreen(
+              eventId: state.pathParameters['eventId']!,
+              coordinatorId: state.pathParameters['coordinatorId']!,
             ),
           ),
           GoRoute(

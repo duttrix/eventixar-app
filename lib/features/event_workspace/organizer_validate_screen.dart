@@ -6,18 +6,22 @@ import '../join/validator_workbench.dart';
 
 /// Organizer entry to the same validate UI used by validators.
 class OrganizerValidateScreen extends ConsumerWidget {
-  const OrganizerValidateScreen({super.key, required this.eventId});
+  const OrganizerValidateScreen({
+    super.key,
+    required this.eventId,
+    this.embedded = false,
+  });
 
   final String eventId;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     final uid = session.userUid;
     if (uid == null) {
-      return const Scaffold(
-        body: Center(child: Text('Tenés que iniciar sesión.')),
-      );
+      final child = const Center(child: Text('Tenés que iniciar sesión.'));
+      return embedded ? child : Scaffold(body: child);
     }
 
     final label = (session.displayName?.trim().isNotEmpty ?? false)
@@ -30,6 +34,7 @@ class OrganizerValidateScreen extends ConsumerWidget {
       actorLabel: label,
       actorRole: 'organizer',
       showLogout: false,
+      embedded: embedded,
     );
   }
 }

@@ -12,20 +12,24 @@ import 'event_data_tab.dart';
 import 'validators_tab.dart';
 import 'collectors_tab.dart';
 import 'coordinators_tab.dart';
+import 'organizer_validate_screen.dart';
 import 'summary_tab.dart';
 import 'tickets_tab.dart';
+import 'ticket_design_screen.dart';
 import 'ticket_tracker_tab.dart';
 import 'sellers_tab.dart';
 
 enum EventTab {
   summary,
   tickets,
+  validate,
+  design,
+  eventData,
+  tracker,
   sellers,
   validators,
   coordinators,
   collectors,
-  tracker,
-  eventData,
 }
 
 /// Organizer workspace for one paid/active event.
@@ -54,12 +58,20 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     final Widget body = switch (_selected) {
       EventTab.summary => SummaryTab(eventId: widget.eventId),
       EventTab.tickets => TicketsTab(eventId: widget.eventId),
+      EventTab.validate => OrganizerValidateScreen(
+          eventId: widget.eventId,
+          embedded: true,
+        ),
+      EventTab.design => TicketDesignScreen(
+          eventId: widget.eventId,
+          embedded: true,
+        ),
+      EventTab.eventData => EventDataTab(eventId: widget.eventId),
       EventTab.tracker => TicketTrackerTab(eventId: widget.eventId),
       EventTab.sellers => SellersTab(eventId: widget.eventId),
       EventTab.validators => ValidatorsTab(eventId: widget.eventId),
       EventTab.coordinators => CoordinatorsTab(eventId: widget.eventId),
       EventTab.collectors => CollectorsTab(eventId: widget.eventId),
-      EventTab.eventData => EventDataTab(eventId: widget.eventId),
     };
 
     final (statusLabel, statusTone) = switch (event.status) {
@@ -96,29 +108,46 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
             ),
         ],
       ),
-      navItems: [
-        for (final tab in EventTab.values)
-          ShellNavItem(
-            icon: _iconFor(tab),
-            label: _labelFor(tab),
-            selected: tab == _selected,
-            onTap: () => setState(() => _selected = tab),
-          ),
-      ],
+      navItems: _navItems(),
       body: body,
     );
+  }
+
+  List<ShellNavItem> _navItems() {
+    ShellNavItem item(EventTab tab) => ShellNavItem(
+          icon: _iconFor(tab),
+          label: _labelFor(tab),
+          selected: tab == _selected,
+          onTap: () => setState(() => _selected = tab),
+        );
+
+    return [
+      item(EventTab.summary),
+      item(EventTab.tickets),
+      item(EventTab.validate),
+      item(EventTab.design),
+      item(EventTab.eventData),
+      item(EventTab.tracker),
+      const ShellNavItem.section('Colaboradores'),
+      item(EventTab.sellers),
+      item(EventTab.validators),
+      item(EventTab.coordinators),
+      item(EventTab.collectors),
+    ];
   }
 
   IconData _iconFor(EventTab tab) {
     return switch (tab) {
       EventTab.summary => Icons.bar_chart_outlined,
       EventTab.tickets => Icons.confirmation_number_outlined,
+      EventTab.validate => Icons.qr_code_scanner,
+      EventTab.design => Icons.palette_outlined,
+      EventTab.eventData => Icons.event_note_outlined,
       EventTab.tracker => Icons.timeline_outlined,
       EventTab.sellers => Icons.groups_outlined,
-      EventTab.validators => Icons.qr_code_scanner_outlined,
+      EventTab.validators => Icons.how_to_reg_outlined,
       EventTab.coordinators => Icons.supervisor_account_outlined,
       EventTab.collectors => Icons.account_balance_wallet_outlined,
-      EventTab.eventData => Icons.event_note_outlined,
     };
   }
 
@@ -126,12 +155,14 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return switch (tab) {
       EventTab.summary => 'Resumen',
       EventTab.tickets => 'Tickets',
-      EventTab.tracker => 'Rastreador',
-      EventTab.sellers => 'Venta',
-      EventTab.validators => 'Validación',
-      EventTab.coordinators => 'Coordinadores',
-      EventTab.collectors => 'Recaudación',
+      EventTab.validate => 'Validar',
+      EventTab.design => 'Diseño',
       EventTab.eventData => 'Datos del evento',
+      EventTab.tracker => 'Rastreador',
+      EventTab.sellers => 'Vendedores',
+      EventTab.validators => 'Validadores',
+      EventTab.coordinators => 'Coordinadores',
+      EventTab.collectors => 'Recaudadores',
     };
   }
 }

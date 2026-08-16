@@ -4,12 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
-import '../../shared/widgets/access_share.dart';
-import 'organizer_sell_screen.dart';
+import '../../shared/widgets/bottom_system_inset.dart';
 
-/// Organizer hub for sales: operate yourself + optional seller roster.
+/// Organizer roster of sellers: create, open detail, share access.
 class SellersTab extends ConsumerWidget {
   const SellersTab({super.key, required this.eventId});
 
@@ -18,22 +16,22 @@ class SellersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
-    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(context, ref),
-        icon: const Icon(Icons.person_add_alt_1_outlined),
-        label: const Text('Agregar'),
+      floatingActionButton: BottomSystemInset(
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddDialog(context, ref),
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          label: const Text('Agregar'),
+        ),
       ),
       body: sellersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
         data: (sellers) {
-          final tickets = ticketsAsync.valueOrNull ?? const <Ticket>[];
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            padding: listPaddingWithFab(context),
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
@@ -42,39 +40,15 @@ class SellersTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Vendé tickets vos mismo',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Vendé del pool o mirá lo que ya está con tus '
-                      'vendedores. Filtrá por estado; solo operás los libres.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                OrganizerSellScreen(eventId: eventId),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.storefront_outlined),
-                      label: const Text('Empezar a vender'),
-                    ),
-                  ],
+                child: const Text(
+                  'Los vendedores reciben tickets asignados y los venden desde '
+                  'su celular con un link, sin crear cuenta. Abrí cada uno para '
+                  'asignar tickets, compartir acceso o editar sus datos.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -94,9 +68,8 @@ class SellersTab extends ConsumerWidget {
                     border: Border.all(color: AppColors.border),
                   ),
                   child: const Text(
-                    'También podés crear vendedores, asignarles rangos y '
-                    'compartirles un link: abren el acceso sin registrarse y '
-                    'venden desde su celular.',
+                    'Usá Agregar para crear un vendedor. Después vas a poder '
+                    'asignarle tickets y compartirle el acceso.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -108,70 +81,17 @@ class SellersTab extends ConsumerWidget {
                 for (final seller in sellers)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
-                      onTap: () => context
-                          .push('/event/$eventId/sellers/${seller.id}'),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                        child: Builder(
-                          builder: (context) {
-                            final sellerTickets = tickets
-                                .where((t) => t.sellerId == seller.id)
-                                .toList();
-                            final numbersLabel = sellerTickets.isEmpty
-                                ? 'Sin tickets'
-                                : compactTicketNumbersLabel(
-                                    sellerTickets.map((t) => t.number),
-                                  );
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            seller.name,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            [
-                                              numbersLabel,
-                                              if (seller.notes.isNotEmpty)
-                                                seller.notes,
-                                            ].join(' · '),
-                                            style: const TextStyle(
-                                              color: AppColors.textMuted,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ],
-                                ),
-                                if (sellerTickets.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 10),
-                                    child: TicketStatusSummary(
-                                      tickets: sellerTickets,
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
+                    child: ListTile(
+                      title: Text(seller.name),
+                      subtitle: seller.notes.isEmpty
+                          ? null
+                          : Text(seller.notes),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textMuted,
+                      ),
+                      onTap: () => context.push(
+                        '/event/$eventId/sellers/${seller.id}',
                       ),
                     ),
                   ),
@@ -184,7 +104,6 @@ class SellersTab extends ConsumerWidget {
 
   void _showAddDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
-    final phoneController = TextEditingController();
     final notesController = TextEditingController();
 
     showDialog<void>(
@@ -201,13 +120,6 @@ class SellersTab extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration:
-                    const InputDecoration(labelText: 'Celular (WhatsApp)'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
                 controller: notesController,
                 maxLines: 2,
                 decoration: const InputDecoration(
@@ -217,7 +129,7 @@ class SellersTab extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Después vas a poder asignar rangos y compartir el acceso desde su ficha.',
+                'Después vas a poder asignar tickets y compartir el acceso desde su ficha.',
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
             ],
@@ -238,7 +150,7 @@ class SellersTab extends ConsumerWidget {
                   eventId: eventId,
                   role: CollaboratorRole.seller,
                   name: name,
-                  phone: phoneController.text.trim(),
+                  phone: '',
                   notes: notesController.text.trim(),
                 );
                 if (!dialogContext.mounted) return;
