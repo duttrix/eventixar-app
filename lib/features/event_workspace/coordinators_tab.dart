@@ -6,6 +6,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
+import '../../shared/widgets/help_callout.dart';
 import 'coordinator_detail_screen.dart';
 
 /// Organizer roster of coordinators.
@@ -45,23 +46,12 @@ class CoordinatorsTab extends ConsumerWidget {
           return ListView(
             padding: listPaddingWithFab(context),
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  'Los coordinadores crean vendedores, les asignan tickets y '
-                  'comparten accesos desde su celular, sin cuenta. Abrí cada '
-                  'uno para ver sus vendedores o gestionar el acceso.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
+              const HelpCallout(
+                message:
+                    'Los coordinadores gestionan vendedores: los crean, les '
+                    'asignan rangos de tickets y comparten accesos desde el '
+                    'celular, sin cuenta. Abrí cada uno para ver sus vendedores '
+                    'o gestionar el acceso.',
               ),
               const SizedBox(height: 20),
               Text(

@@ -7,6 +7,7 @@ import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
+import '../../shared/widgets/help_callout.dart';
 import 'validator_detail_screen.dart';
 
 /// Organizer roster of validators.
@@ -46,23 +47,12 @@ class ValidatorsTab extends ConsumerWidget {
           return ListView(
             padding: listPaddingWithFab(context),
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  'Los validadores escanean o buscan tickets y los marcan como '
-                  'validados en el retiro o en la entrada. Abrí cada uno para '
-                  'compartir acceso, editar datos o ver lo que ya validó.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
+              const HelpCallout(
+                message:
+                    'Los validadores escanean o buscan el QR del ticket y lo '
+                    'marcan como validado en el retiro o en la entrada, sin '
+                    'crear cuenta. Abrí cada uno para compartir acceso, editar '
+                    'datos o ver lo que ya validó.',
               ),
               const SizedBox(height: 20),
               Text(
@@ -108,49 +98,48 @@ class ValidatorsTab extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                        child: Builder(
-                          builder: (context) {
-                            final validatedCount = tickets
-                                .where((t) => t.validatorId == validator.id)
-                                .length;
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        validator.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        [
-                                          validatedCount == 0
-                                              ? 'Sin tickets validados'
-                                              : '$validatedCount validado'
-                                                  '${validatedCount == 1 ? '' : 's'}',
-                                          if (validator.notes.isNotEmpty)
-                                            validator.notes,
-                                        ].join(' · '),
-                                        style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    validator.name,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
                                   ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: AppColors.textMuted,
-                                ),
-                              ],
-                            );
-                          },
+                                  if (validator.notes.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      validator.notes,
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  TicketStatusSummary(
+                                    tickets: tickets
+                                        .where(
+                                          (t) => t.validatorId == validator.id,
+                                        )
+                                        .toList(growable: false),
+                                    emptyLabel: 'Sin tickets validados.',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.chevron_right,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

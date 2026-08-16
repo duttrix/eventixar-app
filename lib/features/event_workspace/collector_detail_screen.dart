@@ -7,7 +7,7 @@ import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/collaborator_access_actions.dart';
+import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -94,24 +94,26 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final collector = match;
     final tickets = ticketsAsync.requireValue
         .where((t) => t.collectorId == collectorId)
         .toList()
       ..sort((a, b) => a.number.compareTo(b.number));
     final visible = tickets.where(_matches).toList(growable: false);
-    final token = ref
-            .watch(eventAccessTokensProvider(eventId))
-            .valueOrNull?[collectorId] ??
-        '';
-    final totalSettled = tickets.fold<double>(
+    final fullTickets = tickets.where(_isFullSettle).toList(growable: false);
+    final profitTickets =
+        tickets.where(_isProfitSettle).toList(growable: false);
+    final fullAmount = fullTickets.fold<double>(
+      0,
+      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+    );
+    final profitAmount = profitTickets.fold<double>(
       0,
       (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
     );
     final validatedCount =
         tickets.where((t) => t.status == TicketStatus.delivered).length;
-    final fullCount = tickets.where(_isFullSettle).length;
-    final profitCount = tickets.where(_isProfitSettle).length;
+    final fullCount = fullTickets.length;
+    final profitCount = profitTickets.length;
 
     Collaborator? sellerById(String? id) {
       if (id == null) return null;
@@ -126,50 +128,50 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          CollaboratorProfileCard(
+            eventId: eventId,
+            collaboratorId: collectorId,
+            expectedRole: CollaboratorRole.collector,
+          ),
+          const SizedBox(height: 16),
           SectionCard(
-            title: collector.name,
-            trailing: IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, collector),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (collector.notes.isNotEmpty) ...[
-                  Text(
-                    'Notas: ${collector.notes}',
-                    style: const TextStyle(color: AppColors.textSecondary),
+            title: 'Rendición',
+            child: tickets.isEmpty
+                ? const Text(
+                    'Todavía no rindió tickets.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (fullCount > 0) ...[
+                        _RendicionStatRow(
+                          label: 'Rendido completo ($fullCount)',
+                          amount: formatMoney(fullAmount),
+                          style: collectorFilterStyle(
+                            validated: false,
+                            fullSettle: true,
+                            profitSettle: false,
+                          ),
+                        ),
+                        if (profitCount > 0) const SizedBox(height: 8),
+                      ],
+                      if (profitCount > 0)
+                        _RendicionStatRow(
+                          label: 'Solo ganancia ($profitCount)',
+                          amount: formatMoney(profitAmount),
+                          style: collectorFilterStyle(
+                            validated: false,
+                            fullSettle: false,
+                            profitSettle: true,
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                ],
-                Text(
-                  tickets.isEmpty
-                      ? 'Todavía no rindió tickets.'
-                      : '${tickets.length} ticket'
-                          '${tickets.length == 1 ? '' : 's'} · '
-                          '${formatMoney(totalSettled)}',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                CollaboratorAccessActions(
-                  collaborator: collector,
-                  eventName: event.name,
-                  token: token,
-                  onDeleted: () {
-                    if (context.mounted) Navigator.of(context).maybePop();
-                  },
-                ),
-              ],
-            ),
           ),
           if (tickets.isNotEmpty) ...[
             const SizedBox(height: 16),
-            SectionCard(
-              title: 'Estado de sus tickets',
+            TicketStatusCard(
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -180,8 +182,11 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                       count: validatedCount,
                       selected:
                           _filters.contains(_CollectorTicketFilter.validated),
-                      textColor: AppColors.accentText,
-                      background: AppColors.accentBg,
+                      style: collectorFilterStyle(
+                        validated: true,
+                        fullSettle: false,
+                        profitSettle: false,
+                      ),
                       onTap: () => setState(() {
                         final f = _CollectorTicketFilter.validated;
                         if (_filters.contains(f)) {
@@ -196,8 +201,11 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                       label: 'Rendido',
                       count: fullCount,
                       selected: _filters.contains(_CollectorTicketFilter.full),
-                      textColor: AppColors.successText,
-                      background: AppColors.successBg,
+                      style: collectorFilterStyle(
+                        validated: false,
+                        fullSettle: true,
+                        profitSettle: false,
+                      ),
                       onTap: () => setState(() {
                         final f = _CollectorTicketFilter.full;
                         if (_filters.contains(f)) {
@@ -212,8 +220,11 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                       label: 'Solo ganancia',
                       count: profitCount,
                       selected: _filters.contains(_CollectorTicketFilter.profit),
-                      textColor: AppColors.warnText,
-                      background: AppColors.warnBg,
+                      style: collectorFilterStyle(
+                        validated: false,
+                        fullSettle: false,
+                        profitSettle: true,
+                      ),
                       onTap: () => setState(() {
                         final f = _CollectorTicketFilter.profit;
                         if (_filters.contains(f)) {
@@ -255,7 +266,7 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Material(
-                    color: ticketStatusBg(ticket.status),
+                    color: ticketBg(ticket),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -319,7 +330,7 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                           ),
                           StatusBadge(
                             label: ticket.status.label,
-                            tone: ticketStatusTone(ticket.status),
+                            tone: ticketTone(ticket),
                           ),
                         ],
                       ),
@@ -331,67 +342,46 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
       ),
     );
   }
+}
 
-  void _showEditDialog(BuildContext context, Collaborator collector) {
-    final nameController = TextEditingController(text: collector.name);
-    final notesController = TextEditingController(text: collector.notes);
+class _RendicionStatRow extends StatelessWidget {
+  const _RendicionStatRow({
+    required this.label,
+    required this.amount,
+    required this.style,
+  });
 
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar recaudador'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
+  final String label;
+  final String amount;
+  final TicketStatusStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: style.background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: style.foreground,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Recauda los viernes en sede',
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await saveCollaborator(
-                  ref,
-                  eventId: eventId,
-                  collaboratorId: collector.id,
-                  name: name,
-                  phone: collector.phone,
-                  notes: notesController.text.trim(),
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Recaudador actualizado.')),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
-              }
-            },
-            child: const Text('Guardar'),
+          Text(
+            amount,
+            style: TextStyle(
+              color: style.foreground,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -404,22 +394,20 @@ class _CollectorFilterChip extends StatelessWidget {
     required this.label,
     required this.count,
     required this.selected,
-    required this.textColor,
-    required this.background,
+    required this.style,
     required this.onTap,
   });
 
   final String label;
   final int count;
   final bool selected;
-  final Color textColor;
-  final Color background;
+  final TicketStatusStyle style;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: background,
+      color: style.background,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
@@ -438,7 +426,7 @@ class _CollectorFilterChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: textColor,
+              color: style.foreground,
             ),
           ),
         ),

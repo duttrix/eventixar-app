@@ -267,47 +267,72 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SectionCard(
-            title: widget.embedded ? 'Operar tickets' : event.name,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  canSelfAssign
-                      ? 'Todos los tickets'
-                      : (widget.actorRole == 'organizer'
-                          ? 'Tickets de $sellerName'
-                          : 'Tus tickets para vender'),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                if (!canSelfAssign && sorted.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+          if (widget.embedded)
+            TicketStatusCard.summary(
+              tickets: sorted,
+              selected: _statusFilters,
+              includePoolStatuses: canSelfAssign,
+              emptyLabel: canSelfAssign
+                  ? 'Todavía no hay tickets en este evento.'
+                  : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
+              onStatusTap: sorted.isEmpty
+                  ? null
+                  : (status) => setState(() {
+                        if (_statusFilters.contains(status)) {
+                          _statusFilters.remove(status);
+                        } else {
+                          _statusFilters.add(status);
+                        }
+                      }),
+            )
+          else
+            SectionCard(
+              title: event.name,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    compactTicketNumbersLabel(sorted.map((t) => t.number)),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
+                    canSelfAssign
+                        ? 'Todos los tickets'
+                        : (widget.actorRole == 'organizer'
+                            ? 'Tickets de $sellerName'
+                            : 'Tus tickets para vender'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (!canSelfAssign && sorted.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      compactTicketNumbersLabel(sorted.map((t) => t.number)),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
+                  ],
+                  if (sorted.isNotEmpty) const SizedBox(height: 10),
+                  if (sorted.isEmpty)
+                    Text(
+                      canSelfAssign
+                          ? 'Todavía no hay tickets en este evento.'
+                          : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
+                      style: const TextStyle(color: AppColors.textMuted),
+                    )
+                  else
+                    TicketStatusSummary(
+                      tickets: sorted,
+                      selected: _statusFilters,
+                      includePoolStatuses: canSelfAssign,
+                      onStatusTap: (status) => setState(() {
+                        if (_statusFilters.contains(status)) {
+                          _statusFilters.remove(status);
+                        } else {
+                          _statusFilters.add(status);
+                        }
+                      }),
+                    ),
                 ],
-                if (sorted.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  TicketStatusSummary(
-                    tickets: sorted,
-                    selected: _statusFilters,
-                    includePoolStatuses: canSelfAssign,
-                    onStatusTap: (status) => setState(() {
-                      if (_statusFilters.contains(status)) {
-                        _statusFilters.remove(status);
-                      } else {
-                        _statusFilters.add(status);
-                      }
-                    }),
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
           const SizedBox(height: 12),
           Row(
             children: [

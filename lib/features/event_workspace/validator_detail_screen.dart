@@ -7,8 +7,7 @@ import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/collaborator_access_actions.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
 /// Organizer view of one validator: access actions + tickets they validated.
@@ -44,7 +43,6 @@ class ValidatorDetailScreen extends ConsumerWidget {
       );
     }
 
-    final event = eventAsync.requireValue;
     Collaborator? match;
     for (final c in collabsAsync.requireValue) {
       if (c.id == validatorId) {
@@ -58,15 +56,11 @@ class ValidatorDetailScreen extends ConsumerWidget {
       });
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final validator = match;
+
     final tickets = ticketsAsync.requireValue
         .where((t) => t.validatorId == validatorId)
         .toList()
       ..sort((a, b) => a.number.compareTo(b.number));
-    final token = ref
-            .watch(eventAccessTokensProvider(eventId))
-            .valueOrNull?[validatorId] ??
-        '';
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
     String? validatedAtLabel(Ticket ticket) {
@@ -84,45 +78,10 @@ class ValidatorDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SectionCard(
-            title: validator.name,
-            trailing: IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, ref, validator),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (validator.notes.isNotEmpty) ...[
-                  Text(
-                    'Notas: ${validator.notes}',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                Text(
-                  tickets.isEmpty
-                      ? 'Todavía no validó tickets.'
-                      : '${tickets.length} ticket'
-                          '${tickets.length == 1 ? '' : 's'} validado'
-                          '${tickets.length == 1 ? '' : 's'}',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                CollaboratorAccessActions(
-                  collaborator: validator,
-                  eventName: event.name,
-                  token: token,
-                  onDeleted: () {
-                    if (context.mounted) Navigator.of(context).maybePop();
-                  },
-                ),
-              ],
-            ),
+          CollaboratorProfileCard(
+            eventId: eventId,
+            collaboratorId: validatorId,
+            expectedRole: CollaboratorRole.validator,
           ),
           const SizedBox(height: 16),
           Text(
@@ -140,7 +99,7 @@ class ValidatorDetailScreen extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Material(
-                  color: ticketStatusBg(ticket.status),
+                  color: ticketBg(ticket),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -188,83 +147,13 @@ class ValidatorDetailScreen extends ConsumerWidget {
                         ),
                         StatusBadge(
                           label: ticket.status.label,
-                          tone: ticketStatusTone(ticket.status),
+                          tone: ticketTone(ticket),
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Collaborator validator,
-  ) {
-    final nameController = TextEditingController(text: validator.name);
-    final notesController = TextEditingController(text: validator.notes);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar validador'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Retiro en puerta lateral',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await saveCollaborator(
-                  ref,
-                  eventId: eventId,
-                  collaboratorId: validator.id,
-                  name: name,
-                  phone: validator.phone,
-                  notes: notesController.text.trim(),
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Validador actualizado.')),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
-              }
-            },
-            child: const Text('Guardar'),
-          ),
         ],
       ),
     );

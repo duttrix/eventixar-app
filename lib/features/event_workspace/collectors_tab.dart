@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
+import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
+import '../../shared/widgets/help_callout.dart';
 
 /// Organizer roster of collectors (settlement helpers).
 class CollectorsTab extends ConsumerWidget {
@@ -18,6 +20,7 @@ class CollectorsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
     final collectorsAsync = ref.watch(eventCollectorsProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -38,25 +41,16 @@ class CollectorsTab extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
         data: (collectors) {
+          final tickets = ticketsAsync.valueOrNull ?? const <Ticket>[];
           return ListView(
             padding: listPaddingWithFab(context),
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  'Los recaudadores rinden tickets de los vendedores. Abrí cada '
-                  'uno para compartir acceso, editar datos o ver lo rendido.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
+              const HelpCallout(
+                message:
+                    'Los recaudadores rinden lo cobrado por los vendedores '
+                    '(ticket completo o solo ganancia) y pueden devolver '
+                    'tickets al pool. Abrí cada uno para compartir acceso, '
+                    'editar datos o ver lo rendido.',
               ),
               const SizedBox(height: 20),
               Text(
@@ -87,17 +81,55 @@ class CollectorsTab extends ConsumerWidget {
                 for (final collector in collectors)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      title: Text(collector.name),
-                      subtitle: collector.notes.isEmpty
-                          ? null
-                          : Text(collector.notes),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.textMuted,
-                      ),
+                    child: InkWell(
                       onTap: () => context.push(
                         '/event/$eventId/collectors/${collector.id}',
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    collector.name,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  if (collector.notes.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      collector.notes,
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  CollectorTicketSummary(
+                                    tickets: tickets
+                                        .where(
+                                          (t) => t.collectorId == collector.id,
+                                        )
+                                        .toList(growable: false),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.chevron_right,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

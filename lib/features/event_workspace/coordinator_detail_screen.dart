@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
-import '../../shared/widgets/collaborator_access_actions.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/collaborator_profile_card.dart';
 import 'seller_detail_screen.dart';
 
 /// Organizer view of one coordinator: access actions + assigned sellers.
@@ -42,8 +42,8 @@ class CoordinatorDetailScreen extends ConsumerWidget {
       );
     }
 
-    final event = eventAsync.requireValue;
     final collaborators = collabsAsync.requireValue;
+    final tickets = ticketsAsync.requireValue;
     Collaborator? match;
     for (final c in collaborators) {
       if (c.id == coordinatorId) {
@@ -72,11 +72,6 @@ class CoordinatorDetailScreen extends ConsumerWidget {
       for (final c in collaborators)
         if (c.role == CollaboratorRole.coordinator) c.id: c.name,
     };
-    final token = ref
-            .watch(eventAccessTokensProvider(eventId))
-            .valueOrNull?[coordinatorId] ??
-        '';
-
     return Scaffold(
       appBar: AppBar(title: const Text('Coordinador')),
       floatingActionButton: assignable.isEmpty
@@ -97,36 +92,10 @@ class CoordinatorDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: listPaddingWithFab(context),
         children: [
-          SectionCard(
-            title: coordinator.name,
-            trailing: IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, ref, coordinator),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (coordinator.notes.isNotEmpty) ...[
-                  Text(
-                    'Notas: ${coordinator.notes}',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                CollaboratorAccessActions(
-                  collaborator: coordinator,
-                  eventName: event.name,
-                  token: token,
-                  onDeleted: () {
-                    if (context.mounted) Navigator.of(context).maybePop();
-                  },
-                ),
-              ],
-            ),
+          CollaboratorProfileCard(
+            eventId: eventId,
+            collaboratorId: coordinatorId,
+            expectedRole: CollaboratorRole.coordinator,
           ),
           const SizedBox(height: 16),
           Text(
@@ -135,12 +104,7 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                 : 'Vendedores (${sellers.length})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Vendedores a cargo de este coordinador.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           if (sellers.isEmpty)
             Text(
               assignable.isEmpty
@@ -167,6 +131,7 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Column(
@@ -187,6 +152,12 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ],
+                              const SizedBox(height: 10),
+                              TicketStatusSummary(
+                                tickets: tickets
+                                    .where((t) => t.sellerId == seller.id)
+                                    .toList(growable: false),
+                              ),
                             ],
                           ),
                         ),
@@ -199,9 +170,12 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                           ),
                           icon: const Icon(Icons.link_off_outlined),
                         ),
-                        const Icon(
-                          Icons.chevron_right,
-                          color: AppColors.textMuted,
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(
+                            Icons.chevron_right,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -319,73 +293,4 @@ class CoordinatorDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Collaborator coordinator,
-  ) {
-    final nameController = TextEditingController(text: coordinator.name);
-    final notesController = TextEditingController(text: coordinator.notes);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar coordinador'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Zona norte',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await saveCollaborator(
-                  ref,
-                  eventId: eventId,
-                  collaboratorId: coordinator.id,
-                  name: name,
-                  phone: coordinator.phone,
-                  notes: notesController.text.trim(),
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Coordinador actualizado.')),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-  }
 }

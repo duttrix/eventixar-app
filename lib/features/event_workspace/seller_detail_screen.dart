@@ -7,9 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/delete_collaborator_button.dart';
-import '../../shared/widgets/regenerate_access_button.dart';
-import '../../shared/widgets/section_card.dart';
+import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
 /// Seller detail: assign ranges, share access, return unsold tickets to the pool.
@@ -145,17 +143,6 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         )
         .toList(growable: false);
     final allTickets = ticketsAsync.requireValue;
-    final token =
-        ref
-            .watch(
-              collaboratorAccessTokenProvider((
-                eventId: eventId,
-                collaboratorId: sellerId,
-              )),
-            )
-            .valueOrNull ??
-        '';
-
     final selectedReturnable = _returnIds
         .where((id) => returnable.any((t) => t.id == id))
         .toSet();
@@ -197,67 +184,10 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          SectionCard(
-            title: seller.name,
-            trailing: IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, seller),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Celular: ${seller.phone.isEmpty ? 'Sin celular' : seller.phone}',
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  seller.notes.isEmpty
-                      ? 'Notas: sin cargar'
-                      : 'Notas: ${seller.notes}',
-                  style: TextStyle(
-                    color: seller.notes.isEmpty
-                        ? AppColors.textMuted
-                        : AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () => AccessShare.share(
-                    context,
-                    seller,
-                    eventName: event.name,
-                    token: token,
-                  ),
-                  icon: const Icon(Icons.ios_share),
-                  label: const Text('Compartir acceso'),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: RegenerateAccessButton(
-                        collaborator: seller,
-                        eventName: event.name,
-                      ),
-                    ),
-                    Expanded(
-                      child: DeleteCollaboratorButton(
-                        collaborator: seller,
-                        onDeleted: () {
-                          if (context.mounted) {
-                            Navigator.of(context).maybePop();
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          CollaboratorProfileCard(
+            eventId: eventId,
+            collaboratorId: sellerId,
+            expectedRole: CollaboratorRole.seller,
           ),
           if (tickets.isEmpty)
             const Padding(
@@ -270,36 +200,33 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             )
           else ...[
             const SizedBox(height: 16),
-            SectionCard(
-              title: 'Estado de sus tickets',
-              child: TicketStatusSummary(
-                tickets: tickets,
-                selected: _statusFilters,
-                onStatusTap: (status) => setState(() {
-                  if (_statusFilters.contains(status)) {
-                    _statusFilters.remove(status);
-                    if (status == TicketStatus.withSeller ||
-                        status == TicketStatus.reserved) {
-                      _returnIds.removeWhere(
-                        (id) => tickets.any(
-                          (t) => t.id == id && t.status == status,
-                        ),
-                      );
-                    }
-                  } else {
-                    _statusFilters.add(status);
-                    if (!finished &&
-                        (status == TicketStatus.withSeller ||
-                            status == TicketStatus.reserved)) {
-                      _returnIds.addAll(
-                        tickets
-                            .where((t) => t.status == status)
-                            .map((t) => t.id),
-                      );
-                    }
+            TicketStatusCard.summary(
+              tickets: tickets,
+              selected: _statusFilters,
+              onStatusTap: (status) => setState(() {
+                if (_statusFilters.contains(status)) {
+                  _statusFilters.remove(status);
+                  if (status == TicketStatus.withSeller ||
+                      status == TicketStatus.reserved) {
+                    _returnIds.removeWhere(
+                      (id) => tickets.any(
+                        (t) => t.id == id && t.status == status,
+                      ),
+                    );
                   }
-                }),
-              ),
+                } else {
+                  _statusFilters.add(status);
+                  if (!finished &&
+                      (status == TicketStatus.withSeller ||
+                          status == TicketStatus.reserved)) {
+                    _returnIds.addAll(
+                      tickets
+                          .where((t) => t.status == status)
+                          .map((t) => t.id),
+                    );
+                  }
+                }
+              }),
             ),
             const SizedBox(height: 16),
             Row(
@@ -330,7 +257,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Material(
-                    color: ticketStatusBg(ticket.status),
+                    color: ticketBg(ticket),
                     borderRadius: BorderRadius.circular(10),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),
@@ -403,7 +330,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                             ),
                             StatusBadge(
                               label: ticket.status.label,
-                              tone: ticketStatusTone(ticket.status),
+                              tone: ticketTone(ticket),
                             ),
                           ],
                         ),
@@ -412,81 +339,6 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                   ),
                 ),
           ],
-        ],
-      ),
-    );
-  }
-
-  void _showEditDialog(BuildContext context, Collaborator seller) {
-    final nameController = TextEditingController(text: seller.name);
-    final phoneController = TextEditingController(text: seller.phone);
-    final notesController = TextEditingController(text: seller.notes);
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Editar vendedor'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Celular (WhatsApp)',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Vende en el barrio Alberdi',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await saveCollaborator(
-                  ref,
-                  eventId: eventId,
-                  collaboratorId: seller.id,
-                  name: name,
-                  phone: phoneController.text.trim(),
-                  notes: notesController.text.trim(),
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Vendedor actualizado.')),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('$e')));
-              }
-            },
-            child: const Text('Guardar'),
-          ),
         ],
       ),
     );

@@ -5,7 +5,10 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
-import 'status_badge.dart';
+import 'section_card.dart';
+import 'ticket_status_style.dart';
+
+export 'ticket_status_style.dart';
 
 /// Shared copy + actions for sharing collaborator access links.
 class AccessShare {
@@ -84,46 +87,39 @@ class AccessShare {
   }
 }
 
-BadgeTone ticketStatusTone(TicketStatus status) {
-  return switch (status) {
-    TicketStatus.collected => BadgeTone.success,
-    TicketStatus.settled => BadgeTone.success,
-    TicketStatus.returned => BadgeTone.danger,
-    TicketStatus.delivered => BadgeTone.info,
-    TicketStatus.reserved => BadgeTone.info,
-    TicketStatus.withSeller => BadgeTone.warn,
-    TicketStatus.unassigned => BadgeTone.neutral,
-  };
-}
+/// Card with a fixed title wrapping status chips (organizer + collaborators).
+class TicketStatusCard extends StatelessWidget {
+  static const String title = 'Estado de los tickets';
 
-/// Tone for a ticket row/badge, including settle-mode nuance.
-BadgeTone ticketTone(Ticket ticket) {
-  if (ticket.status == TicketStatus.settled &&
-      ticket.settleMode == TicketSettleMode.profit) {
-    return BadgeTone.warn;
+  const TicketStatusCard({super.key, required this.child});
+
+  /// Convenience: standard [TicketStatusSummary] chips inside the card.
+  factory TicketStatusCard.summary({
+    Key? key,
+    required List<Ticket> tickets,
+    Set<TicketStatus> selected = const {},
+    ValueChanged<TicketStatus>? onStatusTap,
+    bool includePoolStatuses = false,
+    String emptyLabel = 'Sin tickets asignados.',
+  }) {
+    return TicketStatusCard(
+      key: key,
+      child: TicketStatusSummary(
+        tickets: tickets,
+        selected: selected,
+        onStatusTap: onStatusTap,
+        includePoolStatuses: includePoolStatuses,
+        emptyLabel: emptyLabel,
+      ),
+    );
   }
-  return ticketStatusTone(ticket.status);
-}
 
-Color ticketStatusBg(TicketStatus status) {
-  return switch (status) {
-    TicketStatus.collected => AppColors.successBg,
-    TicketStatus.settled => AppColors.accentBg,
-    TicketStatus.returned => AppColors.dangerBg,
-    TicketStatus.delivered => AppColors.accentBg,
-    TicketStatus.reserved => AppColors.accentBg,
-    TicketStatus.withSeller => AppColors.warnBg,
-    TicketStatus.unassigned => AppColors.border,
-  };
-}
+  final Widget child;
 
-/// Background for a ticket row, including settle-mode nuance.
-Color ticketBg(Ticket ticket) {
-  if (ticket.status == TicketStatus.settled &&
-      ticket.settleMode == TicketSettleMode.profit) {
-    return AppColors.warnBg;
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(title: title, child: child);
   }
-  return ticketStatusBg(ticket.status);
 }
 
 /// Compact summary chips: Cobrado / En poder / Devuelto / etc.
@@ -137,6 +133,7 @@ class TicketStatusSummary extends StatelessWidget {
     this.selected = const {},
     this.onStatusTap,
     this.includePoolStatuses = false,
+    this.emptyLabel = 'Sin tickets asignados.',
   });
 
   final List<Ticket> tickets;
@@ -146,10 +143,12 @@ class TicketStatusSummary extends StatelessWidget {
   /// When true, also shows `Sin vendedor` / `Devuelto` chips (organizer overview).
   final bool includePoolStatuses;
 
+  final String emptyLabel;
+
   @override
   Widget build(BuildContext context) {
     if (tickets.isEmpty) {
-      return const Text('Sin tickets asignados.', style: TextStyle(color: AppColors.textMuted));
+      return Text(emptyLabel, style: const TextStyle(color: AppColors.textMuted));
     }
 
     final counts = <TicketStatus, int>{};
@@ -202,18 +201,10 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = switch (status) {
-      TicketStatus.collected => AppColors.successText,
-      TicketStatus.settled => AppColors.accentText,
-      TicketStatus.returned => AppColors.dangerText,
-      TicketStatus.delivered => AppColors.accentText,
-      TicketStatus.reserved => AppColors.accentText,
-      TicketStatus.withSeller => AppColors.warnText,
-      TicketStatus.unassigned => AppColors.textSecondary,
-    };
+    final style = ticketStatusStyle(status);
 
     return Material(
-      color: ticketStatusBg(status),
+      color: style.background,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
@@ -232,9 +223,113 @@ class _StatusChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: textColor,
+              color: style.foreground,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Read-only chips for collector tickets: Validados / Rendido / Solo ganancia.
+class CollectorTicketSummary extends StatelessWidget {
+  const CollectorTicketSummary({super.key, required this.tickets});
+
+  final List<Ticket> tickets;
+
+  bool _isFullSettle(Ticket ticket) =>
+      ticket.settleMode == TicketSettleMode.full ||
+      (ticket.settleMode == null && ticket.status == TicketStatus.settled);
+
+  bool _isProfitSettle(Ticket ticket) =>
+      ticket.settleMode == TicketSettleMode.profit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tickets.isEmpty) {
+      return const Text(
+        'Sin tickets rendidos.',
+        style: TextStyle(color: AppColors.textMuted),
+      );
+    }
+
+    final validatedCount =
+        tickets.where((t) => t.status == TicketStatus.delivered).length;
+    final fullCount = tickets.where(_isFullSettle).length;
+    final profitCount = tickets.where(_isProfitSettle).length;
+
+    if (validatedCount == 0 && fullCount == 0 && profitCount == 0) {
+      return Text(
+        'Tickets: ${tickets.length}',
+        style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (validatedCount > 0)
+          _SummaryChip(
+            label: 'Validados',
+            count: validatedCount,
+            style: collectorFilterStyle(
+              validated: true,
+              fullSettle: false,
+              profitSettle: false,
+            ),
+          ),
+        if (fullCount > 0)
+          _SummaryChip(
+            label: 'Rendido',
+            count: fullCount,
+            style: collectorFilterStyle(
+              validated: false,
+              fullSettle: true,
+              profitSettle: false,
+            ),
+          ),
+        if (profitCount > 0)
+          _SummaryChip(
+            label: 'Solo ganancia',
+            count: profitCount,
+            style: collectorFilterStyle(
+              validated: false,
+              fullSettle: false,
+              profitSettle: true,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.label,
+    required this.count,
+    required this.style,
+  });
+
+  final String label;
+  final int count;
+  final TicketStatusStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: style.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label: $count',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: style.foreground,
         ),
       ),
     );

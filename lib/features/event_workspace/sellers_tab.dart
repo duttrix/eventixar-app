@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
+import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
+import '../../shared/widgets/help_callout.dart';
 
 /// Organizer roster of sellers: create, open detail, share access.
 class SellersTab extends ConsumerWidget {
@@ -16,6 +19,7 @@ class SellersTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
+    final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -30,26 +34,16 @@ class SellersTab extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
         data: (sellers) {
+          final tickets = ticketsAsync.valueOrNull ?? const <Ticket>[];
           return ListView(
             padding: listPaddingWithFab(context),
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Text(
-                  'Los vendedores reciben tickets asignados y los venden desde '
-                  'su celular con un link, sin crear cuenta. Abrí cada uno para '
-                  'asignar tickets, compartir acceso o editar sus datos.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.35,
-                  ),
-                ),
+              const HelpCallout(
+                message:
+                    'Los vendedores reciben rangos de tickets, los reservan o '
+                    'cobran y los comparten al comprador desde el celular, sin '
+                    'crear cuenta. Abrí cada uno para asignar tickets, compartir '
+                    'acceso o editar sus datos.',
               ),
               const SizedBox(height: 20),
               Text(
@@ -81,17 +75,53 @@ class SellersTab extends ConsumerWidget {
                 for (final seller in sellers)
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      title: Text(seller.name),
-                      subtitle: seller.notes.isEmpty
-                          ? null
-                          : Text(seller.notes),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.textMuted,
-                      ),
+                    child: InkWell(
                       onTap: () => context.push(
                         '/event/$eventId/sellers/${seller.id}',
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    seller.name,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  if (seller.notes.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      seller.notes,
+                                      style: const TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  TicketStatusSummary(
+                                    tickets: tickets
+                                        .where((t) => t.sellerId == seller.id)
+                                        .toList(growable: false),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.chevron_right,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
