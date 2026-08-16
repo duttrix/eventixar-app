@@ -21,22 +21,25 @@ class CollectorsTab extends ConsumerWidget {
     final eventAsync = ref.watch(eventProvider(eventId));
     final collectorsAsync = ref.watch(eventCollectorsProvider(eventId));
     final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
+    final readOnly = eventAsync.valueOrNull?.isReadOnly ?? false;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: BottomSystemInset(
-        child: FloatingActionButton.extended(
-          onPressed: eventAsync.hasValue
-              ? () => _showCreateDialog(
-                    context,
-                    ref,
-                    eventName: eventAsync.requireValue.name,
-                  )
-              : null,
-          icon: const Icon(Icons.person_add_alt_1_outlined),
-          label: const Text('Agregar'),
-        ),
-      ),
+      floatingActionButton: readOnly
+          ? null
+          : BottomSystemInset(
+              child: FloatingActionButton.extended(
+                onPressed: eventAsync.hasValue
+                    ? () => _showCreateDialog(
+                          context,
+                          ref,
+                          eventName: eventAsync.requireValue.name,
+                        )
+                    : null,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Agregar'),
+              ),
+            ),
       body: collectorsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
@@ -68,9 +71,11 @@ class CollectorsTab extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: const Text(
-                    'Usá Agregar para crear uno y compartirle el acceso con un link.',
-                    style: TextStyle(
+                  child: Text(
+                    readOnly
+                        ? 'No se crearon recaudadores para este evento.'
+                        : 'Usá Agregar para crear uno y compartirle el acceso con un link.',
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                       height: 1.35,

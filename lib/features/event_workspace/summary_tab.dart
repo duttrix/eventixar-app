@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
-import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
@@ -56,7 +55,7 @@ class SummaryTab extends ConsumerWidget {
         .where((c) => c.role == CollaboratorRole.collector)
         .toList();
 
-    final finished = event.status == EventStatus.finished;
+    final finished = event.isReadOnly;
     final hasPending = tickets.any(
       (t) =>
           t.status == TicketStatus.withSeller ||

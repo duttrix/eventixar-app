@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
@@ -94,7 +93,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
       return Center(child: Text('${eventAsync.error ?? 'Evento no encontrado'}'));
     }
     final event = eventAsync.requireValue;
-    final finished = event.status == EventStatus.finished;
+    final finished = event.isReadOnly;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
       _productController = TextEditingController(text: event.product);
@@ -120,6 +119,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
             children: [
               TextField(
                 controller: _nameController,
+                enabled: !finished,
                 decoration: const InputDecoration(labelText: 'Nombre'),
               ),
               const SizedBox(height: 12),

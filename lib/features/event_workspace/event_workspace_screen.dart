@@ -83,30 +83,10 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return AppShell(
       title: _labelFor(_selected),
       onHome: () => context.go('/home'),
-      header: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _EventHeader(
-            name: event.name,
-            statusLabel: statusLabel,
-            statusTone: statusTone,
-          ),
-          if (event.status == EventStatus.finished)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-              color: AppColors.successBg,
-              child: const Text(
-                'Evento finalizado · solo consulta',
-                style: TextStyle(
-                  color: AppColors.successText,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-        ],
+      header: _EventHeader(
+        name: event.name,
+        statusLabel: statusLabel,
+        statusTone: statusTone,
       ),
       navItems: _navItems(),
       body: body,

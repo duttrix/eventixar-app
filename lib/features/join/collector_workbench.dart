@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -99,8 +101,12 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (widget.showLogout) ...[
+            EventDetailsCard(event: event),
+            const SizedBox(height: 12),
+          ],
           SectionCard(
-            title: event.name,
+            title: widget.showLogout ? 'Rendición' : event.name,
             child: Text(
               widget.actorRole == 'organizer'
                   ? 'Estás rindiendo como organizador. Elegí un vendedor.'
@@ -111,7 +117,12 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Vendedores', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            sellers.isEmpty
+                ? 'Vendedores'
+                : 'Vendedores (${sellers.length})',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 10),
           if (sellers.isEmpty)
             const Text(
@@ -122,23 +133,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             for (final seller in sellers)
               _CollectorSellerCard(
                 seller: seller,
-                pending: allTickets
-                    .where(
-                      (t) =>
-                          t.sellerId == seller.id &&
-                          (t.status == TicketStatus.collected ||
-                              t.status == TicketStatus.withSeller ||
-                              t.status == TicketStatus.reserved),
-                    )
-                    .length,
-                settled: allTickets
-                    .where(
-                      (t) =>
-                          t.sellerId == seller.id &&
-                          (t.status == TicketStatus.settled ||
-                              t.status == TicketStatus.delivered),
-                    )
-                    .length,
+                tickets: allTickets
+                    .where((t) => t.sellerId == seller.id)
+                    .toList(growable: false),
                 onTap: () => setState(() {
                   _selectedSeller = seller;
                   _selectedIds.clear();
@@ -175,6 +172,23 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     final fullAmount = event.ticketPrice;
     final profitAmount = event.ticketProfit;
 
+    bool isFullSettle(Ticket ticket) =>
+        ticket.settleMode == TicketSettleMode.full ||
+        (ticket.settleMode == null && ticket.status == TicketStatus.settled);
+    bool isProfitSettle(Ticket ticket) =>
+        ticket.settleMode == TicketSettleMode.profit;
+
+    final fullTickets = sorted.where(isFullSettle).toList(growable: false);
+    final profitTickets = sorted.where(isProfitSettle).toList(growable: false);
+    final fullSettledTotal = fullTickets.fold<double>(
+      0,
+      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+    );
+    final profitSettledTotal = profitTickets.fold<double>(
+      0,
+      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(seller.name),
@@ -201,27 +215,17 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SectionCard(
-            title: 'Rendición · ${seller.name}',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Seleccioná tickets en poder del vendedor, reservados o '
-                  'cobrados. Rendirlos los marca como vendidos (aunque el '
-                  'vendedor no haya cobrado en la app). Devolverlos los '
-                  'manda al pool para reasignar.',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13,
-                  ),
-                ),
-                if (sorted.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  TicketStatusSummary(
-                    tickets: sorted,
-                    selected: _statusFilters,
-                    onStatusTap: (status) => setState(() {
+          if (widget.showLogout) ...[
+            EventDetailsCard(event: event),
+            const SizedBox(height: 12),
+          ],
+          TicketStatusCard.summary(
+            tickets: sorted,
+            selected: _statusFilters,
+            emptyLabel: 'Este vendedor no tiene tickets.',
+            onStatusTap: sorted.isEmpty
+                ? null
+                : (status) => setState(() {
                       if (_statusFilters.contains(status)) {
                         _statusFilters.remove(status);
                         if (_isSettleable(status)) {
@@ -242,175 +246,208 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                         }
                       }
                     }),
-                  ),
-                ],
-              ],
-            ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: selectedToSettle.isEmpty
-                      ? null
-                      : () async {
-                          final mode = await showDialog<TicketSettleMode>(
-                            context: context,
-                            builder: (dialogContext) => AlertDialog(
-                              title: const Text('¿Qué rinde el vendedor?'),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Vas a rendir ${selectedToSettle.length} ticket'
-                                    '${selectedToSettle.length == 1 ? '' : 's'} '
-                                    '(quedan como vendidos).',
-                                  ),
-                                  const SizedBox(height: 16),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(
-                                      dialogContext,
-                                      TicketSettleMode.full,
+          SectionCard(
+            title: 'Rendición',
+            child: fullTickets.isEmpty && profitTickets.isEmpty
+                ? const Text(
+                    'Todavía no rindió tickets.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (fullTickets.isNotEmpty) ...[
+                        _SettleSummaryRow(
+                          label: 'Rendido completo (${fullTickets.length})',
+                          amount: formatMoney(fullSettledTotal),
+                          style: collectorFilterStyle(
+                            validated: false,
+                            fullSettle: true,
+                            profitSettle: false,
+                          ),
+                        ),
+                        if (profitTickets.isNotEmpty) const SizedBox(height: 8),
+                      ],
+                      if (profitTickets.isNotEmpty)
+                        _SettleSummaryRow(
+                          label: 'Solo ganancia (${profitTickets.length})',
+                          amount: formatMoney(profitSettledTotal),
+                          style: collectorFilterStyle(
+                            validated: false,
+                            fullSettle: false,
+                            profitSettle: true,
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 12),
+          if (!event.isReadOnly)
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: selectedToSettle.isEmpty
+                        ? null
+                        : () async {
+                            final mode = await showDialog<TicketSettleMode>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('¿Qué rinde el vendedor?'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      'Vas a rendir ${selectedToSettle.length} ticket'
+                                      '${selectedToSettle.length == 1 ? '' : 's'} '
+                                      '(quedan como vendidos).',
                                     ),
-                                    child: Text(
-                                      'Ticket completo · '
-                                      '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
+                                    const SizedBox(height: 16),
+                                    FilledButton(
+                                      onPressed: () => Navigator.pop(
+                                        dialogContext,
+                                        TicketSettleMode.full,
+                                      ),
+                                      child: Text(
+                                        'Ticket completo · '
+                                        '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  OutlinedButton(
-                                    onPressed: () => Navigator.pop(
-                                      dialogContext,
-                                      TicketSettleMode.profit,
+                                    const SizedBox(height: 8),
+                                    OutlinedButton(
+                                      onPressed: () => Navigator.pop(
+                                        dialogContext,
+                                        TicketSettleMode.profit,
+                                      ),
+                                      child: Text(
+                                        'Solo ganancia · '
+                                        '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
+                                      ),
                                     ),
-                                    child: Text(
-                                      'Solo ganancia · '
-                                      '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
-                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext),
+                                    child: const Text('Cancelar'),
                                   ),
                                 ],
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(dialogContext),
-                                  child: const Text('Cancelar'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (mode == null || !context.mounted) return;
-                          try {
-                            await settleTicketsAction(
-                              ref,
-                              eventId: event.id,
-                              ticketIds: selectedToSettle.map((t) => t.id),
-                              collectorId: widget.actorId,
-                              settleMode: mode,
-                              actorRole: widget.actorRole,
                             );
-                            if (!context.mounted) return;
-                            setState(() {
-                              _selectedIds.removeWhere(
-                                (id) =>
-                                    selectedToSettle.any((t) => t.id == id),
+                            if (mode == null || !context.mounted) return;
+                            try {
+                              await settleTicketsAction(
+                                ref,
+                                eventId: event.id,
+                                ticketIds: selectedToSettle.map((t) => t.id),
+                                collectorId: widget.actorId,
+                                settleMode: mode,
+                                actorRole: widget.actorRole,
                               );
-                            });
-                            final unit = event.amountForSettleMode(mode);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Rendiste ${selectedToSettle.length} tickets '
-                                  '(${mode.label.toLowerCase()} · '
-                                  '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
+                              if (!context.mounted) return;
+                              setState(() {
+                                _selectedIds.removeWhere(
+                                  (id) =>
+                                      selectedToSettle.any((t) => t.id == id),
+                                );
+                              });
+                              final unit = event.amountForSettleMode(mode);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Rendiste ${selectedToSettle.length} tickets '
+                                    '(${mode.label.toLowerCase()} · '
+                                    '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
+                                  ),
                                 ),
-                              ),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text('$e')));
-                          }
-                        },
-                  icon: const Icon(Icons.fact_check_outlined),
-                  label: Text(
-                    selectedToSettle.isEmpty
-                        ? 'Rendir'
-                        : 'Rendir (${selectedToSettle.length})',
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(SnackBar(content: Text('$e')));
+                            }
+                          },
+                    icon: const Icon(Icons.fact_check_outlined),
+                    label: Text(
+                      selectedToSettle.isEmpty
+                          ? 'Rendir'
+                          : 'Rendir (${selectedToSettle.length})',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: selectedTickets.isEmpty
-                      ? null
-                      : () async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (dialogContext) => AlertDialog(
-                              title: const Text('Marcar como devuelto'),
-                              content: Text(
-                                'Vas a devolver ${selectedTickets.length} ticket'
-                                '${selectedTickets.length == 1 ? '' : 's'} al pool. '
-                                'Quedan libres para que un coordinador los reasigne.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(dialogContext, false),
-                                  child: const Text('Cancelar'),
-                                ),
-                                FilledButton(
-                                  onPressed: () =>
-                                      Navigator.pop(dialogContext, true),
-                                  child: const Text('Devolver'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed != true || !context.mounted) return;
-                          try {
-                            await markTicketsReturnedAction(
-                              ref,
-                              eventId: event.id,
-                              ticketIds: selectedTickets.map((t) => t.id),
-                              actorId: widget.actorId,
-                              actorRole: widget.actorRole,
-                            );
-                            if (!context.mounted) return;
-                            setState(_selectedIds.clear);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: selectedTickets.isEmpty
+                        ? null
+                        : () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('Marcar como devuelto'),
                                 content: Text(
-                                  '${selectedTickets.length} ticket'
-                                  '${selectedTickets.length == 1 ? '' : 's'} '
-                                  'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
-                                  'al pool (devuelto).',
+                                  'Vas a devolver ${selectedTickets.length} ticket'
+                                  '${selectedTickets.length == 1 ? '' : 's'} al pool. '
+                                  'Quedan libres para que un coordinador los reasigne.',
                                 ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, false),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, true),
+                                    child: const Text('Devolver'),
+                                  ),
+                                ],
                               ),
                             );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('$e')),
-                            );
-                          }
-                        },
-                  icon: const Icon(Icons.undo),
-                  label: Text(
-                    selectedTickets.isEmpty
-                        ? 'Devolver'
-                        : 'Devolver (${selectedTickets.length})',
+                            if (confirmed != true || !context.mounted) return;
+                            try {
+                              await markTicketsReturnedAction(
+                                ref,
+                                eventId: event.id,
+                                ticketIds: selectedTickets.map((t) => t.id),
+                                actorId: widget.actorId,
+                                actorRole: widget.actorRole,
+                              );
+                              if (!context.mounted) return;
+                              setState(_selectedIds.clear);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${selectedTickets.length} ticket'
+                                    '${selectedTickets.length == 1 ? '' : 's'} '
+                                    'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
+                                    'al pool (devuelto).',
+                                  ),
+                                ),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('$e')),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.undo),
+                    label: Text(
+                      selectedTickets.isEmpty
+                          ? 'Devolver'
+                          : 'Devolver (${selectedTickets.length})',
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+              ],
+            ),
+          if (!event.isReadOnly) const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -428,7 +465,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                   }),
                   child: const Text('Ver todos'),
                 ),
-              if (selectableVisible.isNotEmpty) ...[
+              if (!event.isReadOnly && selectableVisible.isNotEmpty) ...[
                 TextButton(
                   onPressed: () => setState(() {
                     _selectedIds.addAll(selectableVisible.map((t) => t.id));
@@ -462,13 +499,14 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                   ticket: ticket,
                   event: event,
                   selected: _selectedIds.contains(ticket.id),
-                  selectable: _isSettleable(ticket.status),
+                  selectable:
+                      !event.isReadOnly && _isSettleable(ticket.status),
                   collectorName: ticket.collectorId == null
                       ? null
                       : (ticket.collectorId == widget.actorId
                           ? widget.actorLabel
                           : null),
-                  onToggle: _isSettleable(ticket.status)
+                  onToggle: !event.isReadOnly && _isSettleable(ticket.status)
                       ? () => setState(() {
                           if (_selectedIds.contains(ticket.id)) {
                             _selectedIds.remove(ticket.id);
@@ -485,35 +523,106 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
   }
 }
 
+class _SettleSummaryRow extends StatelessWidget {
+  const _SettleSummaryRow({
+    required this.label,
+    required this.amount,
+    required this.style,
+  });
+
+  final String label;
+  final String amount;
+  final TicketStatusStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: style.background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: style.foreground,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            amount,
+            style: TextStyle(
+              color: style.foreground,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CollectorSellerCard extends StatelessWidget {
   const _CollectorSellerCard({
     required this.seller,
-    required this.pending,
-    required this.settled,
+    required this.tickets,
     required this.onTap,
   });
 
   final Collaborator seller;
-  final int pending;
-  final int settled;
+  final List<Ticket> tickets;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
+      child: InkWell(
         onTap: onTap,
-        title: Text(seller.name),
-        subtitle: Text(
-          [
-            if (seller.notes.isNotEmpty) seller.notes,
-            '$pending pendientes · $settled rendidos',
-          ].join(' · '),
-        ),
-        trailing: StatusBadge(
-          label: pending == 0 ? 'Al día' : 'Pendiente',
-          tone: pending == 0 ? BadgeTone.success : BadgeTone.warn,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      seller.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (seller.notes.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        seller.notes,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    TicketStatusSummary(tickets: tickets),
+                  ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

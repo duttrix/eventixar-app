@@ -9,6 +9,7 @@ import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 import '../../shared/widgets/ticket_share.dart';
@@ -228,6 +229,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     };
 
     bool isOperable(Ticket ticket) {
+      if (event.isReadOnly) return false;
       if (!canSelfAssign) return true;
       // Organizer overview: only sell pool tickets or ones already claimed
       // by the organizer — never mutate another seller's stock.
@@ -267,105 +269,61 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (widget.embedded)
-            TicketStatusCard.summary(
-              tickets: sorted,
-              selected: _statusFilters,
-              includePoolStatuses: canSelfAssign,
-              emptyLabel: canSelfAssign
-                  ? 'Todavía no hay tickets en este evento.'
-                  : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
-              onStatusTap: sorted.isEmpty
-                  ? null
-                  : (status) => setState(() {
-                        if (_statusFilters.contains(status)) {
-                          _statusFilters.remove(status);
-                        } else {
-                          _statusFilters.add(status);
-                        }
-                      }),
-            )
-          else
-            SectionCard(
-              title: event.name,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    canSelfAssign
-                        ? 'Todos los tickets'
-                        : (widget.actorRole == 'organizer'
-                            ? 'Tickets de $sellerName'
-                            : 'Tus tickets para vender'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  if (!canSelfAssign && sorted.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      compactTicketNumbersLabel(sorted.map((t) => t.number)),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                  if (sorted.isNotEmpty) const SizedBox(height: 10),
-                  if (sorted.isEmpty)
-                    Text(
-                      canSelfAssign
-                          ? 'Todavía no hay tickets en este evento.'
-                          : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
-                      style: const TextStyle(color: AppColors.textMuted),
-                    )
-                  else
-                    TicketStatusSummary(
-                      tickets: sorted,
-                      selected: _statusFilters,
-                      includePoolStatuses: canSelfAssign,
-                      onStatusTap: (status) => setState(() {
-                        if (_statusFilters.contains(status)) {
-                          _statusFilters.remove(status);
-                        } else {
-                          _statusFilters.add(status);
-                        }
-                      }),
-                    ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: !hasSelection
-                      ? null
-                      : () => _printTickets(context, event, selectedTickets),
-                  icon: const Icon(Icons.print_outlined),
-                  label: Text(
-                    hasSelection
-                        ? 'Imprimir (${selectedTickets.length})'
-                        : 'Imprimir',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: !hasSelection
-                      ? null
-                      : () => _shareTickets(context, event, selectedTickets),
-                  icon: const Icon(AccessShare.shareIcon),
-                  label: Text(
-                    hasSelection
-                        ? 'Compartir (${selectedTickets.length})'
-                        : 'Compartir',
-                  ),
-                ),
-              ),
-            ],
+          if (!widget.embedded) ...[
+            EventDetailsCard(event: event),
+            const SizedBox(height: 12),
+          ],
+          TicketStatusCard.summary(
+            tickets: sorted,
+            selected: _statusFilters,
+            includePoolStatuses: canSelfAssign,
+            emptyLabel: canSelfAssign
+                ? 'Todavía no hay tickets en este evento.'
+                : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
+            onStatusTap: sorted.isEmpty
+                ? null
+                : (status) => setState(() {
+                      if (_statusFilters.contains(status)) {
+                        _statusFilters.remove(status);
+                      } else {
+                        _statusFilters.add(status);
+                      }
+                    }),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          if (!event.isReadOnly)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: !hasSelection
+                        ? null
+                        : () => _printTickets(context, event, selectedTickets),
+                    icon: const Icon(Icons.print_outlined),
+                    label: Text(
+                      hasSelection
+                          ? 'Imprimir (${selectedTickets.length})'
+                          : 'Imprimir',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: !hasSelection
+                        ? null
+                        : () => _shareTickets(context, event, selectedTickets),
+                    icon: const Icon(AccessShare.shareIcon),
+                    label: Text(
+                      hasSelection
+                          ? 'Compartir (${selectedTickets.length})'
+                          : 'Compartir',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          if (!event.isReadOnly) const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -432,7 +390,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                       isOperable(ticket) && ticket.status.isSellable,
                   canClearReservation: isOperable(ticket) &&
                       ticket.status == TicketStatus.reserved,
-                  canShare: true,
+                  canShare: !event.isReadOnly,
                   onToggleSelect:
                       selectableTickets.any((t) => t.id == ticket.id)
                           ? () => setState(() {

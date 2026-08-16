@@ -68,17 +68,20 @@ class CollaboratorProfileCard extends ConsumerWidget {
     }
 
     final collaborator = match;
+    final readOnly = event.isReadOnly;
 
     return SectionCard(
       title: collaborator.name,
-      trailing: IconButton(
-        tooltip: 'Editar',
-        icon: const Icon(Icons.edit_outlined),
-        onPressed: () => _showEditDialog(context, ref, collaborator),
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      ),
+      trailing: readOnly
+          ? null
+          : IconButton(
+              tooltip: 'Editar',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _showEditDialog(context, ref, collaborator),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -89,15 +92,16 @@ class CollaboratorProfileCard extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
           ],
-          CollaboratorAccessActions(
-            collaborator: collaborator,
-            eventName: event.name,
-            token: token,
-            onDeleted: onDeleted ??
-                () {
-                  if (context.mounted) Navigator.of(context).maybePop();
-                },
-          ),
+          if (!readOnly)
+            CollaboratorAccessActions(
+              collaborator: collaborator,
+              eventName: event.name,
+              token: token,
+              onDeleted: onDeleted ??
+                  () {
+                    if (context.mounted) Navigator.of(context).maybePop();
+                  },
+            ),
         ],
       ),
     );

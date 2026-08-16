@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/event_details_card.dart';
 
 /// Coordinator portal: manage all sellers for an event (no organizer account).
 class CoordinatorPortalScreen extends ConsumerWidget {
@@ -33,7 +34,31 @@ class CoordinatorPortalScreen extends ConsumerWidget {
     final eventId = coordinator.eventId;
     final eventAsync = ref.watch(eventProvider(eventId));
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
-    final eventName = eventAsync.valueOrNull?.name ?? '';
+    final event = eventAsync.valueOrNull;
+    if (eventAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (event == null || event.isReadOnly) {
+      final session = ref.read(sessionProvider);
+      if (session.collaboratorToken != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(sessionProvider.notifier).logout();
+        });
+      }
+      return Scaffold(
+        appBar: AppBar(title: const Text('Evento finalizado')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Este evento ya finalizó.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+    final eventName = event.name;
 
     return Scaffold(
       appBar: AppBar(
@@ -67,21 +92,23 @@ class CoordinatorPortalScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             children: [
+              EventDetailsCard(event: event),
+              const SizedBox(height: 16),
               Text(
-                eventName.isEmpty
-                    ? 'Gestioná los vendedores del evento.'
-                    : 'Evento: $eventName',
+                'Podés crear vendedores, asignar tickets, compartir accesos y '
+                'devolver tickets al pool.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                sellers.isEmpty
+                    ? 'Vendedores'
+                    : 'Vendedores (${sellers.length})',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text(
-                'Podés crear vendedores, asignar rangos, compartir accesos y '
-                'devolver tickets al pool.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
               if (sellers.isEmpty)
                 const Text(
                   'Todavía no hay vendedores.',

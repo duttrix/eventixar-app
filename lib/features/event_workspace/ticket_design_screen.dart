@@ -72,7 +72,9 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
   void _apply({
     required TicketVisualStyle style,
     required String templateId,
+    required bool readOnly,
   }) {
+    if (readOnly) return;
     setState(() {
       _style = style;
       _templateId = templateId;
@@ -113,6 +115,7 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
       );
     }
     _hydrateFrom(event.ticketDesign);
+    final readOnly = event.isReadOnly;
 
     final previewTicket = Ticket(
       id: 'preview_${widget.eventId}',
@@ -133,10 +136,12 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
         const SizedBox(height: 24),
         Text('Personalizar', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
-        const Text(
-          'Los cambios se guardan solos y se aplican a las imágenes que '
-          'comparte el vendedor.',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+        Text(
+          readOnly
+              ? 'El evento finalizó. El diseño queda en solo consulta.'
+              : 'Los cambios se guardan solos y se aplican a las imágenes que '
+                  'comparte el vendedor.',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
         ),
         const SizedBox(height: 16),
         _sectionLabel('Plantilla'),
@@ -145,13 +150,29 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _templateChip('classic', 'Clásico', TicketVisualStyle.classic),
-            _templateChip('festive', 'Festivo', TicketVisualStyle.festive),
-            _templateChip('dark', 'Oscuro', TicketVisualStyle.dark),
+            _templateChip(
+              'classic',
+              'Clásico',
+              TicketVisualStyle.classic,
+              readOnly: readOnly,
+            ),
+            _templateChip(
+              'festive',
+              'Festivo',
+              TicketVisualStyle.festive,
+              readOnly: readOnly,
+            ),
+            _templateChip(
+              'dark',
+              'Oscuro',
+              TicketVisualStyle.dark,
+              readOnly: readOnly,
+            ),
             _templateChip(
               'institutional',
               'Institucional',
               TicketVisualStyle.institutional,
+              readOnly: readOnly,
             ),
           ],
         ),
@@ -161,10 +182,13 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
         _swatchRow(
           colors: _primarySwatches,
           selected: _style.primary,
-          onPick: (c) => _apply(
-            templateId: 'custom',
-            style: _style.copyWith(primary: c),
-          ),
+          onPick: readOnly
+              ? null
+              : (c) => _apply(
+                    templateId: 'custom',
+                    style: _style.copyWith(primary: c),
+                    readOnly: false,
+                  ),
         ),
         const SizedBox(height: 16),
         _sectionLabel('Color acento'),
@@ -172,10 +196,13 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
         _swatchRow(
           colors: _accentSwatches,
           selected: _style.accent,
-          onPick: (c) => _apply(
-            templateId: 'custom',
-            style: _style.copyWith(accent: c),
-          ),
+          onPick: readOnly
+              ? null
+              : (c) => _apply(
+                    templateId: 'custom',
+                    style: _style.copyWith(accent: c),
+                    readOnly: false,
+                  ),
         ),
         const SizedBox(height: 20),
         _sectionLabel('Fondo'),
@@ -191,10 +218,13 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
                   TicketBackgroundMode.image => 'Imagen (demo)',
                 }),
                 selected: _style.backgroundMode == mode,
-                onSelected: (_) => _apply(
-                  templateId: 'custom',
-                  style: _style.copyWith(backgroundMode: mode),
-                ),
+                onSelected: readOnly
+                    ? null
+                    : (_) => _apply(
+                          templateId: 'custom',
+                          style: _style.copyWith(backgroundMode: mode),
+                          readOnly: false,
+                        ),
               ),
           ],
         ),
@@ -212,10 +242,13 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
                   TicketTypographyStyle.compact => 'Compacta',
                 }),
                 selected: _style.typography == t,
-                onSelected: (_) => _apply(
-                  templateId: 'custom',
-                  style: _style.copyWith(typography: t),
-                ),
+                onSelected: readOnly
+                    ? null
+                    : (_) => _apply(
+                          templateId: 'custom',
+                          style: _style.copyWith(typography: t),
+                          readOnly: false,
+                        ),
               ),
           ],
         ),
@@ -240,18 +273,25 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
     );
   }
 
-  Widget _templateChip(String id, String label, TicketVisualStyle style) {
+  Widget _templateChip(
+    String id,
+    String label,
+    TicketVisualStyle style, {
+    required bool readOnly,
+  }) {
     return ChoiceChip(
       label: Text(label),
       selected: _templateId == id,
-      onSelected: (_) => _apply(templateId: id, style: style),
+      onSelected: readOnly
+          ? null
+          : (_) => _apply(templateId: id, style: style, readOnly: false),
     );
   }
 
   Widget _swatchRow({
     required List<Color> colors,
     required Color selected,
-    required ValueChanged<Color> onPick,
+    required ValueChanged<Color>? onPick,
   }) {
     return Wrap(
       spacing: 8,
@@ -259,7 +299,7 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
       children: [
         for (final color in colors)
           GestureDetector(
-            onTap: () => onPick(color),
+            onTap: onPick == null ? null : () => onPick(color),
             child: Container(
               width: 36,
               height: 36,

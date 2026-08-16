@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/collaborator.dart';
+import '../models/event.dart';
 
 /// Where an invite token points to.
 class CollaboratorLocation {
@@ -35,6 +36,18 @@ class CollaboratorRepository {
   /// Invite tokens, readable only by the event owner.
   CollectionReference<Map<String, dynamic>> _access(String eventId) =>
       _events.doc(eventId).collection('access');
+
+  Future<void> _ensureWritable(String eventId) async {
+    final snap = await _events.doc(eventId).get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Evento $eventId no encontrado.');
+    }
+    final event = Event.fromFirestore(snap.id, data);
+    if (event.isReadOnly) {
+      throw StateError('El evento ya finalizó. Solo consulta.');
+    }
+  }
 
   /// collaboratorId → invite token, for the organizer's share links.
   Stream<Map<String, String>> watchAccessTokens(String eventId) {
@@ -109,6 +122,7 @@ class CollaboratorRepository {
     String notes = '',
     String? createdByCoordinatorId,
   }) async {
+    await _ensureWritable(eventId);
     final token = _generateToken();
     final ref = _collaborators(eventId).doc();
     final now = FieldValue.serverTimestamp();
@@ -148,6 +162,7 @@ class CollaboratorRepository {
     required String phone,
     String notes = '',
   }) async {
+    await _ensureWritable(eventId);
     final ref = _collaborators(eventId).doc(collaboratorId);
     await ref.update({
       'name': name.trim(),
@@ -173,6 +188,7 @@ class CollaboratorRepository {
     required String sellerId,
     required String? coordinatorId,
   }) async {
+    await _ensureWritable(eventId);
     final ref = _collaborators(eventId).doc(sellerId);
     final snap = await ref.get();
     final data = snap.data();
@@ -276,6 +292,7 @@ class CollaboratorRepository {
     required String eventId,
     required String collaboratorId,
   }) async {
+    await _ensureWritable(eventId);
     final ref = _collaborators(eventId).doc(collaboratorId);
     final accessRef = _access(eventId).doc(collaboratorId);
     final snap = await ref.get();
@@ -315,6 +332,7 @@ class CollaboratorRepository {
     required String eventId,
     required String collaboratorId,
   }) async {
+    await _ensureWritable(eventId);
     final ref = _collaborators(eventId).doc(collaboratorId);
     final accessRef = _access(eventId).doc(collaboratorId);
     final snap = await ref.get();

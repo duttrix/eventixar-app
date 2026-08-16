@@ -20,16 +20,20 @@ class SellersTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
     final ticketsAsync = ref.watch(eventTicketsProvider(eventId));
+    final eventAsync = ref.watch(eventProvider(eventId));
+    final readOnly = eventAsync.valueOrNull?.isReadOnly ?? false;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: BottomSystemInset(
-        child: FloatingActionButton.extended(
-          onPressed: () => _showAddDialog(context, ref),
-          icon: const Icon(Icons.person_add_alt_1_outlined),
-          label: const Text('Agregar'),
-        ),
-      ),
+      floatingActionButton: readOnly
+          ? null
+          : BottomSystemInset(
+              child: FloatingActionButton.extended(
+                onPressed: () => _showAddDialog(context, ref),
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Agregar'),
+              ),
+            ),
       body: sellersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
@@ -40,7 +44,7 @@ class SellersTab extends ConsumerWidget {
             children: [
               const HelpCallout(
                 message:
-                    'Los vendedores reciben rangos de tickets, los reservan o '
+                    'Los vendedores reciben tickets, los reservan o '
                     'cobran y los comparten al comprador desde el celular, sin '
                     'crear cuenta. Abrí cada uno para asignar tickets, compartir '
                     'acceso o editar sus datos.',
@@ -61,10 +65,12 @@ class SellersTab extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: const Text(
-                    'Usá Agregar para crear un vendedor. Después vas a poder '
-                    'asignarle tickets y compartirle el acceso.',
-                    style: TextStyle(
+                  child: Text(
+                    readOnly
+                        ? 'No se crearon vendedores para este evento.'
+                        : 'Usá Agregar para crear un vendedor. Después vas a poder '
+                            'asignarle tickets y compartirle el acceso.',
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                       height: 1.35,

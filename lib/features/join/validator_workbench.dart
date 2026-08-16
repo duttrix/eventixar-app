@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/ticket.dart';
+import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/qr_scan_screen.dart';
 import '../../shared/widgets/section_card.dart';
 
@@ -153,6 +154,7 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
     }
 
     final event = eventAsync.requireValue;
+    final readOnly = event.isReadOnly;
     final hasResult = _message != null;
     final scanLabel = hasResult ? 'Escanear otro' : 'Escanear QR';
 
@@ -160,28 +162,21 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
       ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (!widget.embedded) ...[
+            EventDetailsCard(event: event),
+            const SizedBox(height: 12),
+          ],
           SectionCard(
-            title: widget.embedded ? 'Validación' : event.name,
+            title: 'Validación',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Validación · ${event.pickupPlace}',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${event.pickupFrom.format(context)} – ${event.pickupTo.format(context)}',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.actorRole == 'organizer'
-                      ? 'Escaneá el QR del ticket. Si está ok, se valida solo.'
-                      : 'Escaneá el QR en el retiro o en la entrada. Si está ok, se valida solo.',
+                  readOnly
+                      ? 'El evento finalizó. La validación quedó cerrada.'
+                      : widget.actorRole == 'organizer'
+                          ? 'Escaneá el QR del ticket. Si está ok, se valida solo.'
+                          : 'Escaneá el QR en el retiro o en la entrada. Si está ok, se valida solo.',
                   style: const TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 12,
@@ -190,18 +185,20 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _busy ? null : _scanAndValidate,
-            icon: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.qr_code_scanner),
-            label: Text(_busy ? 'Validando…' : scanLabel),
-          ),
+          if (!readOnly) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _busy ? null : _scanAndValidate,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.qr_code_scanner),
+              label: Text(_busy ? 'Validando…' : scanLabel),
+            ),
+          ],
           if (_message != null) ...[
             const SizedBox(height: 16),
             Container(

@@ -59,6 +59,8 @@ class CoordinatorDetailScreen extends ConsumerWidget {
     }
 
     final coordinator = match;
+    final event = eventAsync.requireValue;
+    final readOnly = event.isReadOnly;
     final allSellers = collaborators
         .where((c) => c.role == CollaboratorRole.seller)
         .toList(growable: false);
@@ -74,7 +76,7 @@ class CoordinatorDetailScreen extends ConsumerWidget {
     };
     return Scaffold(
       appBar: AppBar(title: const Text('Coordinador')),
-      floatingActionButton: assignable.isEmpty
+      floatingActionButton: readOnly || assignable.isEmpty
           ? null
           : BottomSystemInset(
               child: FloatingActionButton.extended(
@@ -107,9 +109,11 @@ class CoordinatorDetailScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           if (sellers.isEmpty)
             Text(
-              assignable.isEmpty
-                  ? 'Todavía no hay vendedores en el evento.'
-                  : 'Todavía no tiene vendedores. Usá Asignar vendedor.',
+              readOnly
+                  ? 'No se asignaron vendedores a este coordinador.'
+                  : assignable.isEmpty
+                      ? 'Todavía no hay vendedores en el evento.'
+                      : 'Todavía no tiene vendedores. Usá Asignar vendedor.',
               style: const TextStyle(color: AppColors.textMuted),
             )
           else
@@ -161,15 +165,16 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Quitar del coordinador',
-                          onPressed: () => _unassignSeller(
-                            context,
-                            ref,
-                            seller: seller,
+                        if (!readOnly)
+                          IconButton(
+                            tooltip: 'Quitar del coordinador',
+                            onPressed: () => _unassignSeller(
+                              context,
+                              ref,
+                              seller: seller,
+                            ),
+                            icon: const Icon(Icons.link_off_outlined),
                           ),
-                          icon: const Icon(Icons.link_off_outlined),
-                        ),
                         const Padding(
                           padding: EdgeInsets.only(top: 2),
                           child: Icon(

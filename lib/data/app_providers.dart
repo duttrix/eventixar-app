@@ -523,7 +523,7 @@ class SessionController extends StateNotifier<SessionState> {
           final event = await _ref
               .read(eventRepositoryProvider)
               .getById(collaborator.eventId);
-          if (event != null && event.status != EventStatus.finished) {
+          if (event != null && !event.isReadOnly) {
             await storage.save(installed.token, collaborator.role);
             await _activateCollaborator(installed.token, collaborator.role);
             return;
@@ -570,7 +570,7 @@ class SessionController extends StateNotifier<SessionState> {
       final event = await _ref
           .read(eventRepositoryProvider)
           .getById(collaborator.eventId);
-      if (event == null || event.status == EventStatus.finished) {
+      if (event == null || event.isReadOnly) {
         await _clearCollaboratorSession();
         return;
       }

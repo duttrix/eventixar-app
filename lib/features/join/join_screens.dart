@@ -41,6 +41,17 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
         });
         return;
       }
+      final event = await ref
+          .read(eventRepositoryProvider)
+          .getById(collab.eventId);
+      if (!mounted) return;
+      if (event == null || event.isReadOnly) {
+        setState(() {
+          _resolving = false;
+          _error = 'Este evento ya finalizó.';
+        });
+        return;
+      }
       await ref
           .read(sessionProvider.notifier)
           .enterAsCollaborator(widget.token, role: collab.role);
@@ -98,13 +109,16 @@ class SellerPortalScreen extends ConsumerWidget {
       );
     }
 
-    return SellerWorkbench(
+    return _CollaboratorFinishedGate(
       eventId: seller.eventId,
-      actorId: seller.id,
-      actorLabel: seller.name,
-      actorRole: 'seller',
-      showLogout: true,
-      lockedSellerId: seller.id,
+      child: SellerWorkbench(
+        eventId: seller.eventId,
+        actorId: seller.id,
+        actorLabel: seller.name,
+        actorRole: 'seller',
+        showLogout: true,
+        lockedSellerId: seller.id,
+      ),
     );
   }
 }
@@ -128,12 +142,15 @@ class ValidatorPortalScreen extends ConsumerWidget {
       );
     }
 
-    return ValidatorWorkbench(
+    return _CollaboratorFinishedGate(
       eventId: validator.eventId,
-      actorId: validator.id,
-      actorLabel: validator.name,
-      actorRole: 'validator',
-      showLogout: true,
+      child: ValidatorWorkbench(
+        eventId: validator.eventId,
+        actorId: validator.id,
+        actorLabel: validator.name,
+        actorRole: 'validator',
+        showLogout: true,
+      ),
     );
   }
 }
@@ -157,12 +174,56 @@ class CollectorPortalScreen extends ConsumerWidget {
       );
     }
 
-    return CollectorWorkbench(
+    return _CollaboratorFinishedGate(
       eventId: collector.eventId,
-      actorId: collector.id,
-      actorLabel: collector.name,
-      actorRole: 'collector',
-      showLogout: true,
+      child: CollectorWorkbench(
+        eventId: collector.eventId,
+        actorId: collector.id,
+        actorLabel: collector.name,
+        actorRole: 'collector',
+        showLogout: true,
+      ),
     );
+  }
+}
+
+/// Blocks collaborator UIs when the event is finished and clears the session.
+class _CollaboratorFinishedGate extends ConsumerWidget {
+  const _CollaboratorFinishedGate({
+    required this.eventId,
+    required this.child,
+  });
+
+  final String eventId;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eventAsync = ref.watch(eventProvider(eventId));
+    if (eventAsync.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final event = eventAsync.valueOrNull;
+    if (event == null || event.isReadOnly) {
+      final session = ref.read(sessionProvider);
+      if (session.collaboratorToken != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(sessionProvider.notifier).logout();
+        });
+      }
+      return Scaffold(
+        appBar: AppBar(title: const Text('Evento finalizado')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Este evento ya finalizó.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+    return child;
   }
 }

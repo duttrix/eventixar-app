@@ -22,22 +22,25 @@ class CoordinatorsTab extends ConsumerWidget {
     final eventAsync = ref.watch(eventProvider(eventId));
     final coordinatorsAsync = ref.watch(eventCoordinatorsProvider(eventId));
     final sellersAsync = ref.watch(eventSellersProvider(eventId));
+    final readOnly = eventAsync.valueOrNull?.isReadOnly ?? false;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: BottomSystemInset(
-        child: FloatingActionButton.extended(
-          onPressed: eventAsync.hasValue
-              ? () => _showCreateDialog(
-                    context,
-                    ref,
-                    eventName: eventAsync.requireValue.name,
-                  )
-              : null,
-          icon: const Icon(Icons.person_add_alt_1_outlined),
-          label: const Text('Agregar'),
-        ),
-      ),
+      floatingActionButton: readOnly
+          ? null
+          : BottomSystemInset(
+              child: FloatingActionButton.extended(
+                onPressed: eventAsync.hasValue
+                    ? () => _showCreateDialog(
+                          context,
+                          ref,
+                          eventName: eventAsync.requireValue.name,
+                        )
+                    : null,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+                label: const Text('Agregar'),
+              ),
+            ),
       body: coordinatorsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
@@ -49,7 +52,7 @@ class CoordinatorsTab extends ConsumerWidget {
               const HelpCallout(
                 message:
                     'Los coordinadores gestionan vendedores: los crean, les '
-                    'asignan rangos de tickets y comparten accesos desde el '
+                    'asignan tickets y comparten accesos desde el '
                     'celular, sin cuenta. Abrí cada uno para ver sus vendedores '
                     'o gestionar el acceso.',
               ),
@@ -69,9 +72,11 @@ class CoordinatorsTab extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: const Text(
-                    'Usá Agregar para crear un coordinador y compartirle el link.',
-                    style: TextStyle(
+                  child: Text(
+                    readOnly
+                        ? 'No se crearon coordinadores para este evento.'
+                        : 'Usá Agregar para crear un coordinador y compartirle el link.',
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                       height: 1.35,

@@ -10,7 +10,7 @@ import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-/// Seller detail: assign ranges, share access, return unsold tickets to the pool.
+/// Seller detail: assign tickets by quantity, share access, return to pool.
 class SellerDetailScreen extends ConsumerStatefulWidget {
   const SellerDetailScreen({
     super.key,
@@ -117,7 +117,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     }
 
     final event = eventAsync.requireValue;
-    final finished = event.status == EventStatus.finished;
+    final finished = event.isReadOnly;
     Collaborator? match;
     for (final c in collabsAsync.requireValue) {
       if (c.id == sellerId) {
@@ -159,7 +159,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           : FloatingActionButton.extended(
               onPressed: () => _showAddAssignmentDialog(context, allTickets),
               icon: const Icon(Icons.add),
-              label: const Text('Asignar rango'),
+              label: const Text('Asignar tickets'),
             ),
       bottomNavigationBar: !finished && selectedReturnable.isNotEmpty
           ? SafeArea(
@@ -193,7 +193,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             const Padding(
               padding: EdgeInsets.only(top: 16),
               child: Text(
-                'Este vendedor no tiene tickets ahora. Asigná un rango '
+                'Este vendedor no tiene tickets ahora. Asigná tickets '
                 'con el botón de abajo.',
                 style: TextStyle(color: AppColors.textMuted),
               ),
@@ -345,15 +345,11 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
   }
 
   void _showAddAssignmentDialog(BuildContext context, List<Ticket> allTickets) {
-    final unassigned =
-        allTickets
-            .where((t) => t.status.isAssignablePool)
-            .map((t) => t.number)
-            .toList()
-          ..sort();
-    final nextNumber = unassigned.isEmpty ? 1 : unassigned.first;
-    final fromController = TextEditingController(text: '$nextNumber');
-    final toController = TextEditingController();
+    final pool = allTickets.where((t) => t.status.isAssignablePool).toList()
+      ..sort((a, b) => a.number.compareTo(b.number));
+    final countController = TextEditingController(
+      text: pool.isEmpty ? '' : '1',
+    );
 
     showDialog<void>(
       context: context,
@@ -363,25 +359,22 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              unassigned.isEmpty
+              pool.isEmpty
                   ? 'No hay tickets disponibles en el pool.'
-                  : '${unassigned.length} disponibles (sin vendedor / devueltos) · próximo: #$nextNumber',
+                  : '${pool.length} disponibles en el pool (sin vendedor / '
+                      'devueltos). Se asignan los próximos en orden.',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: fromController,
+              controller: countController,
+              enabled: pool.isNotEmpty,
+              autofocus: pool.isNotEmpty,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Desde',
-                hintText: 'Próximo disponible: $nextNumber',
+                labelText: 'Cantidad',
+                hintText: pool.isEmpty ? null : 'Máx. ${pool.length}',
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: toController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Hasta'),
             ),
           ],
         ),
@@ -391,35 +384,56 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: unassigned.isEmpty
+            onPressed: pool.isEmpty
                 ? null
                 : () async {
-                    final from = int.tryParse(fromController.text.trim());
-                    final to = int.tryParse(toController.text.trim());
-                    if (from == null || to == null || to < from) {
+                    final count = int.tryParse(countController.text.trim());
+                    if (count == null || count < 1) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
+                          content: Text('Ingresá una cantidad válida.'),
+                        ),
+                      );
+                      return;
+                    }
+                    if (count > pool.length) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
                           content: Text(
-                            'Rango inválido. Revisá "desde" y "hasta".',
+                            'Solo hay ${pool.length} tickets disponibles.',
                           ),
                         ),
                       );
                       return;
                     }
                     try {
-                      await assignTicketRangeAction(
-                        ref,
-                        eventId: eventId,
-                        sellerId: sellerId,
-                        from: from,
-                        to: to,
-                        assignedByCollaboratorId: widget.actingCoordinatorId,
+                      final selected = pool.take(count).toList(growable: false);
+                      final ranges = _contiguousRanges(
+                        selected.map((t) => t.number),
                       );
+                      for (final range in ranges) {
+                        await assignTicketRangeAction(
+                          ref,
+                          eventId: eventId,
+                          sellerId: sellerId,
+                          from: range.$1,
+                          to: range.$2,
+                          assignedByCollaboratorId: widget.actingCoordinatorId,
+                        );
+                      }
                       if (!dialogContext.mounted) return;
                       Navigator.pop(dialogContext);
                       if (!context.mounted) return;
+                      final from = selected.first.number;
+                      final to = selected.last.number;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Asignados #$from a #$to.')),
+                        SnackBar(
+                          content: Text(
+                            count == 1
+                                ? 'Asignado 1 ticket (#$from).'
+                                : 'Asignados $count tickets (#$from–#$to).',
+                          ),
+                        ),
                       );
                     } catch (e) {
                       if (!context.mounted) return;
@@ -433,5 +447,26 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// Groups sorted ticket numbers into inclusive (from, to) contiguous ranges.
+  List<(int, int)> _contiguousRanges(Iterable<int> numbers) {
+    final sorted = numbers.toList()..sort();
+    if (sorted.isEmpty) return const [];
+    final ranges = <(int, int)>[];
+    var start = sorted.first;
+    var prev = sorted.first;
+    for (var i = 1; i < sorted.length; i++) {
+      final n = sorted[i];
+      if (n == prev + 1) {
+        prev = n;
+        continue;
+      }
+      ranges.add((start, prev));
+      start = n;
+      prev = n;
+    }
+    ranges.add((start, prev));
+    return ranges;
   }
 }

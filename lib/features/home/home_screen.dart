@@ -9,26 +9,12 @@ import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-/// Organizer home: activos arriba, pasados con buscador. Sin menú lateral.
-class HomeScreen extends ConsumerStatefulWidget {
+/// Organizer home: Activos, Por pagar y Finalizados. Sin menú lateral.
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _pastSearchController = TextEditingController();
-  String _pastQuery = '';
-
-  @override
-  void dispose() {
-    _pastSearchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     final email = session.userEmail ?? '';
 
@@ -39,15 +25,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final displayName = session.displayName;
     return ref.watch(organizerEventsProvider).when(
           loading: () => Scaffold(
-            appBar: _appBar(context, email, displayName: displayName),
+            appBar: _appBar(context, ref, email, displayName: displayName),
             body: const Center(child: CircularProgressIndicator()),
           ),
           error: (e, _) => Scaffold(
-            appBar: _appBar(context, email, displayName: displayName),
+            appBar: _appBar(context, ref, email, displayName: displayName),
             body: Center(child: Text('Error al cargar eventos: $e')),
           ),
           data: (events) => _buildScaffold(
             context,
+            ref,
             email: email,
             displayName: displayName,
             all: events,
@@ -57,6 +44,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   PreferredSizeWidget _appBar(
     BuildContext context,
+    WidgetRef ref,
     String email, {
     required String? displayName,
   }) {
@@ -90,17 +78,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildScaffold(
-    BuildContext context, {
+    BuildContext context,
+    WidgetRef ref, {
     required String email,
     required String? displayName,
     required List<Event> all,
   }) {
-    final upcoming = all.where((e) => !e.isPast).toList();
-    final past = all.where((e) => e.isPast).toList();
-    final filteredPast = _filterPast(past);
+    final active =
+        all.where((e) => e.status == EventStatus.active).toList();
+    final awaitingPayment =
+        all.where((e) => e.status == EventStatus.awaitingPayment).toList();
+    final finished =
+        all.where((e) => e.status == EventStatus.finished).toList();
 
     return Scaffold(
-      appBar: _appBar(context, email, displayName: displayName),
+      appBar: _appBar(context, ref, email, displayName: displayName),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -113,88 +105,74 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          Text(
-            'Activos y por pagar',
-            style: Theme.of(context).textTheme.titleMedium,
+          _EventSection(
+            title: 'Activos',
+            events: active,
+            emptyText: 'Todavía no tenés eventos activos.',
+            onTap: (event) {
+              ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
+              context.push('/event/${event.id}');
+            },
           ),
-          const SizedBox(height: 10),
-          if (upcoming.isEmpty)
-            const _EmptyHint(text: 'Todavía no tenés eventos. Creá el primero.')
-          else
-            for (final event in upcoming)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _EventCard(
-                  event: event,
-                  onTap: () {
-                    ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
-                    if (event.status == EventStatus.awaitingPayment) {
-                      context.push('/create-event/pay/${event.id}');
-                    } else {
-                      context.push('/event/${event.id}');
-                    }
-                  },
-                ),
-              ),
           const SizedBox(height: 24),
-          Text(
-            'Eventos pasados',
-            style: Theme.of(context).textTheme.titleMedium,
+          _EventSection(
+            title: 'Por pagar',
+            events: awaitingPayment,
+            emptyText: 'No hay eventos pendientes de pago.',
+            onTap: (event) {
+              ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
+              context.push('/create-event/pay/${event.id}');
+            },
           ),
-          const SizedBox(height: 10),
-          if (past.isNotEmpty) ...[
-            TextField(
-              controller: _pastSearchController,
-              onChanged: (value) => setState(() => _pastQuery = value.trim()),
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre…',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _pastQuery.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Limpiar',
-                        onPressed: () {
-                          _pastSearchController.clear();
-                          setState(() => _pastQuery = '');
-                        },
-                        icon: const Icon(Icons.clear, size: 18),
-                      ),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (past.isEmpty)
-            const _EmptyHint(text: 'Acá van a aparecer tus eventos finalizados.')
-          else if (filteredPast.isEmpty)
-            const _EmptyHint(text: 'Ningún evento pasado coincide.')
-          else
-            for (final event in filteredPast)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _EventCard(
-                  event: event,
-                  onTap: () {
-                    ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
-                    context.push('/event/${event.id}');
-                  },
-                ),
-              ),
+          const SizedBox(height: 24),
+          _EventSection(
+            title: 'Finalizados',
+            events: finished,
+            emptyText: 'Acá van a aparecer tus eventos finalizados.',
+            onTap: (event) {
+              ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
+              context.push('/event/${event.id}');
+            },
+          ),
         ],
       ),
     );
   }
+}
 
-  List<Event> _filterPast(List<Event> past) {
-    if (_pastQuery.isEmpty) return past;
-    final q = _pastQuery.toLowerCase();
-    return past
-        .where(
-          (e) =>
-              e.name.toLowerCase().contains(q) ||
-              e.product.toLowerCase().contains(q),
-        )
-        .toList();
+class _EventSection extends StatelessWidget {
+  const _EventSection({
+    required this.title,
+    required this.events,
+    required this.emptyText,
+    required this.onTap,
+  });
+
+  final String title;
+  final List<Event> events;
+  final String emptyText;
+  final ValueChanged<Event> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        if (events.isEmpty)
+          _EmptyHint(text: emptyText)
+        else
+          for (final event in events)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _EventCard(
+                event: event,
+                onTap: () => onTap(event),
+              ),
+            ),
+      ],
+    );
   }
 }
 

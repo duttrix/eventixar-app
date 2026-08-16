@@ -304,6 +304,9 @@ class Event {
     return day.isBefore(now) || status == EventStatus.finished;
   }
 
+  /// Closed event: organizer may view, mutations and collaborator access are blocked.
+  bool get isReadOnly => status == EventStatus.finished;
+
   factory Event.fromFirestore(String id, Map<String, dynamic> data) {
     return Event(
       id: id,

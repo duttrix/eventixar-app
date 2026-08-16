@@ -50,6 +50,16 @@ class EventRepository {
     return Event.fromFirestore(snap.id, data);
   }
 
+  Future<void> _ensureWritable(String eventId) async {
+    final event = await getById(eventId);
+    if (event == null) {
+      throw StateError('Evento $eventId no encontrado.');
+    }
+    if (event.isReadOnly) {
+      throw StateError('El evento ya finalizó. Solo consulta.');
+    }
+  }
+
   Future<Event> createEvent({
     required String ownerId,
     required String ownerEmail,
@@ -210,6 +220,7 @@ class EventRepository {
     required int to,
     String? assignedByCollaboratorId,
   }) async {
+    await _ensureWritable(eventId);
     if (to < from) {
       throw ArgumentError('El rango es inválido (hasta < desde).');
     }
@@ -303,6 +314,7 @@ class EventRepository {
     String actorRole = 'organizer',
     String? actorId,
   }) async {
+    await _ensureWritable(eventId);
     final ids = ticketIds.toList(growable: false);
     if (ids.isEmpty) return;
 
@@ -365,6 +377,7 @@ class EventRepository {
     String? actorId,
     String? actorRole,
   }) async {
+    await _ensureWritable(eventId);
     final name = buyerName.trim();
     final snap = await _tickets(eventId).doc(ticketId).get();
     final data = snap.data();
@@ -398,6 +411,7 @@ class EventRepository {
     String? actorId,
     String? actorRole,
   }) async {
+    await _ensureWritable(eventId);
     final name = buyerName.trim();
     const chunk = 400;
     final ids = ticketIds.toList(growable: false);
@@ -453,6 +467,7 @@ class EventRepository {
     String? actorId,
     String actorRole = 'seller',
   }) async {
+    await _ensureWritable(eventId);
     final name = buyerName.trim();
     if (name.isEmpty) {
       throw StateError('La reserva necesita un destinatario.');
@@ -617,6 +632,7 @@ class EventRepository {
     String? actorId,
     String actorRole = 'organizer',
   }) async {
+    await _ensureWritable(eventId);
     final tickets = await listTickets(eventId);
     final owned =
         tickets.where((t) => t.sellerId == sellerId).toList(growable: false);
@@ -681,6 +697,7 @@ class EventRepository {
     required String validatorId,
     String actorRole = 'validator',
   }) async {
+    await _ensureWritable(eventId);
     final ref = _tickets(eventId).doc(ticketId);
     final snap = await ref.get();
     final data = snap.data();
@@ -728,6 +745,9 @@ class EventRepository {
     if (event == null) {
       throw StateError('Evento $eventId no encontrado.');
     }
+    if (event.isReadOnly) {
+      throw StateError('El evento ya finalizó. Solo consulta.');
+    }
     final amount = event.amountForSettleMode(settleMode);
     final note = settleMode == TicketSettleMode.full
         ? 'Rendido ticket completo (\$${amount.toStringAsFixed(0)})'
@@ -767,6 +787,8 @@ class EventRepository {
   }) async {
     final ids = ticketIds.toList(growable: false);
     if (ids.isEmpty) return;
+
+    await _ensureWritable(eventId);
 
     final knownNames = <String, String?>{};
     if (actorId != null) {
@@ -839,6 +861,7 @@ class EventRepository {
     required String pickupPlace,
     required String notes,
   }) async {
+    await _ensureWritable(eventId);
     final ref = _events.doc(eventId);
     await ref.update({
       'name': name,
@@ -863,6 +886,7 @@ class EventRepository {
     String eventId,
     TicketVisualStyle design,
   ) async {
+    await _ensureWritable(eventId);
     await _events.doc(eventId).update({
       'ticketDesign': design.toFirestoreMap(),
       'updatedAt': FieldValue.serverTimestamp(),
