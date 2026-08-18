@@ -109,9 +109,9 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       item(EventTab.eventData),
       item(EventTab.tracker),
       const ShellNavItem.section('Colaboradores'),
+      item(EventTab.coordinators),
       item(EventTab.sellers),
       item(EventTab.validators),
-      item(EventTab.coordinators),
       item(EventTab.collectors),
     ];
   }

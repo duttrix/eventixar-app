@@ -227,14 +227,31 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     final sellerNames = {
       for (final s in sellers) s.id: s.name,
     };
+    if (canSelfAssign) {
+      sellerNames[sellerId] = sellerName;
+    }
 
     bool isOperable(Ticket ticket) {
       if (event.isReadOnly) return false;
       if (!canSelfAssign) return true;
-      // Organizer overview: only sell pool tickets or ones already claimed
-      // by the organizer — never mutate another seller's stock.
-      if (ticket.status.isAssignablePool) return true;
-      return ticket.sellerId == sellerId;
+      // Organizer sees all event tickets and can sell on any of them.
+      return true;
+    }
+
+    String sellerIdFor(Ticket ticket) {
+      final assigned = ticket.sellerId;
+      if (assigned != null &&
+          assigned.isNotEmpty &&
+          !ticket.status.isAssignablePool) {
+        return assigned;
+      }
+      return sellerId;
+    }
+
+    bool clearReservationReturnsToPool(Ticket ticket) {
+      if (!canSelfAssign) return false;
+      final assigned = ticket.sellerId;
+      return assigned == null || assigned.isEmpty || assigned == sellerId;
     }
 
     String? assignedSellerLabel(Ticket ticket) {
@@ -253,13 +270,8 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         : sorted
             .where((t) => _statusFilters.contains(t.status))
             .toList(growable: false);
-    final selectableTickets = visible
-        .where(
-          (t) =>
-              isOperable(t) &&
-              (t.status.isSellable || t.status == TicketStatus.collected),
-        )
-        .toList(growable: false);
+    final selectableTickets =
+        event.isReadOnly ? const <Ticket>[] : visible;
     final selectedTickets = selectableTickets
         .where((t) => _selectedIds.contains(t.id))
         .toList(growable: false);
@@ -298,7 +310,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   child: OutlinedButton.icon(
                     onPressed: !hasSelection
                         ? null
-                        : () => _printTickets(context, event, selectedTickets),
+                        : () => _printTickets(
+                              context,
+                              event,
+                              selectedTickets,
+                              sellerNames: sellerNames,
+                            ),
                     icon: const Icon(Icons.print_outlined),
                     label: Text(
                       hasSelection
@@ -312,7 +329,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   child: OutlinedButton.icon(
                     onPressed: !hasSelection
                         ? null
-                        : () => _shareTickets(context, event, selectedTickets),
+                        : () => _shareTickets(
+                              context,
+                              event,
+                              selectedTickets,
+                              sellerNames: sellerNames,
+                            ),
                     icon: const Icon(AccessShare.shareIcon),
                     label: Text(
                       hasSelection
@@ -390,6 +412,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                       isOperable(ticket) && ticket.status.isSellable,
                   canClearReservation: isOperable(ticket) &&
                       ticket.status == TicketStatus.reserved,
+                  canSetBuyer: isOperable(ticket) &&
+                      (ticket.status == TicketStatus.collected ||
+                          ticket.status == TicketStatus.reserved ||
+                          ticket.status == TicketStatus.settled ||
+                          ticket.status == TicketStatus.delivered),
                   canShare: !event.isReadOnly,
                   onToggleSelect:
                       selectableTickets.any((t) => t.id == ticket.id)
@@ -404,26 +431,41 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   onReserve: () => _reserveTicket(
                     context,
                     event: event,
-                    sellerId: sellerId,
+                    sellerId: sellerIdFor(ticket),
                     ticket: ticket,
                   ),
                   onCollect: () => _collectTicket(
                     context,
                     event: event,
-                    sellerId: sellerId,
+                    sellerId: sellerIdFor(ticket),
                     ticket: ticket,
                   ),
                   onClearReservation: () => _clearReservation(
                     context,
                     event: event,
                     ticket: ticket,
-                    returnToPool: canSelfAssign,
+                    returnToPool: clearReservationReturnsToPool(ticket),
                   ),
-                  clearReservationTooltip: canSelfAssign
+                  clearReservationTooltip: clearReservationReturnsToPool(ticket)
                       ? 'Devolver al pool'
                       : 'Liberar reserva',
-                  onShare: () => _shareTickets(context, event, [ticket]),
-                  onPrint: () => _printTickets(context, event, [ticket]),
+                  onShare: () => _shareTickets(
+                    context,
+                    event,
+                    [ticket],
+                    sellerNames: sellerNames,
+                  ),
+                  onPrint: () => _printTickets(
+                    context,
+                    event,
+                    [ticket],
+                    sellerNames: sellerNames,
+                  ),
+                  onSetBuyer: () => _setTicketBuyer(
+                    context,
+                    event: event,
+                    ticket: ticket,
+                  ),
                 ),
               ),
         ],
@@ -546,6 +588,38 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     }
   }
 
+  Future<void> _setTicketBuyer(
+    BuildContext context, {
+    required Event event,
+    required Ticket ticket,
+  }) async {
+    final hasBuyer = ticket.buyerName.trim().isNotEmpty;
+    final result = await _askBuyerName(
+      context,
+      title: hasBuyer
+          ? 'Editar destinatario · ticket #${ticket.number}'
+          : 'Destinatario · ticket #${ticket.number}',
+      requiredName: false,
+      initialName: ticket.buyerName,
+      confirmLabel: 'Guardar',
+    );
+    if (result == null || !context.mounted) return;
+
+    try {
+      await setTicketsBuyerAction(
+        ref,
+        eventId: event.id,
+        ticketIds: [ticket.id],
+        buyerName: result,
+        actorId: widget.actorId,
+        actorRole: widget.actorRole,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _clearReservation(
     BuildContext context, {
     required Event event,
@@ -581,30 +655,71 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Future<void> _printTickets(
     BuildContext context,
     Event event,
-    List<Ticket> tickets,
-  ) async {
-    final details = await _askShareDetails(
-      context,
-      title: tickets.length == 1
-          ? 'Imprimir ticket #${tickets.first.number}'
-          : 'Imprimir ${tickets.length} tickets',
-      initialBuyerName: _sharedBuyerHint(tickets),
-      confirmLabel: 'Imprimir',
-    );
-    if (details == null || !context.mounted) return;
-
-    final toPrint = await _applyOptionalBuyer(
+    List<Ticket> tickets, {
+    Map<String, String> sellerNames = const {},
+  }) async {
+    final toPrint = await _prepareTicketsForExport(
       context,
       event: event,
       tickets: tickets,
-      buyerName: details.buyerName,
+      singleTitle: 'Imprimir ticket #${tickets.first.number}',
+      confirmLabel: 'Imprimir',
     );
     if (toPrint == null || !context.mounted) return;
 
+    if (!context.mounted) return;
+    var progress = 0;
+    final total = toPrint.length;
+    void Function(void Function())? setDialogState;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setState) {
+          setDialogState = setState;
+          return PopScope(
+            canPop: false,
+            child: AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    total <= 1
+                        ? 'Generando PDF...'
+                        : 'Generando PDF... $progress de $total',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
     try {
-      await TicketPdf.printTickets(event: event, tickets: toPrint);
+      await TicketPdf.downloadTickets(
+        event: event,
+        tickets: toPrint,
+        style: event.ticketDesign,
+        sellerNames: sellerNames,
+        onProgress: (done, count) {
+          progress = done;
+          setDialogState?.call(() {});
+        },
+      );
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('PDF listo. Elegí dónde guardarlo.'),
+        ),
+      );
     } catch (e) {
       if (!context.mounted) return;
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo generar el PDF: $e')),
       );
@@ -614,23 +729,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Future<void> _shareTickets(
     BuildContext context,
     Event event,
-    List<Ticket> tickets,
-  ) async {
-    final details = await _askShareDetails(
-      context,
-      title: tickets.length == 1
-          ? 'Compartir ticket #${tickets.first.number}'
-          : 'Compartir ${tickets.length} tickets',
-      initialBuyerName: _sharedBuyerHint(tickets),
-      confirmLabel: 'Compartir',
-    );
-    if (details == null || !context.mounted) return;
-
-    final toShare = await _applyOptionalBuyer(
+    List<Ticket> tickets, {
+    Map<String, String> sellerNames = const {},
+  }) async {
+    final toShare = await _prepareTicketsForExport(
       context,
       event: event,
       tickets: tickets,
-      buyerName: details.buyerName,
+      singleTitle: 'Compartir ticket #${tickets.first.number}',
+      confirmLabel: 'Compartir',
     );
     if (toShare == null || !context.mounted) return;
 
@@ -640,6 +747,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         tickets: toShare,
         event: event,
         style: event.ticketDesign,
+        sellerNames: sellerNames,
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -647,6 +755,32 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
       );
     }
+  }
+
+  /// Single ticket: optional destinatario. Several tickets: keep each as-is.
+  Future<List<Ticket>?> _prepareTicketsForExport(
+    BuildContext context, {
+    required Event event,
+    required List<Ticket> tickets,
+    required String singleTitle,
+    required String confirmLabel,
+  }) async {
+    if (tickets.length != 1) return tickets;
+
+    final details = await _askShareDetails(
+      context,
+      title: singleTitle,
+      initialBuyerName: _sharedBuyerHint(tickets),
+      confirmLabel: confirmLabel,
+    );
+    if (details == null || !context.mounted) return null;
+
+    return _applyOptionalBuyer(
+      context,
+      event: event,
+      tickets: tickets,
+      buyerName: details.buyerName,
+    );
   }
 
   String _sharedBuyerHint(List<Ticket> tickets) {
@@ -831,12 +965,14 @@ class _SellerTicketCard extends StatelessWidget {
     required this.canReserve,
     required this.canCollect,
     required this.canClearReservation,
+    required this.canSetBuyer,
     required this.canShare,
     required this.onReserve,
     required this.onCollect,
     required this.onClearReservation,
     required this.onShare,
     required this.onPrint,
+    required this.onSetBuyer,
     this.onToggleSelect,
     this.clearReservationTooltip = 'Liberar reserva',
     this.assignedSellerLabel,
@@ -850,6 +986,7 @@ class _SellerTicketCard extends StatelessWidget {
   final bool canReserve;
   final bool canCollect;
   final bool canClearReservation;
+  final bool canSetBuyer;
   final bool canShare;
   final VoidCallback? onToggleSelect;
   final VoidCallback onReserve;
@@ -857,6 +994,7 @@ class _SellerTicketCard extends StatelessWidget {
   final VoidCallback onClearReservation;
   final VoidCallback onShare;
   final VoidCallback onPrint;
+  final VoidCallback onSetBuyer;
   final String clearReservationTooltip;
   final String? assignedSellerLabel;
 
@@ -997,6 +1135,20 @@ class _SellerTicketCard extends StatelessWidget {
                     ),
                   ],
                 ],
+              ),
+            ],
+            if (canSetBuyer) ...[
+              SizedBox(
+                height: (canReserve || canCollect || canClearReservation)
+                    ? 8
+                    : 10,
+              ),
+              OutlinedButton.icon(
+                onPressed: onSetBuyer,
+                icon: const Icon(Icons.person_outline, size: 18),
+                label: Text(
+                  buyer.isEmpty ? 'Destinatario' : 'Editar destinatario',
+                ),
               ),
             ],
           ],

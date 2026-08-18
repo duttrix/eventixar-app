@@ -307,6 +307,24 @@ class Event {
   /// Closed event: organizer may view, mutations and collaborator access are blocked.
   bool get isReadOnly => status == EventStatus.finished;
 
+  String get eventDateLabel {
+    final day = eventDate.day.toString().padLeft(2, '0');
+    final month = eventDate.month.toString().padLeft(2, '0');
+    return '$day/$month/${eventDate.year}';
+  }
+
+  String get eventTimeRangeLabel {
+    String hhmm(TimeOfDay time) {
+      final hour = time.hour.toString().padLeft(2, '0');
+      final minute = time.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    }
+
+    return '${hhmm(pickupFrom)} - ${hhmm(pickupTo)}';
+  }
+
+  String get eventWhenLabel => '$eventDateLabel  $eventTimeRangeLabel';
+
   factory Event.fromFirestore(String id, Map<String, dynamic> data) {
     return Event(
       id: id,

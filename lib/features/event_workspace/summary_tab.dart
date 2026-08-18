@@ -210,35 +210,6 @@ class SummaryTab extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         SectionCard(
-          title: 'Validadores',
-          child: validators.isEmpty
-              ? const Text(
-                  'Todavía no hay validadores.',
-                  style: TextStyle(color: AppColors.textMuted),
-                )
-              : Column(
-                  children: [
-                    for (final validator in validators)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Expanded(child: Text(validator.name)),
-                            Text(
-                              '${tickets.where((t) => t.validatorId == validator.id).length} validados',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 10),
-        SectionCard(
           title: 'Recaudadores',
           child: collectors.isEmpty
               ? const Text(
@@ -276,6 +247,35 @@ class SummaryTab extends ConsumerWidget {
                             ),
                           );
                         },
+                      ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 10),
+        SectionCard(
+          title: 'Validadores',
+          child: validators.isEmpty
+              ? const Text(
+                  'Todavía no hay validadores.',
+                  style: TextStyle(color: AppColors.textMuted),
+                )
+              : Column(
+                  children: [
+                    for (final validator in validators)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(validator.name)),
+                            Text(
+                              '${tickets.where((t) => t.validatorId == validator.id).length} validados',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

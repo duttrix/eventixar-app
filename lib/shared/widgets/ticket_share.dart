@@ -51,6 +51,7 @@ class TicketShare {
     required Ticket ticket,
     required Event event,
     TicketVisualStyle style = TicketVisualStyle.classic,
+    String sellerName = '',
   }) async {
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) {
@@ -61,6 +62,7 @@ class TicketShare {
       ticket: ticket,
       event: event,
       style: style,
+      sellerName: sellerName,
     );
   }
 
@@ -69,6 +71,8 @@ class TicketShare {
     required Ticket ticket,
     required Event event,
     TicketVisualStyle style = TicketVisualStyle.classic,
+    double pixelRatio = 3,
+    String sellerName = '',
   }) async {
     final key = GlobalKey();
     late final OverlayEntry entry;
@@ -86,6 +90,7 @@ class TicketShare {
                 ticket: ticket,
                 event: event,
                 style: style,
+                sellerName: sellerName,
               ),
             ),
           ),
@@ -105,10 +110,14 @@ class TicketShare {
       if (boundary == null) {
         throw StateError('No se pudo capturar el ticket.');
       }
-      final image = await boundary.toImage(pixelRatio: 3);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (bytes == null) throw StateError('No se pudo codificar el PNG.');
-      return bytes.buffer.asUint8List();
+      final image = await boundary.toImage(pixelRatio: pixelRatio);
+      try {
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (bytes == null) throw StateError('No se pudo codificar el PNG.');
+        return bytes.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
     } finally {
       entry.remove();
     }
@@ -119,6 +128,7 @@ class TicketShare {
     required List<Ticket> tickets,
     required Event event,
     TicketVisualStyle style = TicketVisualStyle.classic,
+    Map<String, String> sellerNames = const {},
   }) async {
     final dir = await getTemporaryDirectory();
     final files = <XFile>[];
@@ -128,6 +138,7 @@ class TicketShare {
         ticket: ticket,
         event: event,
         style: style,
+        sellerName: _sellerNameFor(ticket, sellerNames),
       );
       final path = '${dir.path}/ticket_${event.id}_${ticket.id}.png';
       await File(path).writeAsBytes(png, flush: true);
@@ -146,6 +157,7 @@ class TicketShare {
     required List<Ticket> tickets,
     required Event event,
     TicketVisualStyle style = TicketVisualStyle.classic,
+    Map<String, String> sellerNames = const {},
   }) async {
     if (tickets.isEmpty) return;
     final overlay = Overlay.maybeOf(context);
@@ -157,8 +169,15 @@ class TicketShare {
       tickets: tickets,
       event: event,
       style: style,
+      sellerNames: sellerNames,
     );
     await Share.shareXFiles(files);
+  }
+
+  static String _sellerNameFor(Ticket ticket, Map<String, String> sellerNames) {
+    final id = ticket.sellerId?.trim();
+    if (id == null || id.isEmpty) return '';
+    return sellerNames[id]?.trim() ?? '';
   }
 }
 
@@ -170,12 +189,14 @@ class TicketSharePreview extends StatelessWidget {
     required this.event,
     this.style = TicketVisualStyle.classic,
     this.showQr = true,
+    this.sellerName = '',
   });
 
   final Ticket ticket;
   final Event event;
   final TicketVisualStyle style;
   final bool showQr;
+  final String sellerName;
 
   @override
   Widget build(BuildContext context) {
@@ -299,6 +320,17 @@ class TicketSharePreview extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (sellerName.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Vendedor: ${sellerName.trim()}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -330,9 +362,16 @@ class TicketSharePreview extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Retiro / entrada · ${event.pickupPlace}',
+            'Fecha: ${event.eventWhenLabel}',
             style: const TextStyle(color: Colors.white60, fontSize: 11),
           ),
+          if (event.pickupPlace.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Lugar: ${event.pickupPlace.trim()}',
+              style: const TextStyle(color: Colors.white60, fontSize: 11),
+            ),
+          ],
         ],
       ),
     );

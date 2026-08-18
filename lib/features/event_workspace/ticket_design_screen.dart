@@ -132,18 +132,9 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
           ticket: previewTicket,
           event: event,
           style: _style,
+          sellerName: 'Ejemplo',
         ),
         const SizedBox(height: 24),
-        Text('Personalizar', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          readOnly
-              ? 'El evento finalizó. El diseño queda en solo consulta.'
-              : 'Los cambios se guardan solos y se aplican a las imágenes que '
-                  'comparte el vendedor.',
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-        ),
-        const SizedBox(height: 16),
         _sectionLabel('Plantilla'),
         const SizedBox(height: 8),
         Wrap(
