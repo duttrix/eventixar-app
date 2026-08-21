@@ -639,17 +639,30 @@ class SessionController extends StateNotifier<SessionState> {
   Future<User?> signInWithGoogle() async {
     final user = await _ref.read(googleAuthServiceProvider).signInWithGoogle();
     if (user == null) return null;
-
-    // Organizer login owns the device: drop any installed collaborator access
-    // so Google auth is not ignored by _applyFirebaseUser.
-    if (state.collaboratorToken != null) {
-      await _ref.read(collaboratorSessionStorageProvider).clear();
-      state = const SessionState();
-    }
-
-    // Apply immediately so GoRouter redirect sees userUid before /home.
+    await _prepareOrganizerLogin();
     await _applyFirebaseUser(user);
     return user;
+  }
+
+  Future<User?> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    final user = await _ref
+        .read(googleAuthServiceProvider)
+        .signInWithEmailAndPassword(email: email, password: password);
+    if (user == null) return null;
+    await _prepareOrganizerLogin();
+    await _applyFirebaseUser(user);
+    return user;
+  }
+
+  /// Organizer login owns the device: drop any installed collaborator access
+  /// so Firebase auth is not ignored by [_applyFirebaseUser].
+  Future<void> _prepareOrganizerLogin() async {
+    if (state.collaboratorToken == null) return;
+    await _ref.read(collaboratorSessionStorageProvider).clear();
+    state = const SessionState();
   }
 
   Future<void> enterAsCollaborator(

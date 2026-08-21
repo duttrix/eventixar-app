@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,17 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   String? _error;
+  bool _showEmailForm = false;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _signInWithGoogle() async {
     if (_busy) return;
@@ -31,7 +43,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         setState(() => _busy = false);
         return;
       }
-      // Session already has userUid; prefer go via redirect-safe navigation.
       if (context.mounted) context.go('/home');
     } catch (e) {
       if (!mounted) return;
@@ -41,6 +52,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
       debugPrint('Google sign-in error: $e');
     }
+  }
+
+  Future<void> _signInWithEmail() async {
+    if (_busy) return;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Completá email y contraseña.');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final user = await ref
+          .read(sessionProvider.notifier)
+          .signInWithEmailAndPassword(email: email, password: password);
+      if (!mounted) return;
+      if (user == null) {
+        setState(() => _busy = false);
+        return;
+      }
+      if (context.mounted) context.go('/home');
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = _emailAuthMessage(e);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'No se pudo iniciar sesión. Probá de nuevo.';
+      });
+      debugPrint('Email sign-in error: $e');
+    }
+  }
+
+  String _emailAuthMessage(FirebaseAuthException e) {
+    return switch (e.code) {
+      'user-not-found' || 'wrong-password' || 'invalid-credential' =>
+        'Email o contraseña incorrectos.',
+      'invalid-email' => 'El email no es válido.',
+      'user-disabled' => 'Esta cuenta está deshabilitada.',
+      'too-many-requests' => 'Demasiados intentos. Probá más tarde.',
+      _ => 'No se pudo iniciar sesión. Probá de nuevo.',
+    };
   }
 
   @override
@@ -88,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _busy ? null : _signInWithGoogle,
-                        icon: _busy
+                        icon: _busy && !_showEmailForm
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
@@ -96,7 +157,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               )
                             : const GoogleLogo(size: 18),
                         label: Text(
-                          _busy ? 'Conectando…' : 'Continuar con Google',
+                          _busy && !_showEmailForm
+                              ? 'Conectando…'
+                              : 'Continuar con Google',
                         ),
                         style: OutlinedButton.styleFrom(
                           backgroundColor: Colors.white,
@@ -120,6 +183,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                                _showEmailForm = !_showEmailForm;
+                                _error = null;
+                              }),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textMuted,
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                      child: Text(
+                        _showEmailForm
+                            ? 'Ocultar email'
+                            : 'Entrar con email',
+                      ),
+                    ),
+                    if (_showEmailForm) ...[
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _emailController,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _passwordController,
+                        enabled: !_busy,
+                        obscureText: _obscurePassword,
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _signInWithEmail(),
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Mostrar'
+                                : 'Ocultar',
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _signInWithEmail,
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Entrar'),
+                        ),
+                      ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 14),
                       Text(

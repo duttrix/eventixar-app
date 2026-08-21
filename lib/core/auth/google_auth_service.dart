@@ -27,6 +27,18 @@ class GoogleAuthService {
     _initialized = true;
   }
 
+  /// Email / password sign-in (demo / Play review accounts).
+  Future<User?> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    final result = await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+    return result.user;
+  }
+
   /// Interactive Google sign-in. Returns the Firebase [User] or null if cancelled.
   Future<User?> signInWithGoogle() async {
     await _ensureInitialized();
