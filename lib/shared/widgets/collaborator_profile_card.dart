@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import 'busy_dialog.dart';
 import 'collaborator_access_actions.dart';
 import 'section_card.dart';
 
@@ -154,17 +155,21 @@ class CollaboratorProfileCard extends ConsumerWidget {
             onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
+              final notes = notesController.text.trim();
+              Navigator.pop(dialogContext);
               try {
-                await saveCollaborator(
-                  ref,
-                  eventId: eventId,
-                  collaboratorId: collaborator.id,
-                  name: name,
-                  phone: collaborator.phone,
-                  notes: notesController.text.trim(),
+                await runBusyDialog(
+                  context,
+                  message: 'Guardando...',
+                  work: (_) => saveCollaborator(
+                    ref,
+                    eventId: eventId,
+                    collaboratorId: collaborator.id,
+                    name: name,
+                    phone: collaborator.phone,
+                    notes: notes,
+                  ),
                 );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

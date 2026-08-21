@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
 
 /// Coordinator portal: manage all sellers for an event (no organizer account).
@@ -189,18 +190,23 @@ class CoordinatorPortalScreen extends ConsumerWidget {
             onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
+              final phone = phoneController.text.trim();
+              final notes = notesController.text.trim();
+              Navigator.pop(dialogContext);
               try {
-                final seller = await inviteCollaborator(
-                  ref,
-                  eventId: eventId,
-                  role: CollaboratorRole.seller,
-                  name: name,
-                  phone: phoneController.text.trim(),
-                  notes: notesController.text.trim(),
-                  createdByCoordinatorId: coordinatorId,
+                final seller = await runBusyDialog(
+                  context,
+                  message: 'Creando vendedor...',
+                  work: (_) => inviteCollaborator(
+                    ref,
+                    eventId: eventId,
+                    role: CollaboratorRole.seller,
+                    name: name,
+                    phone: phone,
+                    notes: notes,
+                    createdByCoordinatorId: coordinatorId,
+                  ),
                 );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
                 if (!context.mounted) return;
                 await AccessShare.copy(
                   context,

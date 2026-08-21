@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'organizer_sell_screen.dart';
+import 'organizer_tickets_screen.dart';
 
-/// Organizer ticket hub: sell / share / print.
+/// Organizer ticket hub: manage, sell, share and print tickets.
 class TicketsTab extends StatelessWidget {
   const TicketsTab({super.key, required this.eventId});
 
@@ -10,9 +10,6 @@ class TicketsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OrganizerSellScreen(
-      eventId: eventId,
-      embedded: true,
-    );
+    return OrganizerTicketsScreen(eventId: eventId);
   }
 }

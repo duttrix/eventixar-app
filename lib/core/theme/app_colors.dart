@@ -28,7 +28,7 @@ class AppColors {
   static const Color accentBg = Color(0xFFE6F7F2);
   static const Color accentText = Color(0xFF0A6B5F);
 
-  // Semantic
+  // Semantic — ticket / badge tones (kept distinct on purpose)
   static const Color successText = Color(0xFF0A6B5F);
   static const Color successBg = Color(0xFFE6F7F2);
 
@@ -37,4 +37,16 @@ class AppColors {
 
   static const Color warnText = Color(0xFF8A6410);
   static const Color warnBg = Color(0xFFFEF3D9);
+
+  /// Reserved tickets (sky).
+  static const Color infoText = Color(0xFF1565C0);
+  static const Color infoBg = Color(0xFFE3F2FD);
+
+  /// Settled / rendido tickets (indigo).
+  static const Color settleText = Color(0xFF3949AB);
+  static const Color settleBg = Color(0xFFE8EAF6);
+
+  /// Delivered / validado tickets (rose — clearly apart from cobrado green).
+  static const Color deliveredText = Color(0xFF9D174D);
+  static const Color deliveredBg = Color(0xFFFCE7F3);
 }

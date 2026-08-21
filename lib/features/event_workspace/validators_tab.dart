@@ -7,6 +7,7 @@ import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
+import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
 import 'validator_detail_screen.dart';
 
@@ -202,17 +203,21 @@ class ValidatorsTab extends ConsumerWidget {
             onPressed: () async {
               final name = nameController.text.trim();
               if (name.isEmpty) return;
+              final notes = notesController.text.trim();
+              Navigator.pop(dialogContext);
               try {
-                final v = await inviteCollaborator(
-                  ref,
-                  eventId: eventId,
-                  role: CollaboratorRole.validator,
-                  name: name,
-                  phone: '',
-                  notes: notesController.text.trim(),
+                final v = await runBusyDialog(
+                  context,
+                  message: 'Creando validador...',
+                  work: (_) => inviteCollaborator(
+                    ref,
+                    eventId: eventId,
+                    role: CollaboratorRole.validator,
+                    name: name,
+                    phone: '',
+                    notes: notes,
+                  ),
                 );
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
                 if (!context.mounted) return;
                 await AccessShare.share(
                   context,

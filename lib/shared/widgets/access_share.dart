@@ -201,33 +201,12 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = ticketStatusStyle(status);
-
-    return Material(
-      color: style.background,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? AppColors.accent : Colors.transparent,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            '${status.label}: $count',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: style.foreground,
-            ),
-          ),
-        ),
-      ),
+    return TicketStatusPill(
+      label: status.label,
+      style: ticketStatusStyle(status),
+      count: count,
+      selected: selected,
+      onTap: onTap,
     );
   }
 }
