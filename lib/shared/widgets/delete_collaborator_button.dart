@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import 'app_snackbar.dart';
 
 /// Removes a collaborator after confirmation.
 ///
@@ -42,10 +43,10 @@ class _DeleteCollaboratorButtonState
         content: Text(
           isSeller
               ? 'Vas a eliminar a ${person.name}. Los tickets sin vender '
-                  'vuelven al pool. Los ya cobrados se mantienen. '
-                  'Su link deja de funcionar.'
+                    'vuelven al pool. Los ya cobrados se mantienen. '
+                    'Su link deja de funcionar.'
               : 'Vas a eliminar a ${person.name}. Su link deja de funcionar '
-                  'de inmediato.',
+                    'de inmediato.',
         ),
         actions: [
           TextButton(
@@ -72,15 +73,11 @@ class _DeleteCollaboratorButtonState
         collaborator: person,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${person.name} eliminado.')),
-      );
+      AppSnackBar.success(context, '${person.name} eliminado.');
       widget.onDeleted?.call();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo eliminar: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo eliminar: $e', cause: e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

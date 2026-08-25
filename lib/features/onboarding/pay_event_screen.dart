@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Payment screen. Confirming payment enables the event and generates tickets.
@@ -51,8 +52,10 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo habilitar el evento: $e')),
+      AppSnackBar.error(
+        context,
+        'No se pudo habilitar el evento: $e',
+        cause: e,
       );
     } finally {
       if (mounted) setState(() => _confirming = false);
@@ -61,10 +64,11 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ref.watch(eventProvider(widget.eventId)).when(
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
+    return ref
+        .watch(eventProvider(widget.eventId))
+        .when(
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (e, _) => Scaffold(
             appBar: AppBar(title: const Text('Pagar y habilitar')),
             body: Center(child: Text('No se pudo cargar el evento: $e')),
@@ -126,9 +130,9 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
                 Text(
                   quote.priceLabel,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 for (final line in quote.breakdown) ...[
@@ -161,7 +165,10 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
                 Text(
                   'Todavía no hay checkout integrado. Al confirmar se habilita '
                   'el evento y se generan los tickets.',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),

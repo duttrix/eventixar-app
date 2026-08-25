@@ -8,9 +8,9 @@ import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/ticket_share.dart';
-import '../../shared/widgets/ticket_status_style.dart';
 
 /// Organizer ticket hub: individual cards + multi-select bulk actions.
 class OrganizerTicketsScreen extends ConsumerStatefulWidget {
@@ -70,9 +70,7 @@ class _OrganizerTicketsScreenState
         sellersAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (eventAsync.hasError ||
-        ticketsAsync.hasError ||
-        sellersAsync.hasError) {
+    if (eventAsync.hasError || ticketsAsync.hasError || sellersAsync.hasError) {
       return Center(
         child: Text(
           '${eventAsync.error ?? ticketsAsync.error ?? sellersAsync.error}',
@@ -96,8 +94,8 @@ class _OrganizerTicketsScreenState
     final visible = _statusFilters.isEmpty
         ? sorted
         : sorted
-            .where((t) => _statusFilters.contains(t.status))
-            .toList(growable: false);
+              .where((t) => _statusFilters.contains(t.status))
+              .toList(growable: false);
 
     final selectedTickets = visible
         .where((t) => _selectedIds.contains(t.id))
@@ -105,13 +103,11 @@ class _OrganizerTicketsScreenState
     final showBar =
         !event.isReadOnly && _selectionMode && selectedTickets.isNotEmpty;
 
-    final collectible =
-        selectedTickets.where((t) => t.status.isSellable).toList();
+    final collectible = selectedTickets
+        .where((t) => t.status.isSellable)
+        .toList();
     final reservable = selectedTickets
-        .where(
-          (t) =>
-              t.status.isSellable && t.status != TicketStatus.reserved,
-        )
+        .where((t) => t.status.isSellable && t.status != TicketStatus.reserved)
         .toList();
     final assignable = selectedTickets
         .where(
@@ -143,12 +139,12 @@ class _OrganizerTicketsScreenState
                 onStatusTap: sorted.isEmpty
                     ? null
                     : (status) => setState(() {
-                          if (_statusFilters.contains(status)) {
-                            _statusFilters.remove(status);
-                          } else {
-                            _statusFilters.add(status);
-                          }
-                        }),
+                        if (_statusFilters.contains(status)) {
+                          _statusFilters.remove(status);
+                        } else {
+                          _statusFilters.add(status);
+                        }
+                      }),
               ),
               const SizedBox(height: 16),
               Row(
@@ -170,7 +166,8 @@ class _OrganizerTicketsScreenState
                     if (_selectionMode) ...[
                       TextButton(
                         onPressed: () {
-                          final allSelected = visible.isNotEmpty &&
+                          final allSelected =
+                              visible.isNotEmpty &&
                               visible.every((t) => _selectedIds.contains(t.id));
                           setState(() {
                             if (allSelected) {
@@ -251,8 +248,7 @@ class _OrganizerTicketsScreenState
                         ticket: ticket,
                         organizerId: uid,
                       ),
-                      onSetBuyer: () =>
-                          _setBuyer(event: event, ticket: ticket),
+                      onSetBuyer: () => _setBuyer(event: event, ticket: ticket),
                       onAssignSeller: () => _assignSeller(
                         event: event,
                         ticket: ticket,
@@ -265,10 +261,8 @@ class _OrganizerTicketsScreenState
                         ticket: ticket,
                         organizerId: uid,
                       ),
-                      onReturnToPool: () => _returnToPool(
-                        event: event,
-                        ticket: ticket,
-                      ),
+                      onReturnToPool: () =>
+                          _returnToPool(event: event, ticket: ticket),
                       onPrint: () => _printTickets(
                         event: event,
                         tickets: [ticket],
@@ -291,11 +285,11 @@ class _OrganizerTicketsScreenState
             onCollect: collectible.isEmpty
                 ? null
                 : () => _bulkCollect(
-                      event: event,
-                      selected: selectedTickets,
-                      eligible: collectible,
-                      organizerId: uid,
-                    ),
+                    event: event,
+                    selected: selectedTickets,
+                    eligible: collectible,
+                    organizerId: uid,
+                  ),
             onMore: () => _openBulkMore(
               event: event,
               selected: selectedTickets,
@@ -343,8 +337,9 @@ class _OrganizerTicketsScreenState
     required String actionVerb,
   }) async {
     if (eligible.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ningún ticket seleccionado se puede $actionVerb.')),
+      AppSnackBar.warning(
+        context,
+        'Ningún ticket seleccionado se puede $actionVerb.',
       );
       return false;
     }
@@ -352,9 +347,9 @@ class _OrganizerTicketsScreenState
     final skipped = selected.length - eligible.length;
     final body = skipped == 0
         ? 'Se van a $actionVerb ${eligible.length} '
-            'ticket${eligible.length == 1 ? '' : 's'}.'
+              'ticket${eligible.length == 1 ? '' : 's'}.'
         : 'Se van a $actionVerb ${eligible.length} de ${selected.length}.\n'
-            'Se omiten $skipped que no aplican.';
+              'Se omiten $skipped que no aplican.';
 
     final ok = await showDialog<bool>(
       context: context,
@@ -421,8 +416,8 @@ class _OrganizerTicketsScreenState
                     reservable.isEmpty
                         ? 'Reservar'
                         : reservable.length == selected.length
-                            ? 'Reservar (${reservable.length})'
-                            : 'Reservar (${reservable.length} de ${selected.length})',
+                        ? 'Reservar (${reservable.length})'
+                        : 'Reservar (${reservable.length} de ${selected.length})',
                   ),
                   onTap: reservable.isEmpty
                       ? null
@@ -443,8 +438,8 @@ class _OrganizerTicketsScreenState
                     assignable.isEmpty
                         ? 'Asignar vendedor'
                         : assignable.length == selected.length
-                            ? 'Asignar vendedor (${assignable.length})'
-                            : 'Asignar vendedor (${assignable.length} de ${selected.length})',
+                        ? 'Asignar vendedor (${assignable.length})'
+                        : 'Asignar vendedor (${assignable.length} de ${selected.length})',
                   ),
                   onTap: assignable.isEmpty
                       ? null
@@ -467,8 +462,8 @@ class _OrganizerTicketsScreenState
                     returnable.isEmpty
                         ? 'Devolver al pool'
                         : returnable.length == selected.length
-                            ? 'Devolver al pool (${returnable.length})'
-                            : 'Devolver al pool (${returnable.length} de ${selected.length})',
+                        ? 'Devolver al pool (${returnable.length})'
+                        : 'Devolver al pool (${returnable.length} de ${selected.length})',
                   ),
                   onTap: returnable.isEmpty
                       ? null
@@ -559,17 +554,14 @@ class _OrganizerTicketsScreenState
       );
       if (!mounted) return;
       _exitSelection();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
-            'cobrado${eligible.length == 1 ? '' : 's'}.',
-          ),
-        ),
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        'cobrado${eligible.length == 1 ? '' : 's'}.',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -616,17 +608,14 @@ class _OrganizerTicketsScreenState
       );
       if (!mounted) return;
       _exitSelection();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
-            'reservado${eligible.length == 1 ? '' : 's'}.',
-          ),
-        ),
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        'reservado${eligible.length == 1 ? '' : 's'}.',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -709,17 +698,14 @@ class _OrganizerTicketsScreenState
       );
       if (!mounted) return;
       _exitSelection();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
-            '→ ${chosen.name}',
-          ),
-        ),
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        '→ ${chosen.name}',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -753,17 +739,14 @@ class _OrganizerTicketsScreenState
       );
       if (!mounted) return;
       _exitSelection();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
-            'vuelve${eligible.length == 1 ? '' : 'n'} al pool.',
-          ),
-        ),
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        'vuelve${eligible.length == 1 ? '' : 'n'} al pool.',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -806,10 +789,8 @@ class _OrganizerTicketsScreenState
                     leading: const Icon(Icons.storefront_outlined),
                     title: Text(s.name),
                     subtitle: s.phone.trim().isEmpty ? null : Text(s.phone),
-                    onTap: () => Navigator.pop(
-                      sheetContext,
-                      _SellerPick(s.id, s.name),
-                    ),
+                    onTap: () =>
+                        Navigator.pop(sheetContext, _SellerPick(s.id, s.name)),
                   ),
                 if (sellers.isEmpty)
                   const Padding(
@@ -876,7 +857,7 @@ class _OrganizerTicketsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -915,14 +896,11 @@ class _OrganizerTicketsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
-  Future<void> _setBuyer({
-    required Event event,
-    required Ticket ticket,
-  }) async {
+  Future<void> _setBuyer({required Event event, required Ticket ticket}) async {
     if (event.isReadOnly) return;
     final hasBuyer = ticket.buyerName.trim().isNotEmpty;
     final result = await _askBuyerName(
@@ -951,7 +929,7 @@ class _OrganizerTicketsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -963,7 +941,8 @@ class _OrganizerTicketsScreenState
     required String organizerName,
   }) async {
     if (event.isReadOnly) return;
-    final canAssign = ticket.status.isAssignablePool ||
+    final canAssign =
+        ticket.status.isAssignablePool ||
         ticket.status == TicketStatus.withSeller ||
         ticket.status == TicketStatus.reserved;
     if (!canAssign) return;
@@ -980,9 +959,7 @@ class _OrganizerTicketsScreenState
 
     final current = ticket.sellerId?.trim();
     if (current == chosen.id && !ticket.status.isAssignablePool) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ya está asignado a ${chosen.name}.')),
-      );
+      AppSnackBar.info(context, 'Ya está asignado a ${chosen.name}.');
       return;
     }
 
@@ -994,7 +971,7 @@ class _OrganizerTicketsScreenState
           content: Text(
             ticket.status == TicketStatus.reserved
                 ? 'El ticket #${ticket.number} está reservado. Al cambiar de '
-                    'vendedor se libera la reserva y el destinatario.'
+                      'vendedor se libera la reserva y el destinatario.'
                 : 'El ticket #${ticket.number} pasa a ${chosen.name}.',
           ),
           actions: [
@@ -1036,14 +1013,10 @@ class _OrganizerTicketsScreenState
         },
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ticket #${ticket.number} → ${chosen.name}'),
-        ),
-      );
+      AppSnackBar.success(context, 'Ticket #${ticket.number} → ${chosen.name}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -1054,9 +1027,8 @@ class _OrganizerTicketsScreenState
   }) async {
     if (event.isReadOnly || ticket.status != TicketStatus.reserved) return;
     final assigned = ticket.sellerId;
-    final returnToPool = assigned == null ||
-        assigned.isEmpty ||
-        assigned == organizerId;
+    final returnToPool =
+        assigned == null || assigned.isEmpty || assigned == organizerId;
 
     try {
       await _runBusy(
@@ -1083,7 +1055,7 @@ class _OrganizerTicketsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -1101,9 +1073,7 @@ class _OrganizerTicketsScreenState
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Devolver al pool'),
-        content: Text(
-          'El ticket #${ticket.number} vuelve a “Sin vendedor”.',
-        ),
+        content: Text('El ticket #${ticket.number} vuelve a “Sin vendedor”.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -1133,7 +1103,7 @@ class _OrganizerTicketsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -1188,15 +1158,11 @@ class _OrganizerTicketsScreenState
       if (!mounted) return;
       Navigator.of(context).pop();
       if (_selectionMode) _exitSelection();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PDF listo. Elegí dónde guardarlo.')),
-      );
+      AppSnackBar.success(context, 'PDF listo. Elegí dónde guardarlo.');
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo generar el PDF: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo generar el PDF: $e', cause: e);
     }
   }
 
@@ -1217,8 +1183,10 @@ class _OrganizerTicketsScreenState
       if (_selectionMode && mounted) _exitSelection();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
+      AppSnackBar.error(
+        context,
+        'No se pudieron generar las imágenes: $e',
+        cause: e,
       );
     }
   }
@@ -1301,8 +1269,8 @@ class _BulkActionBar extends StatelessWidget {
     final collectLabel = collectibleCount == 0
         ? 'Cobrar'
         : collectibleCount == selectedCount
-            ? 'Cobrar ($collectibleCount)'
-            : 'Cobrar ($collectibleCount de $selectedCount)';
+        ? 'Cobrar ($collectibleCount)'
+        : 'Cobrar ($collectibleCount de $selectedCount)';
 
     return Material(
       elevation: 8,
@@ -1322,10 +1290,7 @@ class _BulkActionBar extends StatelessWidget {
                   ),
                 ),
               ),
-              FilledButton(
-                onPressed: onCollect,
-                child: Text(collectLabel),
-              ),
+              FilledButton(onPressed: onCollect, child: Text(collectLabel)),
               const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Más acciones',
@@ -1447,10 +1412,7 @@ class _OrganizerTicketCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: borderColor,
-              width: selected ? 1.5 : 1,
-            ),
+            border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
           ),
           padding: EdgeInsets.fromLTRB(selectionMode ? 6 : 14, 12, 8, 12),
           child: Column(
@@ -1580,8 +1542,7 @@ class _OrganizerTicketCard extends StatelessWidget {
                   ListTile(
                     leading: const Icon(Icons.bookmark_add_outlined),
                     title: const Text('Reservar'),
-                    subtitle:
-                        const Text('Pide destinatario y marca reservado'),
+                    subtitle: const Text('Pide destinatario y marca reservado'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       onReserve();

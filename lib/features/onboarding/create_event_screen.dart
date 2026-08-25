@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
@@ -56,12 +57,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   void _next() {
     if (_step == 0 && !_step0Valid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Completá nombre, qué se vende, fecha y cantidad de tickets.',
-          ),
-        ),
+      AppSnackBar.warning(
+        context,
+        'Completá nombre, qué se vende, fecha y cantidad de tickets.',
       );
       return;
     }
@@ -83,7 +81,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
     setState(() => _submitting = true);
     try {
-      final event = await ref.read(eventRepositoryProvider).createEvent(
+      final event = await ref
+          .read(eventRepositoryProvider)
+          .createEvent(
             ownerId: uid,
             ownerEmail: session.userEmail ?? '',
             name: _nameController.text.trim(),
@@ -106,9 +106,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       context.go('/create-event/pay/${event.id}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo crear el evento: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo crear el evento: $e', cause: e);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -162,10 +160,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   String get _stepTitle => switch (_step) {
-        0 => 'Nuevo evento · Datos',
-        1 => 'Nuevo evento · Equipo',
-        _ => 'Nuevo evento · Cotización',
-      };
+    0 => 'Nuevo evento · Datos',
+    1 => 'Nuevo evento · Equipo',
+    _ => 'Nuevo evento · Cotización',
+  };
 
   Widget _buildDatos() {
     final products =
@@ -207,9 +205,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 child: TextField(
                   controller: _profitController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Ganancia',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Ganancia'),
                 ),
               ),
             ],
@@ -218,9 +214,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           TextField(
             controller: _countController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Cantidad de tickets',
-            ),
+            decoration: const InputDecoration(labelText: 'Cantidad de tickets'),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
@@ -408,15 +402,18 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           Text(
             quote.priceLabel,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: AppColors.accent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 16),
           for (final line in quote.breakdown) ...[
             Text(
               line,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 6),
           ],
@@ -472,11 +469,16 @@ class _StepIndicator extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundColor: i <= step ? AppColors.accent : AppColors.border,
+                backgroundColor: i <= step
+                    ? AppColors.accent
+                    : AppColors.border,
                 foregroundColor: i <= step ? Colors.white : AppColors.textMuted,
                 child: Text(
                   '${i + 1}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),

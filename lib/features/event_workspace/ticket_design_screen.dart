@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/ticket.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/ticket_share.dart';
 
 /// Customize ticket look for an event. Saved on the event document.
@@ -92,9 +93,7 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
       if (!mounted || generation != _saveGeneration) return;
     } catch (e) {
       if (!mounted || generation != _saveGeneration) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar el diseño: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo guardar el diseño: $e', cause: e);
     }
   }
 
@@ -176,10 +175,10 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
           onPick: readOnly
               ? null
               : (c) => _apply(
-                    templateId: 'custom',
-                    style: _style.copyWith(primary: c),
-                    readOnly: false,
-                  ),
+                  templateId: 'custom',
+                  style: _style.copyWith(primary: c),
+                  readOnly: false,
+                ),
         ),
         const SizedBox(height: 16),
         _sectionLabel('Color acento'),
@@ -190,10 +189,10 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
           onPick: readOnly
               ? null
               : (c) => _apply(
-                    templateId: 'custom',
-                    style: _style.copyWith(accent: c),
-                    readOnly: false,
-                  ),
+                  templateId: 'custom',
+                  style: _style.copyWith(accent: c),
+                  readOnly: false,
+                ),
         ),
         const SizedBox(height: 20),
         _sectionLabel('Fondo'),
@@ -212,10 +211,10 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
                 onSelected: readOnly
                     ? null
                     : (_) => _apply(
-                          templateId: 'custom',
-                          style: _style.copyWith(backgroundMode: mode),
-                          readOnly: false,
-                        ),
+                        templateId: 'custom',
+                        style: _style.copyWith(backgroundMode: mode),
+                        readOnly: false,
+                      ),
               ),
           ],
         ),
@@ -236,10 +235,10 @@ class _TicketDesignScreenState extends ConsumerState<TicketDesignScreen> {
                 onSelected: readOnly
                     ? null
                     : (_) => _apply(
-                          templateId: 'custom',
-                          style: _style.copyWith(typography: t),
-                          readOnly: false,
-                        ),
+                        templateId: 'custom',
+                        style: _style.copyWith(typography: t),
+                        readOnly: false,
+                      ),
               ),
           ],
         ),

@@ -7,6 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
@@ -70,7 +71,7 @@ class SellersTab extends ConsumerWidget {
                     readOnly
                         ? 'No se crearon vendedores para este evento.'
                         : 'Usá Agregar para crear un vendedor. Después vas a poder '
-                            'asignarle tickets y compartirle el acceso.',
+                              'asignarle tickets y compartirle el acceso.',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -83,9 +84,8 @@ class SellersTab extends ConsumerWidget {
                   Card(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: InkWell(
-                      onTap: () => context.push(
-                        '/event/$eventId/sellers/${seller.id}',
-                      ),
+                      onTap: () =>
+                          context.push('/event/$eventId/sellers/${seller.id}'),
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
@@ -98,8 +98,9 @@ class SellersTab extends ConsumerWidget {
                                 children: [
                                   Text(
                                     seller.name,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   if (seller.notes.isNotEmpty) ...[
                                     const SizedBox(height: 2),
@@ -200,9 +201,7 @@ class SellersTab extends ConsumerWidget {
                 context.push('/event/$eventId/sellers/${seller.id}');
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Crear'),

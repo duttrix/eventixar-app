@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
@@ -33,10 +34,10 @@ class CoordinatorsTab extends ConsumerWidget {
               child: FloatingActionButton.extended(
                 onPressed: eventAsync.hasValue
                     ? () => _showCreateDialog(
-                          context,
-                          ref,
-                          eventName: eventAsync.requireValue.name,
-                        )
+                        context,
+                        ref,
+                        eventName: eventAsync.requireValue.name,
+                      )
                     : null,
                 icon: const Icon(Icons.person_add_alt_1_outlined),
                 label: const Text('Agregar'),
@@ -120,9 +121,9 @@ class CoordinatorsTab extends ConsumerWidget {
                                     children: [
                                       Text(
                                         coordinator.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -130,7 +131,7 @@ class CoordinatorsTab extends ConsumerWidget {
                                           sellerCount == 0
                                               ? 'Sin vendedores'
                                               : '$sellerCount vendedor'
-                                                  '${sellerCount == 1 ? '' : 'es'}',
+                                                    '${sellerCount == 1 ? '' : 'es'}',
                                           if (coordinator.notes.isNotEmpty)
                                             coordinator.notes,
                                         ].join(' · '),
@@ -239,9 +240,7 @@ class CoordinatorsTab extends ConsumerWidget {
                 );
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Crear y compartir acceso'),

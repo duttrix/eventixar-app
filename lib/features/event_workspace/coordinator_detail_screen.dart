@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/collaborator_profile_card.dart';
 import 'seller_detail_screen.dart';
@@ -101,9 +102,7 @@ class CoordinatorDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            sellers.isEmpty
-                ? 'Vendedores'
-                : 'Vendedores (${sellers.length})',
+            sellers.isEmpty ? 'Vendedores' : 'Vendedores (${sellers.length})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
@@ -112,8 +111,8 @@ class CoordinatorDetailScreen extends ConsumerWidget {
               readOnly
                   ? 'No se asignaron vendedores a este coordinador.'
                   : assignable.isEmpty
-                      ? 'Todavía no hay vendedores en el evento.'
-                      : 'Todavía no tiene vendedores. Usá Asignar vendedor.',
+                  ? 'Todavía no hay vendedores en el evento.'
+                  : 'Todavía no tiene vendedores. Usá Asignar vendedor.',
               style: const TextStyle(color: AppColors.textMuted),
             )
           else
@@ -143,8 +142,7 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 seller.name,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium,
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
                               if (seller.notes.isNotEmpty) ...[
                                 const SizedBox(height: 2),
@@ -168,11 +166,8 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                         if (!readOnly)
                           IconButton(
                             tooltip: 'Quitar del coordinador',
-                            onPressed: () => _unassignSeller(
-                              context,
-                              ref,
-                              seller: seller,
-                            ),
+                            onPressed: () =>
+                                _unassignSeller(context, ref, seller: seller),
                             icon: const Icon(Icons.link_off_outlined),
                           ),
                         const Padding(
@@ -227,12 +222,13 @@ class CoordinatorDetailScreen extends ConsumerWidget {
         coordinatorId: null,
       );
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${seller.name} ya no está en este coordinador.')),
+      AppSnackBar.success(
+        context,
+        '${seller.name} ya no está en este coordinador.',
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -276,18 +272,13 @@ class CoordinatorDetailScreen extends ConsumerWidget {
                         coordinatorId: coordinatorId,
                       );
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '${seller.name} asignado a ${coordinator.name}.',
-                          ),
-                        ),
+                      AppSnackBar.success(
+                        context,
+                        '${seller.name} asignado a ${coordinator.name}.',
                       );
                     } catch (e) {
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('$e')),
-                      );
+                      AppSnackBar.error(context, '$e', cause: e);
                     }
                   },
                 ),
@@ -297,5 +288,4 @@ class CoordinatorDetailScreen extends ConsumerWidget {
       },
     );
   }
-
 }

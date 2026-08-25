@@ -6,6 +6,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
@@ -34,10 +35,10 @@ class ValidatorsTab extends ConsumerWidget {
               child: FloatingActionButton.extended(
                 onPressed: eventAsync.hasValue
                     ? () => _showCreateDialog(
-                          context,
-                          ref,
-                          eventName: eventAsync.requireValue.name,
-                        )
+                        context,
+                        ref,
+                        eventName: eventAsync.requireValue.name,
+                      )
                     : null,
                 icon: const Icon(Icons.person_add_alt_1_outlined),
                 label: const Text('Agregar'),
@@ -78,7 +79,7 @@ class ValidatorsTab extends ConsumerWidget {
                     readOnly
                         ? 'No se crearon validadores para este evento.'
                         : 'Usá Agregar para crear un validador y compartirle el link. '
-                            'Abre el acceso sin registrarse.',
+                              'Abre el acceso sin registrarse.',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
@@ -113,8 +114,9 @@ class ValidatorsTab extends ConsumerWidget {
                                 children: [
                                   Text(
                                     validator.name,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   if (validator.notes.isNotEmpty) ...[
                                     const SizedBox(height: 2),
@@ -236,9 +238,7 @@ class ValidatorsTab extends ConsumerWidget {
                 );
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Crear y compartir acceso'),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
@@ -43,9 +44,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final name = _nameController.text.trim();
     final product = _productController.text.trim();
     if (product.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Especificá qué se vende.')),
-      );
+      AppSnackBar.warning(context, 'Especificá qué se vende.');
       return;
     }
     final ticketPrice = double.tryParse(_priceController.text) ?? 0;
@@ -57,7 +56,9 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final notes = _notesController.text.trim();
 
     try {
-      await ref.read(eventRepositoryProvider).updateEvent(
+      await ref
+          .read(eventRepositoryProvider)
+          .updateEvent(
             widget.eventId,
             name: name,
             product: product,
@@ -70,14 +71,10 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
             notes: notes,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cambios guardados.')),
-      );
+      AppSnackBar.success(context, 'Cambios guardados.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo guardar: $e', cause: e);
     }
   }
 
@@ -90,17 +87,21 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (eventAsync.hasError || !eventAsync.hasValue) {
-      return Center(child: Text('${eventAsync.error ?? 'Evento no encontrado'}'));
+      return Center(
+        child: Text('${eventAsync.error ?? 'Evento no encontrado'}'),
+      );
     }
     final event = eventAsync.requireValue;
     final finished = event.isReadOnly;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
       _productController = TextEditingController(text: event.product);
-      _priceController =
-          TextEditingController(text: event.ticketPrice.toStringAsFixed(0));
-      _profitController =
-          TextEditingController(text: event.ticketProfit.toStringAsFixed(0));
+      _priceController = TextEditingController(
+        text: event.ticketPrice.toStringAsFixed(0),
+      );
+      _profitController = TextEditingController(
+        text: event.ticketProfit.toStringAsFixed(0),
+      );
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
       _eventDate = event.eventDate;
@@ -147,9 +148,7 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                       controller: _profitController,
                       enabled: !finished,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Ganancia',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Ganancia'),
                     ),
                   ),
                 ],
@@ -162,10 +161,12 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _eventDate ?? DateTime.now(),
-                          firstDate: DateTime.now()
-                              .subtract(const Duration(days: 365)),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 730)),
+                          firstDate: DateTime.now().subtract(
+                            const Duration(days: 365),
+                          ),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 730),
+                          ),
                         );
                         if (picked != null) setState(() => _eventDate = picked);
                       },
@@ -188,7 +189,8 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                           : () async {
                               final picked = await showTimePicker(
                                 context: context,
-                                initialTime: _pickupFrom ??
+                                initialTime:
+                                    _pickupFrom ??
                                     const TimeOfDay(hour: 12, minute: 0),
                               );
                               if (picked != null) {
@@ -196,8 +198,9 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                               }
                             },
                       child: InputDecorator(
-                        decoration:
-                            const InputDecoration(labelText: 'Hora desde'),
+                        decoration: const InputDecoration(
+                          labelText: 'Hora desde',
+                        ),
                         child: Text(
                           (_pickupFrom ?? const TimeOfDay(hour: 12, minute: 0))
                               .format(context),
@@ -213,7 +216,8 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                           : () async {
                               final picked = await showTimePicker(
                                 context: context,
-                                initialTime: _pickupTo ??
+                                initialTime:
+                                    _pickupTo ??
                                     const TimeOfDay(hour: 15, minute: 0),
                               );
                               if (picked != null) {
@@ -221,8 +225,9 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                               }
                             },
                       child: InputDecorator(
-                        decoration:
-                            const InputDecoration(labelText: 'Hora hasta'),
+                        decoration: const InputDecoration(
+                          labelText: 'Hora hasta',
+                        ),
                         child: Text(
                           (_pickupTo ?? const TimeOfDay(hour: 15, minute: 0))
                               .format(context),

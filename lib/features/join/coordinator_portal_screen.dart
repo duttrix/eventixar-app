@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
 
@@ -99,8 +100,8 @@ class CoordinatorPortalScreen extends ConsumerWidget {
                 'Podés crear vendedores, asignar tickets, compartir accesos y '
                 'devolver tickets al pool.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
@@ -218,9 +219,7 @@ class CoordinatorPortalScreen extends ConsumerWidget {
                 context.push('/coordinator/$token/sellers/${seller.id}');
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('$e')));
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Crear y compartir'),

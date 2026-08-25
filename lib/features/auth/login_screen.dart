@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth/google_auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/brand_icons.dart';
 import '../../shared/widgets/duttrix_brand.dart';
 
@@ -17,7 +19,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
-  String? _error;
   bool _showEmailForm = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -32,32 +33,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _signInWithGoogle() async {
     if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _busy = true);
     try {
       final user = await ref.read(sessionProvider.notifier).signInWithGoogle();
       if (!mounted) return;
       if (user == null) {
-        setState(() {
-          _busy = false;
-          _error = 'Inicio de sesión cancelado.';
-        });
+        // User dismissed the account picker — no toast.
+        setState(() => _busy = false);
         return;
       }
       if (context.mounted) context.go('/home');
-    } catch (e, st) {
+    } catch (e) {
       if (!mounted) return;
-      final message = e is StateError ? e.message : 'Google: $e';
-      setState(() {
-        _busy = false;
-        // Show the real diagnostic text so Play builds can be debugged
-        // without logcat (e.g. "Google: [16] Account reauth failed").
-        _error = message;
-      });
-      debugPrint('[DuttrixAuth] login_screen catch: $message');
-      debugPrint('[DuttrixAuth] stack: $st');
+      setState(() => _busy = false);
+      final message = e is AuthFailure
+          ? e.userMessage
+          : 'No se pudo iniciar sesión con Google. Probá de nuevo.';
+      // AuthFailure already reported to Crashlytics in GoogleAuthService.
+      AppSnackBar.error(
+        context,
+        message,
+        cause: e is AuthFailure ? null : e,
+        reportToCrashlytics: e is! AuthFailure,
+        crashReason: 'login_google_failed',
+      );
     }
   }
 
@@ -66,14 +65,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Completá email y contraseña.');
+      AppSnackBar.warning(context, 'Completá email y contraseña.');
       return;
     }
 
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _busy = true);
     try {
       final user = await ref
           .read(sessionProvider.notifier)
@@ -86,17 +82,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (context.mounted) context.go('/home');
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = _emailAuthMessage(e);
-      });
-    } catch (e) {
+      setState(() => _busy = false);
+      AppSnackBar.error(
+        context,
+        _emailAuthMessage(e),
+        reportToCrashlytics: false,
+      );
+    } catch (e, st) {
       if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = 'No se pudo iniciar sesión. Probá de nuevo.';
-      });
-      debugPrint('Email sign-in error: $e');
+      setState(() => _busy = false);
+      AppSnackBar.error(
+        context,
+        'No se pudo iniciar sesión. Probá de nuevo.',
+        cause: e,
+        stackTrace: st,
+        crashReason: 'login_email_unexpected',
+      );
     }
   }
 
@@ -194,18 +195,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     TextButton(
                       onPressed: _busy
                           ? null
-                          : () => setState(() {
-                                _showEmailForm = !_showEmailForm;
-                                _error = null;
-                              }),
+                          : () => setState(() => _showEmailForm = !_showEmailForm),
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.textMuted,
                         textStyle: const TextStyle(fontSize: 12),
                       ),
                       child: Text(
-                        _showEmailForm
-                            ? 'Ocultar email'
-                            : 'Entrar con email',
+                        _showEmailForm ? 'Ocultar email' : 'Entrar con email',
                       ),
                     ),
                     if (_showEmailForm) ...[
@@ -233,9 +229,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           labelText: 'Contraseña',
                           isDense: true,
                           suffixIcon: IconButton(
-                            tooltip: _obscurePassword
-                                ? 'Mostrar'
-                                : 'Ocultar',
+                            tooltip: _obscurePassword ? 'Mostrar' : 'Ocultar',
                             onPressed: () => setState(
                               () => _obscurePassword = !_obscurePassword,
                             ),
@@ -262,17 +256,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                                 )
                               : const Text('Entrar'),
-                        ),
-                      ),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: 14),
-                      Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.dangerText,
-                          fontSize: 13,
                         ),
                       ),
                     ],

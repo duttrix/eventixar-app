@@ -7,6 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
@@ -32,10 +33,10 @@ class CollectorsTab extends ConsumerWidget {
               child: FloatingActionButton.extended(
                 onPressed: eventAsync.hasValue
                     ? () => _showCreateDialog(
-                          context,
-                          ref,
-                          eventName: eventAsync.requireValue.name,
-                        )
+                        context,
+                        ref,
+                        eventName: eventAsync.requireValue.name,
+                      )
                     : null,
                 icon: const Icon(Icons.person_add_alt_1_outlined),
                 label: const Text('Agregar'),
@@ -103,8 +104,9 @@ class CollectorsTab extends ConsumerWidget {
                                 children: [
                                   Text(
                                     collector.name,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   if (collector.notes.isNotEmpty) ...[
                                     const SizedBox(height: 2),
@@ -218,9 +220,7 @@ class CollectorsTab extends ConsumerWidget {
                 context.push('/event/$eventId/collectors/${collector.id}');
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Crear y compartir acceso'),

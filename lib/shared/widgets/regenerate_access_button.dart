@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import 'access_share.dart';
+import 'app_snackbar.dart';
 
 /// Revokes a collaborator's invite link and issues a new one.
 ///
@@ -73,8 +74,10 @@ class _RegenerateAccessButtonState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo regenerar el acceso: $e')),
+      AppSnackBar.error(
+        context,
+        'No se pudo regenerar el acceso: $e',
+        cause: e,
       );
     } finally {
       if (mounted) setState(() => _busy = false);

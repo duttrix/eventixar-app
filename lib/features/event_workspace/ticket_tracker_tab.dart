@@ -8,6 +8,7 @@ import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -24,7 +25,6 @@ class TicketTrackerTab extends ConsumerStatefulWidget {
 class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
   final _controller = TextEditingController();
   int? _searchedNumber;
-  String? _error;
 
   @override
   void dispose() {
@@ -36,16 +36,11 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
     final raw = _controller.text.trim();
     final number = int.tryParse(raw);
     if (number == null || number <= 0) {
-      setState(() {
-        _error = 'Ingresá un número de ticket válido.';
-        _searchedNumber = null;
-      });
+      AppSnackBar.warning(context, 'Ingresá un número de ticket válido.');
+      setState(() => _searchedNumber = null);
       return;
     }
-    setState(() {
-      _error = null;
-      _searchedNumber = number;
-    });
+    setState(() => _searchedNumber = number);
   }
 
   @override
@@ -89,13 +84,6 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
                   ),
                 ],
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: AppColors.dangerText),
-                ),
-              ],
             ],
           ),
         ),

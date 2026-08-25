@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/stat_card.dart';
 
@@ -349,16 +350,10 @@ class SummaryTab extends ConsumerWidget {
     try {
       await ref.read(eventRepositoryProvider).finishEvent(eventId);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Evento finalizado. Pasó a solo consulta.'),
-        ),
-      );
+      AppSnackBar.success(context, 'Evento finalizado. Pasó a solo consulta.');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo finalizar: $e')));
+      AppSnackBar.error(context, 'No se pudo finalizar: $e', cause: e);
     }
   }
 }

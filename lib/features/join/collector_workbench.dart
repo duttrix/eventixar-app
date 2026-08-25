@@ -9,6 +9,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -111,16 +112,14 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
               widget.actorRole == 'organizer'
                   ? 'Estás rindiendo como organizador. Elegí un vendedor.'
                   : 'Elegí un vendedor para rendir tickets (en poder, '
-                      'reservados o cobrados) o devolverlos al pool '
-                      '(para que un coordinador los reasigne).',
+                        'reservados o cobrados) o devolverlos al pool '
+                        '(para que un coordinador los reasigne).',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            sellers.isEmpty
-                ? 'Vendedores'
-                : 'Vendedores (${sellers.length})',
+            sellers.isEmpty ? 'Vendedores' : 'Vendedores (${sellers.length})',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 10),
@@ -153,20 +152,17 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     required Collaborator seller,
     required List<Ticket> tickets,
   }) {
-    final sorted = [...tickets]
-      ..sort((a, b) => a.number.compareTo(b.number));
+    final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
     final visible = _statusFilters.isEmpty
         ? sorted
         : sorted
-            .where((t) => _statusFilters.contains(t.status))
-            .toList(growable: false);
+              .where((t) => _statusFilters.contains(t.status))
+              .toList(growable: false);
     final selectableVisible = visible
         .where((t) => _isSettleable(t.status))
         .toList(growable: false);
     final selectedTickets = sorted
-        .where(
-          (t) => _isSettleable(t.status) && _selectedIds.contains(t.id),
-        )
+        .where((t) => _isSettleable(t.status) && _selectedIds.contains(t.id))
         .toList(growable: false);
     final selectedToSettle = selectedTickets;
     final fullAmount = event.ticketPrice;
@@ -226,26 +222,26 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             onStatusTap: sorted.isEmpty
                 ? null
                 : (status) => setState(() {
-                      if (_statusFilters.contains(status)) {
-                        _statusFilters.remove(status);
-                        if (_isSettleable(status)) {
-                          _selectedIds.removeWhere(
-                            (id) => tickets.any(
-                              (t) => t.id == id && t.status == status,
-                            ),
-                          );
-                        }
-                      } else {
-                        _statusFilters.add(status);
-                        if (_isSettleable(status)) {
-                          _selectedIds.addAll(
-                            tickets
-                                .where((t) => t.status == status)
-                                .map((t) => t.id),
-                          );
-                        }
+                    if (_statusFilters.contains(status)) {
+                      _statusFilters.remove(status);
+                      if (_isSettleable(status)) {
+                        _selectedIds.removeWhere(
+                          (id) => tickets.any(
+                            (t) => t.id == id && t.status == status,
+                          ),
+                        );
                       }
-                    }),
+                    } else {
+                      _statusFilters.add(status);
+                      if (_isSettleable(status)) {
+                        _selectedIds.addAll(
+                          tickets
+                              .where((t) => t.status == status)
+                              .map((t) => t.id),
+                        );
+                      }
+                    }
+                  }),
           ),
           const SizedBox(height: 12),
           SectionCard(
@@ -298,7 +294,8 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                                 title: const Text('¿Qué rinde el vendedor?'),
                                 content: Column(
                                   mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Text(
                                       'Vas a rendir ${selectedToSettle.length} ticket'
@@ -356,20 +353,15 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                                 );
                               });
                               final unit = event.amountForSettleMode(mode);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Rendiste ${selectedToSettle.length} tickets '
-                                    '(${mode.label.toLowerCase()} · '
-                                    '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
-                                  ),
-                                ),
+                              AppSnackBar.success(
+                                context,
+                                'Rendiste ${selectedToSettle.length} tickets '
+                                '(${mode.label.toLowerCase()} · '
+                                '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
                               );
                             } catch (e) {
                               if (!context.mounted) return;
-                              ScaffoldMessenger.of(
-                                context,
-                              ).showSnackBar(SnackBar(content: Text('$e')));
+                              AppSnackBar.error(context, '$e', cause: e);
                             }
                           },
                     icon: const Icon(Icons.fact_check_outlined),
@@ -420,21 +412,16 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                               );
                               if (!context.mounted) return;
                               setState(_selectedIds.clear);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${selectedTickets.length} ticket'
-                                    '${selectedTickets.length == 1 ? '' : 's'} '
-                                    'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
-                                    'al pool (devuelto).',
-                                  ),
-                                ),
+                              AppSnackBar.success(
+                                context,
+                                '${selectedTickets.length} ticket'
+                                '${selectedTickets.length == 1 ? '' : 's'} '
+                                'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
+                                'al pool (devuelto).',
                               );
                             } catch (e) {
                               if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('$e')),
-                              );
+                              AppSnackBar.error(context, '$e', cause: e);
                             }
                           },
                     icon: const Icon(Icons.undo),
@@ -499,13 +486,12 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                   ticket: ticket,
                   event: event,
                   selected: _selectedIds.contains(ticket.id),
-                  selectable:
-                      !event.isReadOnly && _isSettleable(ticket.status),
+                  selectable: !event.isReadOnly && _isSettleable(ticket.status),
                   collectorName: ticket.collectorId == null
                       ? null
                       : (ticket.collectorId == widget.actorId
-                          ? widget.actorLabel
-                          : null),
+                            ? widget.actorLabel
+                            : null),
                   onToggle: !event.isReadOnly && _isSettleable(ticket.status)
                       ? () => setState(() {
                           if (_selectedIds.contains(ticket.id)) {
@@ -616,10 +602,7 @@ class _CollectorSellerCard extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textMuted,
-                ),
+                child: Icon(Icons.chevron_right, color: AppColors.textMuted),
               ),
             ],
           ),

@@ -7,6 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -76,19 +77,14 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
       );
       if (!mounted) return;
       setState(() => _returnIds.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${ids.length} ticket${ids.length == 1 ? '' : 's'} '
-            'vuelve${ids.length == 1 ? '' : 'n'} al pool sin vendedor.',
-          ),
-        ),
+      AppSnackBar.success(
+        context,
+        '${ids.length} ticket${ids.length == 1 ? '' : 's'} '
+        'vuelve${ids.length == 1 ? '' : 'n'} al pool sin vendedor.',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo devolver: $e')));
+      AppSnackBar.error(context, 'No se pudo devolver: $e', cause: e);
     } finally {
       if (mounted) setState(() => _returning = false);
     }
@@ -209,9 +205,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                   if (status == TicketStatus.withSeller ||
                       status == TicketStatus.reserved) {
                     _returnIds.removeWhere(
-                      (id) => tickets.any(
-                        (t) => t.id == id && t.status == status,
-                      ),
+                      (id) =>
+                          tickets.any((t) => t.id == id && t.status == status),
                     );
                   }
                 } else {
@@ -220,9 +215,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                       (status == TicketStatus.withSeller ||
                           status == TicketStatus.reserved)) {
                     _returnIds.addAll(
-                      tickets
-                          .where((t) => t.status == status)
-                          .map((t) => t.id),
+                      tickets.where((t) => t.status == status).map((t) => t.id),
                     );
                   }
                 }
@@ -362,7 +355,7 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
               pool.isEmpty
                   ? 'No hay tickets disponibles en el pool.'
                   : '${pool.length} disponibles en el pool (sin vendedor / '
-                      'devueltos). Se asignan los próximos en orden.',
+                        'devueltos). Se asignan los próximos en orden.',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -389,20 +382,16 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                 : () async {
                     final count = int.tryParse(countController.text.trim());
                     if (count == null || count < 1) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Ingresá una cantidad válida.'),
-                        ),
+                      AppSnackBar.warning(
+                        context,
+                        'Ingresá una cantidad válida.',
                       );
                       return;
                     }
                     if (count > pool.length) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Solo hay ${pool.length} tickets disponibles.',
-                          ),
-                        ),
+                      AppSnackBar.warning(
+                        context,
+                        'Solo hay ${pool.length} tickets disponibles.',
                       );
                       return;
                     }
@@ -426,20 +415,15 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                       if (!context.mounted) return;
                       final from = selected.first.number;
                       final to = selected.last.number;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            count == 1
-                                ? 'Asignado 1 ticket (#$from).'
-                                : 'Asignados $count tickets (#$from–#$to).',
-                          ),
-                        ),
+                      AppSnackBar.success(
+                        context,
+                        count == 1
+                            ? 'Asignado 1 ticket (#$from).'
+                            : 'Asignados $count tickets (#$from–#$to).',
                       );
                     } catch (e) {
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('$e')));
+                      AppSnackBar.error(context, '$e', cause: e);
                     }
                   },
             child: const Text('Asignar'),

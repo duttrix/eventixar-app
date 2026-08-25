@@ -9,6 +9,7 @@ import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -153,7 +154,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
             child: Text(
               widget.actorRole == 'organizer'
                   ? 'Estás vendiendo como organizador. Elegí un vendedor '
-                      'para reservar o cobrar sus tickets.'
+                        'para reservar o cobrar sus tickets.'
                   : 'Elegí un vendedor.',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
@@ -224,9 +225,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     required bool canSelfAssign,
     required bool hasSellers,
   }) {
-    final sellerNames = {
-      for (final s in sellers) s.id: s.name,
-    };
+    final sellerNames = {for (final s in sellers) s.id: s.name};
     if (canSelfAssign) {
       sellerNames[sellerId] = sellerName;
     }
@@ -263,15 +262,13 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       return sellerNames[id] ?? 'Vendedor';
     }
 
-    final sorted = [...tickets]
-      ..sort((a, b) => a.number.compareTo(b.number));
+    final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
     final visible = _statusFilters.isEmpty
         ? sorted
         : sorted
-            .where((t) => _statusFilters.contains(t.status))
-            .toList(growable: false);
-    final selectableTickets =
-        event.isReadOnly ? const <Ticket>[] : visible;
+              .where((t) => _statusFilters.contains(t.status))
+              .toList(growable: false);
+    final selectableTickets = event.isReadOnly ? const <Ticket>[] : visible;
     final selectedTickets = selectableTickets
         .where((t) => _selectedIds.contains(t.id))
         .toList(growable: false);
@@ -295,12 +292,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
             onStatusTap: sorted.isEmpty
                 ? null
                 : (status) => setState(() {
-                      if (_statusFilters.contains(status)) {
-                        _statusFilters.remove(status);
-                      } else {
-                        _statusFilters.add(status);
-                      }
-                    }),
+                    if (_statusFilters.contains(status)) {
+                      _statusFilters.remove(status);
+                    } else {
+                      _statusFilters.add(status);
+                    }
+                  }),
           ),
           const SizedBox(height: 12),
           if (!event.isReadOnly)
@@ -311,11 +308,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                     onPressed: !hasSelection
                         ? null
                         : () => _printTickets(
-                              context,
-                              event,
-                              selectedTickets,
-                              sellerNames: sellerNames,
-                            ),
+                            context,
+                            event,
+                            selectedTickets,
+                            sellerNames: sellerNames,
+                          ),
                     icon: const Icon(Icons.print_outlined),
                     label: Text(
                       hasSelection
@@ -330,11 +327,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                     onPressed: !hasSelection
                         ? null
                         : () => _shareTickets(
-                              context,
-                              event,
-                              selectedTickets,
-                              sellerNames: sellerNames,
-                            ),
+                            context,
+                            event,
+                            selectedTickets,
+                            sellerNames: sellerNames,
+                          ),
                     icon: const Icon(AccessShare.shareIcon),
                     label: Text(
                       hasSelection
@@ -399,20 +396,24 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 child: _SellerTicketCard(
                   ticket: ticket,
                   event: event,
-                  selected: selectableTickets.any((t) => t.id == ticket.id) &&
+                  selected:
+                      selectableTickets.any((t) => t.id == ticket.id) &&
                       _selectedIds.contains(ticket.id),
-                  selectionEnabled:
-                      selectableTickets.any((t) => t.id == ticket.id),
+                  selectionEnabled: selectableTickets.any(
+                    (t) => t.id == ticket.id,
+                  ),
                   showUnassignedStatus: hasSellers,
                   assignedSellerLabel: assignedSellerLabel(ticket),
-                  canReserve: isOperable(ticket) &&
+                  canReserve:
+                      isOperable(ticket) &&
                       ticket.status.isSellable &&
                       ticket.status != TicketStatus.reserved,
-                  canCollect:
-                      isOperable(ticket) && ticket.status.isSellable,
-                  canClearReservation: isOperable(ticket) &&
+                  canCollect: isOperable(ticket) && ticket.status.isSellable,
+                  canClearReservation:
+                      isOperable(ticket) &&
                       ticket.status == TicketStatus.reserved,
-                  canSetBuyer: isOperable(ticket) &&
+                  canSetBuyer:
+                      isOperable(ticket) &&
                       (ticket.status == TicketStatus.collected ||
                           ticket.status == TicketStatus.reserved ||
                           ticket.status == TicketStatus.settled ||
@@ -420,14 +421,14 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   canShare: !event.isReadOnly,
                   onToggleSelect:
                       selectableTickets.any((t) => t.id == ticket.id)
-                          ? () => setState(() {
-                              if (_selectedIds.contains(ticket.id)) {
-                                _selectedIds.remove(ticket.id);
-                              } else {
-                                _selectedIds.add(ticket.id);
-                              }
-                            })
-                          : null,
+                      ? () => setState(() {
+                          if (_selectedIds.contains(ticket.id)) {
+                            _selectedIds.remove(ticket.id);
+                          } else {
+                            _selectedIds.add(ticket.id);
+                          }
+                        })
+                      : null,
                   onReserve: () => _reserveTicket(
                     context,
                     event: event,
@@ -449,23 +450,14 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   clearReservationTooltip: clearReservationReturnsToPool(ticket)
                       ? 'Devolver al pool'
                       : 'Liberar reserva',
-                  onShare: () => _shareTickets(
-                    context,
-                    event,
-                    [ticket],
-                    sellerNames: sellerNames,
-                  ),
-                  onPrint: () => _printTickets(
-                    context,
-                    event,
-                    [ticket],
-                    sellerNames: sellerNames,
-                  ),
-                  onSetBuyer: () => _setTicketBuyer(
-                    context,
-                    event: event,
-                    ticket: ticket,
-                  ),
+                  onShare: () => _shareTickets(context, event, [
+                    ticket,
+                  ], sellerNames: sellerNames),
+                  onPrint: () => _printTickets(context, event, [
+                    ticket,
+                  ], sellerNames: sellerNames),
+                  onSetBuyer: () =>
+                      _setTicketBuyer(context, event: event, ticket: ticket),
                 ),
               ),
         ],
@@ -544,7 +536,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       setState(() => _selectedIds.remove(ticket.id));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -584,7 +576,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       setState(() => _selectedIds.remove(ticket.id));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -616,7 +608,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -648,7 +640,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
     }
   }
 
@@ -712,17 +704,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       );
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('PDF listo. Elegí dónde guardarlo.'),
-        ),
-      );
+      AppSnackBar.success(context, 'PDF listo. Elegí dónde guardarlo.');
     } catch (e) {
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo generar el PDF: $e')),
-      );
+      AppSnackBar.error(context, 'No se pudo generar el PDF: $e', cause: e);
     }
   }
 
@@ -751,8 +737,10 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron generar las imágenes: $e')),
+      AppSnackBar.error(
+        context,
+        'No se pudieron generar las imágenes: $e',
+        cause: e,
       );
     }
   }
@@ -829,7 +817,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       ];
     } catch (e) {
       if (!context.mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppSnackBar.error(context, '$e', cause: e);
       return null;
     }
   }
@@ -844,8 +832,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) {
-        final buyerController =
-            TextEditingController(text: initialBuyerName);
+        final buyerController = TextEditingController(text: initialBuyerName);
         return Padding(
           padding: EdgeInsets.only(
             left: 20,
@@ -874,9 +861,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 onPressed: () {
                   Navigator.pop(
                     sheetContext,
-                    _ShareDetails(
-                      buyerName: buyerController.text.trim(),
-                    ),
+                    _ShareDetails(buyerName: buyerController.text.trim()),
                   );
                 },
                 child: Text(confirmLabel),
@@ -948,9 +933,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
 }
 
 class _ShareDetails {
-  const _ShareDetails({
-    required this.buyerName,
-  });
+  const _ShareDetails({required this.buyerName});
 
   final String buyerName;
 }
@@ -1002,8 +985,8 @@ class _SellerTicketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final buyer = ticket.buyerName.trim();
     final sellerLabel = assignedSellerLabel?.trim() ?? '';
-    final showStatus = ticket.status != TicketStatus.unassigned ||
-        showUnassignedStatus;
+    final showStatus =
+        ticket.status != TicketStatus.unassigned || showUnassignedStatus;
 
     return Material(
       color: AppColors.card,
@@ -1026,8 +1009,9 @@ class _SellerTicketCard extends StatelessWidget {
               children: [
                 Checkbox(
                   value: selected,
-                  onChanged:
-                      selectionEnabled ? (_) => onToggleSelect?.call() : null,
+                  onChanged: selectionEnabled
+                      ? (_) => onToggleSelect?.call()
+                      : null,
                   visualDensity: VisualDensity.compact,
                 ),
                 Expanded(

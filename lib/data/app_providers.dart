@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/google_auth_service.dart';
+import '../core/monitoring/crash_reporting.dart';
 import '../core/session/collaborator_session_storage.dart';
 import 'firebase/catalog_repository.dart';
 import 'firebase/collaborator_repository.dart';
@@ -525,7 +526,11 @@ class SessionController extends StateNotifier<SessionState> {
               .getById(collaborator.eventId);
           if (event != null && !event.isReadOnly) {
             await storage.save(installed.token, collaborator.role);
-            await _activateCollaborator(installed.token, collaborator.role);
+            await _activateCollaborator(
+              installed.token,
+              collaborator.role,
+              eventId: collaborator.eventId,
+            );
             return;
           }
         }
@@ -540,14 +545,21 @@ class SessionController extends StateNotifier<SessionState> {
     }
 
     state = const SessionState();
+    unawaited(CrashReporting.setEventId(null));
     _bindAuth();
   }
 
   Future<void> _activateCollaborator(
     String token,
-    CollaboratorRole? role,
-  ) async {
-    state = SessionState(collaboratorToken: token, collaboratorRole: role);
+    CollaboratorRole? role, {
+    String? eventId,
+  }) async {
+    state = SessionState(
+      collaboratorToken: token,
+      collaboratorRole: role,
+      currentEventId: eventId,
+    );
+    unawaited(CrashReporting.setEventId(eventId));
     await _ref.read(googleAuthServiceProvider).signOut();
     _bindAuth();
   }
@@ -581,6 +593,10 @@ class SessionController extends StateNotifier<SessionState> {
             .save(token, collaborator.role);
         state = state.copyWith(collaboratorRole: collaborator.role);
       }
+      if (state.currentEventId != collaborator.eventId) {
+        state = state.copyWith(currentEventId: collaborator.eventId);
+      }
+      unawaited(CrashReporting.setEventId(collaborator.eventId));
     } catch (e, st) {
       // Connectivity errors must not destroy the installed credential.
       debugPrint('Collaborator session revalidation failed: $e\n$st');
@@ -590,6 +606,7 @@ class SessionController extends StateNotifier<SessionState> {
   Future<void> _clearCollaboratorSession() async {
     await _ref.read(collaboratorSessionStorageProvider).clear();
     state = const SessionState();
+    unawaited(CrashReporting.setEventId(null));
   }
 
   void _bindAuth() {
@@ -613,6 +630,7 @@ class SessionController extends StateNotifier<SessionState> {
     if (state.collaboratorToken != null) return;
     if (state.userUid != null) {
       state = const SessionState();
+      unawaited(CrashReporting.setEventId(null));
     }
   }
 
@@ -628,11 +646,20 @@ class SessionController extends StateNotifier<SessionState> {
       photoUrl: profile.photoUrl,
       currentEventId: state.currentEventId,
     );
+    unawaited(CrashReporting.setUserId(profile.uid));
+    unawaited(CrashReporting.setEventId(state.currentEventId));
 
     try {
       await _ref.read(userRepositoryProvider).upsertFromAuthUser(user);
     } catch (e, st) {
       debugPrint('Firestore user upsert failed: $e\n$st');
+      unawaited(
+        CrashReporting.recordNonFatal(
+          e,
+          st,
+          reason: 'firestore_user_upsert_failed',
+        ),
+      );
     }
   }
 
@@ -663,14 +690,21 @@ class SessionController extends StateNotifier<SessionState> {
     if (state.collaboratorToken == null) return;
     await _ref.read(collaboratorSessionStorageProvider).clear();
     state = const SessionState();
+    unawaited(CrashReporting.setEventId(null));
   }
 
   Future<void> enterAsCollaborator(
     String token, {
     CollaboratorRole? role,
+    String? eventId,
   }) async {
     await _ref.read(collaboratorSessionStorageProvider).save(token, role);
-    state = SessionState(collaboratorToken: token, collaboratorRole: role);
+    state = SessionState(
+      collaboratorToken: token,
+      collaboratorRole: role,
+      currentEventId: eventId,
+    );
+    unawaited(CrashReporting.setEventId(eventId));
     await _ref.read(googleAuthServiceProvider).signOut();
   }
 
@@ -680,6 +714,8 @@ class SessionController extends StateNotifier<SessionState> {
         _ref.read(googleAuthServiceProvider).currentUser != null;
     await _ref.read(collaboratorSessionStorageProvider).clear();
     state = const SessionState();
+    unawaited(CrashReporting.setUserId(null));
+    unawaited(CrashReporting.setEventId(null));
     if (hadFirebaseUser) {
       await _ref.read(googleAuthServiceProvider).signOut();
     }
@@ -690,6 +726,7 @@ class SessionController extends StateNotifier<SessionState> {
       currentEventId: eventId,
       clearCurrentEventId: eventId == null,
     );
+    unawaited(CrashReporting.setEventId(eventId));
   }
 
   @override

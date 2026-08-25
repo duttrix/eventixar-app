@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import 'app_snackbar.dart';
 import 'busy_dialog.dart';
 import 'collaborator_access_actions.dart';
 import 'section_card.dart';
@@ -33,7 +34,8 @@ class CollaboratorProfileCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
     final collabsAsync = ref.watch(eventCollaboratorsProvider(eventId));
-    final token = ref
+    final token =
+        ref
             .watch(eventAccessTokensProvider(eventId))
             .valueOrNull?[collaboratorId] ??
         '';
@@ -63,8 +65,7 @@ class CollaboratorProfileCard extends ConsumerWidget {
         break;
       }
     }
-    if (match == null ||
-        (expectedRole != null && match.role != expectedRole)) {
+    if (match == null || (expectedRole != null && match.role != expectedRole)) {
       return const SizedBox.shrink();
     }
 
@@ -98,7 +99,8 @@ class CollaboratorProfileCard extends ConsumerWidget {
               collaborator: collaborator,
               eventName: event.name,
               token: token,
-              onDeleted: onDeleted ??
+              onDeleted:
+                  onDeleted ??
                   () {
                     if (context.mounted) Navigator.of(context).maybePop();
                   },
@@ -171,16 +173,13 @@ class CollaboratorProfileCard extends ConsumerWidget {
                   ),
                 );
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${collaborator.role.label} actualizado.'),
-                  ),
+                AppSnackBar.success(
+                  context,
+                  '${collaborator.role.label} actualizado.',
                 );
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$e')),
-                );
+                AppSnackBar.error(context, '$e', cause: e);
               }
             },
             child: const Text('Guardar'),

@@ -54,7 +54,11 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
       }
       await ref
           .read(sessionProvider.notifier)
-          .enterAsCollaborator(widget.token, role: collab.role);
+          .enterAsCollaborator(
+            widget.token,
+            role: collab.role,
+            eventId: collab.eventId,
+          );
       if (!mounted) return;
       final path = switch (collab.role) {
         CollaboratorRole.seller => '/seller/${widget.token}',

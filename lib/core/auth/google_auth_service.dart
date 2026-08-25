@@ -1,11 +1,21 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../monitoring/crash_reporting.dart';
+
+/// User-facing auth failure. Technical detail goes to Crashlytics only.
+class AuthFailure implements Exception {
+  AuthFailure(this.userMessage, {this.cause});
+
+  final String userMessage;
+  final Object? cause;
+
+  @override
+  String toString() => userMessage;
+}
 
 /// Google Sign-In → Firebase Auth for organizers.
 class GoogleAuthService {
@@ -17,8 +27,6 @@ class GoogleAuthService {
   final GoogleSignIn? _googleSignInOverride;
   bool _initialized = false;
 
-  static const _logName = 'DuttrixAuth';
-
   // Resolved lazily so that constructing the service never requires Firebase
   // to be initialized (tests subclass this and override the members they use).
   FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
@@ -29,39 +37,40 @@ class GoogleAuthService {
   static const String webClientId =
       '165106453677-1pv115libl5nvjtkdjkpa4lermbn7gko.apps.googleusercontent.com';
 
-  void _log(String message, {Object? error, StackTrace? stackTrace}) {
-    developer.log(
-      message,
-      name: _logName,
-      error: error,
-      stackTrace: stackTrace,
-    );
-    // Also mirror to debugPrint so `adb logcat` / Flutter consoles catch it.
-    debugPrint('[$_logName] $message');
-    if (error != null) debugPrint('[$_logName] error=$error');
-    unawaited(CrashReporting.log('[$_logName] $message'));
+  static const _userGoogleFailure =
+      'No se pudo iniciar sesión con Google. Probá de nuevo.';
+
+  void _debug(String message, {Object? error}) {
+    if (!kDebugMode) return;
+    debugPrint('[DuttrixAuth] $message');
+    if (error != null) debugPrint('[DuttrixAuth] error=$error');
   }
 
-  Future<void> _reportAuthFailure(
+  Future<void> _breadcrumb(String message) {
+    _debug(message);
+    return CrashReporting.log(message);
+  }
+
+  Future<Never> _failGoogle(
     Object error,
     StackTrace stack, {
     required String reason,
     Map<String, Object?>? information,
-  }) {
-    return CrashReporting.recordNonFatal(
+  }) async {
+    await CrashReporting.recordNonFatal(
       error,
       stack,
       reason: reason,
       information: information,
     );
+    throw AuthFailure(_userGoogleFailure, cause: error);
   }
 
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
-    _log('initialize GoogleSignIn serverClientId=$webClientId');
+    await _breadcrumb('google_sign_in.initialize');
     await _googleSignIn.initialize(serverClientId: webClientId);
     _initialized = true;
-    _log('GoogleSignIn initialized');
   }
 
   /// Email / password sign-in (demo / Play review accounts).
@@ -69,123 +78,95 @@ class GoogleAuthService {
     required String email,
     required String password,
   }) async {
-    final result = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    return result.user;
+    try {
+      final result = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      return result.user;
+    } on FirebaseAuthException {
+      rethrow;
+    } catch (e, st) {
+      await CrashReporting.recordNonFatal(
+        e,
+        st,
+        reason: 'email_password_sign_in_unexpected',
+      );
+      rethrow;
+    }
   }
 
   /// Interactive Google sign-in. Returns the Firebase [User] or null if cancelled.
   Future<User?> signInWithGoogle() async {
     await _ensureInitialized();
-    _log('authenticate() starting');
+    await _breadcrumb('google_sign_in.authenticate.start');
 
     try {
       final account = await _googleSignIn.authenticate();
-      _log(
-        'authenticate() ok email=${account.email} id=${account.id} '
-        'displayName=${account.displayName}',
-      );
+      await _breadcrumb('google_sign_in.authenticate.ok');
 
       final idToken = account.authentication.idToken;
-      _log(
-        'idToken present=${idToken != null} '
-        'length=${idToken?.length ?? 0}',
-      );
       if (idToken == null) {
-        final error = StateError(
-          'Google no devolvió idToken. Revisá que el SHA-1 de la firma '
-          '(debug y release) esté cargado en Firebase Console → Project '
-          'settings → Your apps → Android, y que el proveedor Google esté '
-          'habilitado.',
-        );
-        await _reportAuthFailure(
-          error,
+        await _failGoogle(
+          StateError('Google Sign-In returned null idToken'),
           StackTrace.current,
           reason: 'google_sign_in_missing_id_token',
         );
-        throw error;
       }
 
-      _log('signInWithCredential(Firebase) starting');
+      await _breadcrumb('firebase_auth.sign_in_with_credential.start');
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       final result = await _auth.signInWithCredential(credential);
-      _log(
-        'Firebase Auth ok uid=${result.user?.uid} '
-        'email=${result.user?.email}',
-      );
+      await _breadcrumb('firebase_auth.sign_in_with_credential.ok');
       return result.user;
+    } on AuthFailure {
+      rethrow;
     } on FirebaseAuthException catch (e, st) {
-      _log(
-        'FirebaseAuthException code=${e.code} message=${e.message}',
-        error: e,
-        stackTrace: st,
-      );
-      await _reportAuthFailure(
+      _debug('FirebaseAuthException ${e.code}', error: e);
+      await _failGoogle(
         e,
         st,
         reason: 'firebase_auth_google_credential',
-        information: {'auth_code': e.code, 'auth_message': e.message},
+        information: {
+          'auth_code': e.code,
+          'auth_message': e.message,
+        },
       );
-      throw StateError('Firebase Auth: ${e.code} — ${e.message ?? e}');
     } on GoogleSignInException catch (e, st) {
       // Credential Manager often reports config errors (missing SHA-1, wrong
       // package) as "canceled" with a description like "[16] Account reauth
       // failed". A real back-button cancel usually has an empty description.
-      _log(
-        'GoogleSignInException code=${e.code.name} '
-        'description=${e.description} details=${e.details}',
-        error: e,
-        stackTrace: st,
-      );
       final detail = e.description?.trim();
-      if (e.code == GoogleSignInExceptionCode.canceled) {
-        if (detail == null || detail.isEmpty) {
-          _log('treated as user cancel (empty description)');
-          return null;
-        }
-        await _reportAuthFailure(
-          e,
-          st,
-          reason: 'google_sign_in_canceled_with_detail',
-          information: {
-            'gsi_code': e.code.name,
-            'gsi_description': detail,
-            'gsi_details': e.details,
-          },
-        );
-        throw StateError('Google: $detail (${e.code.name})');
+      _debug(
+        'GoogleSignInException ${e.code.name} description=$detail',
+        error: e,
+      );
+
+      if (e.code == GoogleSignInExceptionCode.canceled &&
+          (detail == null || detail.isEmpty)) {
+        await _breadcrumb('google_sign_in.user_canceled');
+        return null;
       }
-      await _reportAuthFailure(
+
+      await _failGoogle(
         e,
         st,
-        reason: 'google_sign_in_${e.code.name}',
+        reason: e.code == GoogleSignInExceptionCode.canceled
+            ? 'google_sign_in_canceled_with_detail'
+            : 'google_sign_in_${e.code.name}',
         information: {
           'gsi_code': e.code.name,
           'gsi_description': detail,
           'gsi_details': e.details,
         },
       );
-      if (e.code == GoogleSignInExceptionCode.clientConfigurationError ||
-          e.code == GoogleSignInExceptionCode.providerConfigurationError) {
-        throw StateError(
-          'Google config (${e.code.name}): ${detail ?? e}. '
-          'Revisá SHA-1 / OAuth client de Android en Firebase.',
-        );
-      }
-      throw StateError('Google: ${detail ?? e} (${e.code.name})');
-    } on StateError {
-      // Already reported (e.g. missing idToken).
-      rethrow;
     } catch (e, st) {
-      _log('signInWithGoogle unexpected error', error: e, stackTrace: st);
-      await _reportAuthFailure(
+      _debug('unexpected Google sign-in error', error: e);
+      await _failGoogle(
         e,
         st,
         reason: 'google_sign_in_unexpected',
       );
-      rethrow;
     }
   }
 

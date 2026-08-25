@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
+import 'app_snackbar.dart';
 import 'section_card.dart';
 import 'ticket_status_style.dart';
 
@@ -49,11 +50,7 @@ class AccessShare {
     required String token,
   }) async {
     if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Todavía no se pudo leer el link de acceso.'),
-        ),
-      );
+      AppSnackBar.error(context, 'Todavía no se pudo leer el link de acceso.');
       return;
     }
     final text = messageFor(person, eventName: eventName, token: token);
@@ -67,22 +64,15 @@ class AccessShare {
     required String token,
   }) async {
     if (token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Todavía no se pudo leer el link de acceso.'),
-        ),
-      );
+      AppSnackBar.error(context, 'Todavía no se pudo leer el link de acceso.');
       return;
     }
     final text = messageFor(person, eventName: eventName, token: token);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Acceso de ${person.name} (${person.role.label}) listo para enviar.',
-        ),
-      ),
+    AppSnackBar.info(
+      context,
+      'Acceso de ${person.name} (${person.role.label}) listo para enviar.',
     );
   }
 }
@@ -148,7 +138,10 @@ class TicketStatusSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tickets.isEmpty) {
-      return Text(emptyLabel, style: const TextStyle(color: AppColors.textMuted));
+      return Text(
+        emptyLabel,
+        style: const TextStyle(color: AppColors.textMuted),
+      );
     }
 
     final counts = <TicketStatus, int>{};
@@ -233,8 +226,9 @@ class CollectorTicketSummary extends StatelessWidget {
       );
     }
 
-    final validatedCount =
-        tickets.where((t) => t.status == TicketStatus.delivered).length;
+    final validatedCount = tickets
+        .where((t) => t.status == TicketStatus.delivered)
+        .length;
     final fullCount = tickets.where(_isFullSettle).length;
     final profitCount = tickets.where(_isProfitSettle).length;
 
