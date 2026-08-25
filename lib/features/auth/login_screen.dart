@@ -40,17 +40,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final user = await ref.read(sessionProvider.notifier).signInWithGoogle();
       if (!mounted) return;
       if (user == null) {
-        setState(() => _busy = false);
+        setState(() {
+          _busy = false;
+          _error = 'Inicio de sesión cancelado.';
+        });
         return;
       }
       if (context.mounted) context.go('/home');
-    } catch (e) {
+    } catch (e, st) {
       if (!mounted) return;
+      final message = e is StateError ? e.message : 'Google: $e';
       setState(() {
         _busy = false;
-        _error = 'No se pudo iniciar sesión con Google. Probá de nuevo.';
+        // Show the real diagnostic text so Play builds can be debugged
+        // without logcat (e.g. "Google: [16] Account reauth failed").
+        _error = message;
       });
-      debugPrint('Google sign-in error: $e');
+      debugPrint('[DuttrixAuth] login_screen catch: $message');
+      debugPrint('[DuttrixAuth] stack: $st');
     }
   }
 
