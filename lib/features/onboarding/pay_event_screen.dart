@@ -5,120 +5,56 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
-import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
 
-/// Payment screen. Confirming payment enables the event and generates tickets.
-class PayEventScreen extends ConsumerStatefulWidget {
+/// Checkout placeholder. Tapping a pending event lands here; Pay stays
+/// disabled until a real provider is wired.
+class PayEventScreen extends ConsumerWidget {
   const PayEventScreen({super.key, required this.eventId});
 
   final String eventId;
 
   @override
-  ConsumerState<PayEventScreen> createState() => _PayEventScreenState();
-}
-
-class _PayEventScreenState extends ConsumerState<PayEventScreen> {
-  bool _confirming = false;
-
-  Future<void> _confirm(Event event) async {
-    if (_confirming) return;
-    setState(() => _confirming = true);
-    try {
-      final updated = await ref
-          .read(eventRepositoryProvider)
-          .confirmPaymentAndGenerateTickets(widget.eventId);
-
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Evento habilitado'),
-          content: Text(
-            'Evento habilitado. Se generaron ${updated.ticketCount} tickets. '
-            'Ya podés invitar colaboradores y asignar tickets.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                context.go('/event/${widget.eventId}');
-              },
-              child: const Text('Ir al evento'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      AppSnackBar.error(
-        context,
-        'No se pudo habilitar el evento: $e',
-        cause: e,
-      );
-    } finally {
-      if (mounted) setState(() => _confirming = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ref
-        .watch(eventProvider(widget.eventId))
-        .when(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref.watch(eventProvider(eventId)).when(
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (e, _) => Scaffold(
-            appBar: AppBar(title: const Text('Pagar y habilitar')),
+            appBar: AppBar(title: const Text('Pagar')),
             body: Center(child: Text('No se pudo cargar el evento: $e')),
           ),
-          data: _buildBody,
+          data: (event) => _buildBody(context, ref, event),
         );
   }
 
-  Widget _buildBody(Event event) {
+  Widget _buildBody(BuildContext context, WidgetRef ref, Event event) {
     if (event.paid) {
       return Scaffold(
         body: Center(
           child: FilledButton(
-            onPressed: () => context.go('/event/${widget.eventId}'),
+            onPressed: () => context.go('/event/$eventId'),
             child: const Text('Evento ya pagado · Ir al workspace'),
           ),
         ),
       );
     }
 
-    final pricingAsync = ref.watch(eventPricingProvider);
-    final pricing = pricingAsync.asData?.value;
-    if (pricingAsync.isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Pagar y habilitar')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (pricing == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Pagar y habilitar')),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Falta configurar precios en Firestore (config/eventPricing).',
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final quote = EventQuote.calculate(
-      ticketCount: event.ticketCount,
-      pricing: pricing,
-    );
+    final pricing = ref.watch(eventPricingProvider).asData?.value;
+    final quote = pricing == null
+        ? null
+        : EventQuote.calculate(
+            ticketCount: event.ticketCount,
+            pricing: pricing,
+          );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pagar y habilitar')),
+      appBar: AppBar(
+        title: const Text('Pagar'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -127,27 +63,26 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  quote.priceLabel,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.accent,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final line in quote.breakdown) ...[
+                if (quote != null) ...[
                   Text(
-                    line,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
+                    quote.priceLabel,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 12),
                 ],
+                const Text(
+                  'El precio se calcula solo por cantidad de tickets.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  'Se van a generar ${event.ticketCount} tickets al habilitar.',
+                  'Se van a generar ${event.ticketCount} tickets al pagar.',
                   style: const TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 13,
@@ -158,43 +93,24 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
           ),
           const SizedBox(height: 16),
           const SectionCard(
-            title: 'Habilitación (provisorio)',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Todavía no hay checkout integrado. Al confirmar se habilita '
-                  'el evento y se generan los tickets.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+            title: 'Pago',
+            child: Text(
+              'Todavía no hay checkout integrado. Cuando esté listo, '
+              'este botón va a habilitar el evento y generar los tickets.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _confirming ? null : () => _confirm(event),
+          const ElevatedButton(
+            onPressed: null,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: _confirming
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      quote.amount == 0
-                          ? 'Habilitar gratis'
-                          : 'Confirmar y habilitar',
-                    ),
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('Pagar'),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _confirming ? null : () => context.go('/home'),
-            child: const Text('Habilitar después'),
           ),
         ],
       ),

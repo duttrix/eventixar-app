@@ -358,6 +358,50 @@ class CollaboratorRepository {
     await batch.commit();
   }
 
+  /// Copies people (name, phone, notes, role) into [toEventId] with new
+  /// invite tokens. Ticket ranges are not copied. Coordinator→seller links
+  /// are remapped when both roles are included.
+  Future<void> copyRolesToEvent({
+    required String fromEventId,
+    required String toEventId,
+    required Set<CollaboratorRole> roles,
+  }) async {
+    if (roles.isEmpty) return;
+
+    final source = await listForEvent(fromEventId);
+    final coordinatorIdMap = <String, String>{};
+
+    Future<void> copyRole(CollaboratorRole role) async {
+      for (final person in source.where((c) => c.role == role)) {
+        final mappedCoordinatorId = person.createdByCoordinatorId == null
+            ? null
+            : coordinatorIdMap[person.createdByCoordinatorId];
+        final created = await create(
+          eventId: toEventId,
+          role: role,
+          name: person.name,
+          phone: person.phone,
+          notes: person.notes,
+          createdByCoordinatorId: mappedCoordinatorId,
+        );
+        if (role == CollaboratorRole.coordinator) {
+          coordinatorIdMap[person.id] = created.id;
+        }
+      }
+    }
+
+    if (roles.contains(CollaboratorRole.coordinator)) {
+      await copyRole(CollaboratorRole.coordinator);
+    }
+    for (final role in [
+      CollaboratorRole.seller,
+      CollaboratorRole.validator,
+      CollaboratorRole.collector,
+    ]) {
+      if (roles.contains(role)) await copyRole(role);
+    }
+  }
+
   String _generateToken() {
     final bytes = List<int>.generate(24, (_) => Random.secure().nextInt(256));
     return base64UrlEncode(bytes).replaceAll('=', '');

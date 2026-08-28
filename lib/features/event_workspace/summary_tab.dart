@@ -6,7 +6,6 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
-import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/stat_card.dart';
 
@@ -55,14 +54,6 @@ class SummaryTab extends ConsumerWidget {
     final collectors = collaborators
         .where((c) => c.role == CollaboratorRole.collector)
         .toList();
-
-    final finished = event.isReadOnly;
-    final hasPending = tickets.any(
-      (t) =>
-          t.status == TicketStatus.withSeller ||
-          t.status == TicketStatus.reserved ||
-          t.status == TicketStatus.collected,
-    );
 
     final total = tickets.isEmpty ? event.ticketCount : tickets.length;
     var inPool = 0;
@@ -281,80 +272,8 @@ class SummaryTab extends ConsumerWidget {
                   ],
                 ),
         ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: 'Cierre del evento',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                finished
-                    ? 'Evento finalizado. La operación está en solo consulta.'
-                    : hasPending
-                    ? 'Hay tickets en poder de vendedores, reservados o cobrados sin rendir.'
-                    : 'No hay cobros pendientes de rendición. Podés finalizar cuando quieras.',
-                style: TextStyle(
-                  color: finished
-                      ? AppColors.successText
-                      : hasPending
-                      ? AppColors.warnText
-                      : AppColors.textSecondary,
-                ),
-              ),
-              if (!finished) ...[
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: () =>
-                      _confirmFinish(context, ref, hasPending: hasPending),
-                  icon: const Icon(Icons.flag_outlined),
-                  label: const Text('Finalizar evento'),
-                ),
-              ],
-            ],
-          ),
-        ),
       ],
     );
-  }
-
-  Future<void> _confirmFinish(
-    BuildContext context,
-    WidgetRef ref, {
-    required bool hasPending,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Finalizar evento'),
-        content: Text(
-          hasPending
-              ? 'Todavía hay tickets en poder de vendedores, reservados o cobrados sin rendir. '
-                    'Si finalizás igual, el evento pasa a solo consulta.'
-              : 'Vas a finalizar el evento. La operación quedará en solo consulta.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(hasPending ? 'Finalizar igual' : 'Finalizar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    try {
-      await ref.read(eventRepositoryProvider).finishEvent(eventId);
-      if (!context.mounted) return;
-      AppSnackBar.success(context, 'Evento finalizado. Pasó a solo consulta.');
-    } catch (e) {
-      if (!context.mounted) return;
-      AppSnackBar.error(context, 'No se pudo finalizar: $e', cause: e);
-    }
   }
 }
 

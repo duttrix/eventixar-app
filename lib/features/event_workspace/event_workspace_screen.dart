@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
+import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_shell.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/async_body.dart';
 import '../../shared/widgets/status_badge.dart';
 import 'event_data_tab.dart';
@@ -83,6 +85,10 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return AppShell(
       title: _labelFor(_selected),
       onHome: () => context.go('/home'),
+      onFinish: event.isReadOnly ? null : () => _confirmFinish(context),
+      onDuplicate: event.isReadOnly
+          ? () => context.push('/event/${widget.eventId}/copy')
+          : null,
       header: _EventHeader(
         name: event.name,
         statusLabel: statusLabel,
@@ -144,6 +150,52 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
       EventTab.coordinators => 'Coordinadores',
       EventTab.collectors => 'Recaudadores',
     };
+  }
+
+  Future<void> _confirmFinish(BuildContext context) async {
+    final tickets =
+        ref.read(eventTicketsProvider(widget.eventId)).asData?.value ??
+        const <Ticket>[];
+    final hasPending = tickets.any(
+      (t) =>
+          t.status == TicketStatus.withSeller ||
+          t.status == TicketStatus.reserved ||
+          t.status == TicketStatus.collected,
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Finalizar evento'),
+        content: Text(
+          hasPending
+              ? 'Todavía hay tickets en poder de vendedores, reservados o cobrados sin rendir. '
+                    'Si finalizás igual, el evento pasa a solo consulta.'
+              : 'Vas a finalizar el evento. La operación quedará en solo consulta.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(hasPending ? 'Finalizar igual' : 'Finalizar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(eventRepositoryProvider).finishEvent(widget.eventId);
+      if (!context.mounted) return;
+      AppSnackBar.success(context, 'Evento finalizado. Pasó a solo consulta.');
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackBar.error(context, 'No se pudo finalizar: $e', cause: e);
+    }
   }
 }
 

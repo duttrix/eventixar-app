@@ -111,8 +111,76 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/events/$(eventId)/collaborators/$(collaboratorId)).data.role == 'seller';
     }
 
+    function ownerUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function remainingFreeEvents() {
+      return 'freeEvents' in get(ownerUserPath()).data
+        ? get(ownerUserPath()).data.freeEvents
+        : 0;
+    }
+
+    function consumesFreeEventCredit() {
+      return remainingFreeEvents() is int
+        && remainingFreeEvents() > 0
+        && getAfter(ownerUserPath()).data.freeEvents == remainingFreeEvents() - 1;
+    }
+
+    // No free slots left: the event can be created unpaid and sit in "Por pagar".
+    function isUnpaidEventCreate() {
+      return remainingFreeEvents() == 0
+        && request.resource.data.paid == false
+        && request.resource.data.status == 'awaitingPayment';
+    }
+
+    function userUpdateAllowed() {
+      return userChangedKeysAllowed() && freeEventsChangeAllowed();
+    }
+
+    function userChangedKeysAllowed() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'email',
+          'displayName',
+          'photoUrl',
+          'lastLoginAt',
+          'uid',
+          'freeEvents',
+        ]);
+    }
+
+    // Client may backfill a missing quota (0..2) or consume one slot.
+    // It must never raise freeEvents once the field exists.
+    function freeEventsChangeAllowed() {
+      return !('freeEvents' in request.resource.data.diff(resource.data).affectedKeys())
+        || isFreeEventsBackfill()
+        || isFreeEventDecrement();
+    }
+
+    // Must stay in sync with AppUser.defaultFreeEvents in the Flutter app.
+    function isFreeEventsBackfill() {
+      return !('freeEvents' in resource.data)
+        && request.resource.data.freeEvents is int
+        && request.resource.data.freeEvents >= 0
+        && request.resource.data.freeEvents <= 2;
+    }
+
+    function isFreeEventDecrement() {
+      return resource.data.freeEvents is int
+        && request.resource.data.freeEvents is int
+        && request.resource.data.freeEvents == resource.data.freeEvents - 1
+        && request.resource.data.freeEvents >= 0
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['freeEvents']);
+    }
+
     match /users/{userId} {
-      allow read, create, update: if isOwner(userId);
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.freeEvents is int
+        && request.resource.data.freeEvents == 2;
+      allow update: if isOwner(userId) && userUpdateAllowed();
       allow delete: if false;
     }
 
@@ -120,7 +188,8 @@ service cloud.firestore {
       allow get: if true;
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn()
-        && request.resource.data.ownerId == request.auth.uid;
+        && request.resource.data.ownerId == request.auth.uid
+        && (consumesFreeEventCredit() || isUnpaidEventCreate());
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId;

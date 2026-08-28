@@ -38,6 +38,8 @@ class AppShell extends StatelessWidget {
     this.navItems,
     required this.body,
     this.onHome,
+    this.onFinish,
+    this.onDuplicate,
     this.floatingActionButton,
   });
 
@@ -51,6 +53,8 @@ class AppShell extends StatelessWidget {
   final List<ShellNavItem>? navItems;
   final Widget body;
   final VoidCallback? onHome;
+  final VoidCallback? onFinish;
+  final VoidCallback? onDuplicate;
   final Widget? floatingActionButton;
 
   @override
@@ -137,25 +141,64 @@ class AppShell extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (onHome != null) ...[
+                    if (onFinish != null ||
+                        onDuplicate != null ||
+                        onHome != null) ...[
                       const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(
-                          Icons.home_outlined,
-                          color: AppColors.textSecondary,
-                        ),
-                        title: const Text(
-                          'Volver a mis eventos',
-                          style: TextStyle(
-                            color: AppColors.text,
-                            fontWeight: FontWeight.w500,
+                      if (onFinish != null)
+                        ListTile(
+                          leading: const Icon(
+                            Icons.flag_outlined,
+                            color: AppColors.dangerText,
                           ),
+                          title: const Text(
+                            'Finalizar evento',
+                            style: TextStyle(
+                              color: AppColors.dangerText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            onFinish!();
+                          },
                         ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          onHome!();
-                        },
-                      ),
+                      if (onDuplicate != null)
+                        ListTile(
+                          leading: const Icon(
+                            Icons.copy_outlined,
+                            color: AppColors.textSecondary,
+                          ),
+                          title: const Text(
+                            'Duplicar evento',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            onDuplicate!();
+                          },
+                        ),
+                      if (onHome != null)
+                        ListTile(
+                          leading: const Icon(
+                            Icons.home_outlined,
+                            color: AppColors.textSecondary,
+                          ),
+                          title: const Text(
+                            'Volver a mis eventos',
+                            style: TextStyle(
+                              color: AppColors.text,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            onHome!();
+                          },
+                        ),
                     ],
                   ],
                 ),

@@ -20,17 +20,33 @@ class UserRepository {
     final snap = await ref.get();
     final now = FieldValue.serverTimestamp();
     final isNew = !snap.exists;
+    final data = snap.data();
+    final missingFreeEvents =
+        !isNew && data != null && data['freeEvents'] == null;
 
-    await ref.set(
-      profile.toFirestoreMap(isNew: isNew, serverNow: now),
-      SetOptions(merge: true),
-    );
+    final map = profile.toFirestoreMap(isNew: isNew, serverNow: now);
+    if (missingFreeEvents) {
+      map['freeEvents'] = await _backfillFreeEvents(profile.uid);
+    }
+
+    await ref.set(map, SetOptions(merge: true));
 
     // Re-read so createdAt/lastLoginAt come back as concrete timestamps when available.
     final saved = await ref.get();
-    final data = saved.data();
-    if (data == null) return profile;
-    return AppUser.fromFirestore(profile.uid, data);
+    final savedData = saved.data();
+    if (savedData == null) return profile;
+    return AppUser.fromFirestore(profile.uid, savedData);
+  }
+
+  /// Existing users created before [AppUser.freeEvents] existed get the
+  /// remaining quota: default minus events already created (never below 0).
+  Future<int> _backfillFreeEvents(String uid) async {
+    final snap = await _firestore
+        .collection('events')
+        .where('ownerId', isEqualTo: uid)
+        .get();
+    final remaining = AppUser.defaultFreeEvents - snap.docs.length;
+    return remaining < 0 ? 0 : remaining;
   }
 
   Future<AppUser?> getByUid(String uid) async {
@@ -38,5 +54,13 @@ class UserRepository {
     final data = snap.data();
     if (!snap.exists || data == null) return null;
     return AppUser.fromFirestore(uid, data);
+  }
+
+  Stream<AppUser?> watchByUid(String uid) {
+    return _users.doc(uid).snapshots().map((snap) {
+      final data = snap.data();
+      if (!snap.exists || data == null) return null;
+      return AppUser.fromFirestore(uid, data);
+    });
   }
 }

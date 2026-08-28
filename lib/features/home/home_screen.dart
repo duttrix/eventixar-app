@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
+import '../../data/models/user.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -23,6 +24,7 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final displayName = session.displayName;
+    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
     return ref.watch(organizerEventsProvider).when(
           loading: () => Scaffold(
             appBar: _appBar(context, ref, email, displayName: displayName),
@@ -38,6 +40,7 @@ class HomeScreen extends ConsumerWidget {
             email: email,
             displayName: displayName,
             all: events,
+            organizer: organizer,
           ),
         );
   }
@@ -83,6 +86,7 @@ class HomeScreen extends ConsumerWidget {
     required String email,
     required String? displayName,
     required List<Event> all,
+    required AppUser? organizer,
   }) {
     final active =
         all.where((e) => e.status == EventStatus.active).toList();
@@ -104,6 +108,16 @@ class HomeScreen extends ConsumerWidget {
               label: const Text('Crear evento nuevo'),
             ),
           ),
+          if (organizer != null && organizer.canCreateFreeEvent) ...[
+            const SizedBox(height: 8),
+            Text(
+              organizer.freeEventsLabel,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
+            ),
+          ],
           const SizedBox(height: 28),
           _EventSection(
             title: 'Activos',
@@ -133,6 +147,10 @@ class HomeScreen extends ConsumerWidget {
               ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
               context.push('/event/${event.id}');
             },
+            onCopy: (event) {
+              ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
+              context.push('/event/${event.id}/copy');
+            },
           ),
         ],
       ),
@@ -146,12 +164,14 @@ class _EventSection extends StatelessWidget {
     required this.events,
     required this.emptyText,
     required this.onTap,
+    this.onCopy,
   });
 
   final String title;
   final List<Event> events;
   final String emptyText;
   final ValueChanged<Event> onTap;
+  final ValueChanged<Event>? onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +189,7 @@ class _EventSection extends StatelessWidget {
               child: _EventCard(
                 event: event,
                 onTap: () => onTap(event),
+                onCopy: onCopy == null ? null : () => onCopy!(event),
               ),
             ),
       ],
@@ -177,10 +198,15 @@ class _EventSection extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  const _EventCard({required this.event, required this.onTap});
+  const _EventCard({
+    required this.event,
+    required this.onTap,
+    this.onCopy,
+  });
 
   final Event event;
   final VoidCallback onTap;
+  final VoidCallback? onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -217,8 +243,18 @@ class _EventCard extends StatelessWidget {
               ),
             ),
             StatusBadge(label: label, tone: tone),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            if (onCopy != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Duplicar evento',
+                onPressed: onCopy,
+                icon: const Icon(Icons.copy_outlined),
+                color: AppColors.textMuted,
+              ),
+            ] else ...[
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right, color: AppColors.textMuted),
+            ],
           ],
         ),
       ),

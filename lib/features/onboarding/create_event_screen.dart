@@ -1,15 +1,16 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
-/// Multi-step create-event flow: datos → equipo → cotización → pago.
+/// Create-event form. With a free slot the event is enabled immediately;
+/// otherwise it stays in "Por pagar" until checkout.
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
 
@@ -18,7 +19,6 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
-  int _step = 0;
   bool _submitting = false;
 
   final _nameController = TextEditingController();
@@ -32,10 +32,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   DateTime? _eventDate;
   TimeOfDay _pickupFrom = const TimeOfDay(hour: 12, minute: 0);
   TimeOfDay _pickupTo = const TimeOfDay(hour: 15, minute: 0);
-  int _sellersCount = 2;
-  int _validatorsCount = 1;
-  int _collectorsCount = 0;
-  int _coordinatorsCount = 0;
 
   @override
   void dispose() {
@@ -49,61 +45,66 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     super.dispose();
   }
 
-  bool get _step0Valid =>
+  bool get _formValid =>
       _nameController.text.trim().isNotEmpty &&
       _productController.text.trim().isNotEmpty &&
       _eventDate != null &&
       (int.tryParse(_countController.text) ?? 0) > 0;
 
-  void _next() {
-    if (_step == 0 && !_step0Valid) {
+  Future<void> _submit() async {
+    final session = ref.read(sessionProvider);
+    final uid = session.userUid;
+    if (uid == null || _eventDate == null || _submitting) return;
+
+    if (!_formValid) {
       AppSnackBar.warning(
         context,
         'Completá nombre, qué se vende, fecha y cantidad de tickets.',
       );
       return;
     }
-    setState(() => _step++);
-  }
-
-  void _back() {
-    if (_step == 0) {
-      context.pop();
-      return;
-    }
-    setState(() => _step--);
-  }
-
-  Future<void> _submitAndPay() async {
-    final session = ref.read(sessionProvider);
-    final uid = session.userUid;
-    if (uid == null || _eventDate == null || _submitting) return;
 
     setState(() => _submitting = true);
     try {
-      final event = await ref
-          .read(eventRepositoryProvider)
-          .createEvent(
-            ownerId: uid,
-            ownerEmail: session.userEmail ?? '',
-            name: _nameController.text.trim(),
-            product: _productController.text.trim(),
-            ticketPrice: double.tryParse(_priceController.text) ?? 0,
-            ticketProfit: double.tryParse(_profitController.text) ?? 0,
-            ticketCount: int.tryParse(_countController.text) ?? 0,
-            eventDate: _eventDate!,
-            pickupFrom: _pickupFrom,
-            pickupTo: _pickupTo,
-            pickupPlace: _placeController.text.trim(),
-            sellersCount: _sellersCount,
-            validatorsCount: _validatorsCount,
-            collectorsCount: _collectorsCount,
-            coordinatorsCount: _coordinatorsCount,
-            notes: _notesController.text.trim(),
-          );
+      final repo = ref.read(eventRepositoryProvider);
+      final created = await repo.createEvent(
+        ownerId: uid,
+        ownerEmail: session.userEmail ?? '',
+        name: _nameController.text.trim(),
+        product: _productController.text.trim(),
+        ticketPrice: double.tryParse(_priceController.text) ?? 0,
+        ticketProfit: double.tryParse(_profitController.text) ?? 0,
+        ticketCount: int.tryParse(_countController.text) ?? 0,
+        eventDate: _eventDate!,
+        pickupFrom: _pickupFrom,
+        pickupTo: _pickupTo,
+        pickupPlace: _placeController.text.trim(),
+        sellersCount: 2,
+        validatorsCount: 1,
+        notes: _notesController.text.trim(),
+      );
 
       if (!mounted) return;
-      context.go('/create-event/pay/${event.id}');
+
+      if (created.usedFreeSlot) {
+        await repo.confirmPaymentAndGenerateTickets(created.event.id);
+        if (!mounted) return;
+        AppSnackBar.success(
+          context,
+          'Evento creado. Se generaron ${created.event.ticketCount} tickets.',
+        );
+        context.go('/event/${created.event.id}');
+        return;
+      }
+
+      AppSnackBar.info(
+        context,
+        'El evento quedó pendiente de pago. Lo encontrás en Por pagar.',
+      );
+      context.go('/home');
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      AppSnackBar.error(context, 'No se pudo crear el evento: $e', cause: e);
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.error(context, 'No se pudo crear el evento: $e', cause: e);
@@ -114,386 +115,186 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
+    final products =
+        ref.watch(eventProductsProvider).asData?.value ?? const <String>[];
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_stepTitle),
+        title: const Text('Nuevo evento'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: _submitting ? null : _back,
+          onPressed: _submitting ? null : () => context.pop(),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _StepIndicator(step: _step),
-          const SizedBox(height: 20),
-          if (_step == 0) _buildDatos(),
-          if (_step == 1) _buildEquipo(),
-          if (_step == 2) _buildCotizacion(),
-          const SizedBox(height: 24),
-          if (_step < 2)
-            ElevatedButton(
-              onPressed: _next,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Continuar'),
-              ),
-            )
-          else
-            ElevatedButton(
-              onPressed: _submitting ? null : _submitAndPay,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: _submitting
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Ir a pagar y habilitar'),
-              ),
-            ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  String get _stepTitle => switch (_step) {
-    0 => 'Nuevo evento · Datos',
-    1 => 'Nuevo evento · Equipo',
-    _ => 'Nuevo evento · Cotización',
-  };
-
-  Widget _buildDatos() {
-    final products =
-        ref.watch(eventProductsProvider).asData?.value ?? const <String>[];
-
-    return SectionCard(
-      title: 'Datos del evento',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Nombre del evento',
-              hintText: 'Ej. Pollo a beneficio',
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          ProductTypeaheadField(
-            controller: _productController,
-            suggestions: products,
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _priceController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Precio del ticket',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _profitController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Ganancia'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _countController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Cantidad de tickets'),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: () async {
-              final now = DateTime.now();
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: _eventDate ?? now.add(const Duration(days: 14)),
-                firstDate: now,
-                lastDate: now.add(const Duration(days: 365)),
-              );
-              if (picked != null) setState(() => _eventDate = picked);
-            },
-            child: InputDecorator(
-              decoration: const InputDecoration(labelText: 'Fecha del evento'),
-              child: Text(
-                _eventDate == null
-                    ? 'Seleccionar fecha'
-                    : '${_eventDate!.day}/${_eventDate!.month}/${_eventDate!.year}',
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: _pickupFrom,
-                    );
-                    if (picked != null) setState(() => _pickupFrom = picked);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Hora desde'),
-                    child: Text(_pickupFrom.format(context)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: _pickupTo,
-                    );
-                    if (picked != null) setState(() => _pickupTo = picked);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Hora hasta'),
-                    child: Text(_pickupTo.format(context)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _placeController,
-            decoration: const InputDecoration(labelText: 'Lugar de retiro'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _notesController,
-            maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Notas (opcional)'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEquipo() {
-    return Column(
-      children: [
-        SectionCard(
-          title: '¿Cuántos vendedores?',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Cupos sugeridos. Después vas a invitar a cada persona con un link (token).',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              _CountStepper(
-                value: _sellersCount,
-                onChanged: (v) => setState(() => _sellersCount = v),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: '¿Cuántos validadores?',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Quienes validan el ticket en el retiro o en la entrada.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              _CountStepper(
-                value: _validatorsCount,
-                onChanged: (v) => setState(() => _validatorsCount = v),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: '¿Cuántos coordinadores?',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Opcional. Gestionan vendedores y les asignan tickets.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              _CountStepper(
-                value: _coordinatorsCount,
-                onChanged: (v) => setState(() => _coordinatorsCount = v),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SectionCard(
-          title: '¿Cuántos recaudadores?',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Opcional. Reciben las rendiciones de los vendedores.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              _CountStepper(
-                value: _collectorsCount,
-                onChanged: (v) => setState(() => _collectorsCount = v),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCotizacion() {
-    final pricingAsync = ref.watch(eventPricingProvider);
-    final pricing = pricingAsync.asData?.value;
-    if (pricingAsync.isLoading) {
-      return const SectionCard(
-        title: 'Cotización',
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
-    if (pricing == null) {
-      return const SectionCard(
-        title: 'Cotización',
-        child: Text(
-          'Falta configurar precios en Firestore (config/eventPricing).',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-      );
-    }
-
-    final quote = EventQuote.calculate(
-      ticketCount: int.tryParse(_countController.text) ?? 0,
-      pricing: pricing,
-    );
-    return SectionCard(
-      title: quote.label,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            quote.priceLabel,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: AppColors.accent,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 16),
-          for (final line in quote.breakdown) ...[
+          if (organizer != null && organizer.canCreateFreeEvent) ...[
             Text(
-              line,
+              organizer.freeEventsLabel,
               style: const TextStyle(
-                color: AppColors.textSecondary,
+                color: AppColors.textMuted,
                 fontSize: 13,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 16),
           ],
-          const SizedBox(height: 12),
-          const Text(
-            'Al confirmar el pago, el evento queda habilitado y se generan los tickets. '
-            'Los colaboradores se invitan después, cada uno con su link.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountStepper extends StatelessWidget {
-  const _CountStepper({required this.value, required this.onChanged});
-
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: value > 0 ? () => onChanged(value - 1) : null,
-          icon: const Icon(Icons.remove_circle_outline),
-        ),
-        Text('$value', style: Theme.of(context).textTheme.headlineSmall),
-        IconButton(
-          onPressed: () => onChanged(value + 1),
-          icon: const Icon(Icons.add_circle_outline),
-        ),
-      ],
-    );
-  }
-}
-
-class _StepIndicator extends StatelessWidget {
-  const _StepIndicator({required this.step});
-
-  final int step;
-
-  @override
-  Widget build(BuildContext context) {
-    const labels = ['Datos', 'Equipo', 'Cotización'];
-    return Row(
-      children: [
-        for (var i = 0; i < labels.length; i++) ...[
-          if (i > 0) const Expanded(child: Divider()),
-          Column(
-            children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: i <= step
-                    ? AppColors.accent
-                    : AppColors.border,
-                foregroundColor: i <= step ? Colors.white : AppColors.textMuted,
-                child: Text(
-                  '${i + 1}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+          SectionCard(
+            title: 'Datos del evento',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre del evento',
+                    hintText: 'Ej. Pollo a beneficio',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                ProductTypeaheadField(
+                  controller: _productController,
+                  suggestions: products,
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Precio del ticket',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _profitController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Ganancia',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _countController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Cantidad de tickets',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate:
+                          _eventDate ?? now.add(const Duration(days: 14)),
+                      firstDate: now,
+                      lastDate: now.add(const Duration(days: 365)),
+                    );
+                    if (picked != null) setState(() => _eventDate = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Fecha del evento',
+                    ),
+                    child: Text(
+                      _eventDate == null
+                          ? 'Seleccionar fecha'
+                          : '${_eventDate!.day}/${_eventDate!.month}/${_eventDate!.year}',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                labels[i],
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: i == step ? FontWeight.w700 : FontWeight.w500,
-                  color: i <= step ? AppColors.text : AppColors.textMuted,
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _pickupFrom,
+                          );
+                          if (picked != null) {
+                            setState(() => _pickupFrom = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Hora desde',
+                          ),
+                          child: Text(_pickupFrom.format(context)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _pickupTo,
+                          );
+                          if (picked != null) {
+                            setState(() => _pickupTo = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Hora hasta',
+                          ),
+                          child: Text(_pickupTo.format(context)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _placeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Lugar de retiro',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas (opcional)',
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _submitting ? null : _submit,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: _submitting
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Crear evento'),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
-      ],
+      ),
     );
   }
 }

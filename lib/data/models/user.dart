@@ -10,7 +10,11 @@ class AppUser {
     this.photoUrl,
     this.createdAt,
     this.lastLoginAt,
+    this.freeEvents = defaultFreeEvents,
   });
+
+  /// How many events a new organizer can create without paying.
+  static const int defaultFreeEvents = 2;
 
   /// Firebase Auth uid (doc id in Firestore). Mock users use a synthetic id.
   final String uid;
@@ -19,6 +23,18 @@ class AppUser {
   String? photoUrl;
   final DateTime? createdAt;
   DateTime? lastLoginAt;
+
+  /// Remaining events this organizer can create for free.
+  int freeEvents;
+
+  bool get canCreateFreeEvent => freeEvents > 0;
+
+  String get freeEventsLabel {
+    if (freeEvents == 1) {
+      return 'Te queda 1 evento gratis';
+    }
+    return 'Te quedan $freeEvents eventos gratis';
+  }
 
   /// Convenience for UI that still says "name".
   String get name => displayName;
@@ -33,6 +49,7 @@ class AppUser {
     bool clearPhotoUrl = false,
     DateTime? createdAt,
     DateTime? lastLoginAt,
+    int? freeEvents,
   }) {
     return AppUser(
       uid: uid ?? this.uid,
@@ -41,6 +58,7 @@ class AppUser {
       photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      freeEvents: freeEvents ?? this.freeEvents,
     );
   }
 
@@ -65,6 +83,7 @@ class AppUser {
       photoUrl: data['photoUrl'] as String?,
       createdAt: _readTimestamp(data['createdAt']),
       lastLoginAt: _readTimestamp(data['lastLoginAt']),
+      freeEvents: _readInt(data['freeEvents'], 0),
     );
   }
 
@@ -80,7 +99,14 @@ class AppUser {
       'photoUrl': photoUrl,
       'lastLoginAt': serverNow,
       if (isNew) 'createdAt': serverNow,
+      if (isNew) 'freeEvents': defaultFreeEvents,
     };
+  }
+
+  static int _readInt(Object? value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return fallback;
   }
 
   static DateTime? _readTimestamp(Object? value) {

@@ -16,6 +16,9 @@ class EventRepository {
   CollectionReference<Map<String, dynamic>> get _events =>
       _firestore.collection('events');
 
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _firestore.collection('users');
+
   CollectionReference<Map<String, dynamic>> _tickets(String eventId) =>
       _events.doc(eventId).collection('tickets');
 
@@ -60,7 +63,10 @@ class EventRepository {
     }
   }
 
-  Future<Event> createEvent({
+  /// Creates the event. If the organizer still has free slots, one is consumed
+  /// ([usedFreeSlot] = true). Otherwise the event stays in `awaitingPayment`
+  /// for checkout later.
+  Future<({Event event, bool usedFreeSlot})> createEvent({
     required String ownerId,
     required String ownerEmail,
     required String name,
@@ -77,6 +83,7 @@ class EventRepository {
     int collectorsCount = 0,
     int coordinatorsCount = 0,
     String notes = '',
+    TicketVisualStyle? ticketDesign,
   }) async {
     final ref = _events.doc();
     final now = FieldValue.serverTimestamp();
@@ -101,12 +108,24 @@ class EventRepository {
       status: EventStatus.awaitingPayment,
       paid: false,
       ticketsGenerated: false,
+      ticketDesign: ticketDesign ?? TicketVisualStyle.classic,
     );
 
-    await ref.set(
-      event.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
-    );
-    return event;
+    final userRef = _users.doc(ownerId);
+    final usedFreeSlot = await _firestore.runTransaction((tx) async {
+      final userSnap = await tx.get(userRef);
+      final remaining =
+          (userSnap.data()?['freeEvents'] as num?)?.toInt() ?? 0;
+
+      tx.set(
+        ref,
+        event.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
+      );
+      if (remaining <= 0) return false;
+      tx.update(userRef, {'freeEvents': remaining - 1});
+      return true;
+    });
+    return (event: event, usedFreeSlot: usedFreeSlot);
   }
 
   /// Marks the event as paid/active and creates ticket docs 1..ticketCount.

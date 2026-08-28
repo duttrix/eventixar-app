@@ -115,8 +115,7 @@ class EventPricingConfig {
   const EventPricingConfig({
     required this.tiers,
     this.overage,
-    this.note =
-        'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.',
+    this.note = 'El precio se calcula solo por cantidad de tickets.',
   });
 
   final List<EventPricingTier> tiers;
@@ -154,7 +153,7 @@ class EventPricingConfig {
       tiers: tiers,
       overage: overage,
       note: (note == null || note.isEmpty)
-          ? 'El precio se calcula solo por cantidad de tickets. Vendedores y validadores no suman al costo.'
+          ? 'El precio se calcula solo por cantidad de tickets.'
           : note,
     );
   }

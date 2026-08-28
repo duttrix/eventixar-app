@@ -47,6 +47,13 @@ final eventProductsProvider = StreamProvider<List<String>>((ref) {
   return ref.watch(catalogRepositoryProvider).watchEventProducts();
 });
 
+/// Live organizer profile (`users/{uid}`), including remaining free events.
+final currentOrganizerProvider = StreamProvider<AppUser?>((ref) {
+  final uid = ref.watch(sessionProvider).userUid;
+  if (uid == null) return Stream.value(null);
+  return ref.watch(userRepositoryProvider).watchByUid(uid);
+});
+
 /// Pricing tiers from Firestore `config/eventPricing`.
 final eventPricingProvider = StreamProvider<EventPricingConfig?>((ref) {
   return ref.watch(catalogRepositoryProvider).watchEventPricing();

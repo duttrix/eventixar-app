@@ -16,6 +16,7 @@ import '../../features/event_workspace/validator_detail_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/join/coordinator_portal_screen.dart';
 import '../../features/join/join_screens.dart';
+import '../../features/onboarding/copy_event_screen.dart';
 import '../../features/onboarding/create_event_screen.dart';
 import '../../features/onboarding/pay_event_screen.dart';
 import 'deep_link_mapper.dart';
@@ -154,6 +155,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             EventWorkspaceScreen(eventId: state.pathParameters['eventId']!),
         routes: [
+          GoRoute(
+            path: 'copy',
+            builder: (context, state) => CopyEventScreen(
+              sourceEventId: state.pathParameters['eventId']!,
+            ),
+          ),
           GoRoute(
             path: 'ticket-design',
             builder: (context, state) =>
