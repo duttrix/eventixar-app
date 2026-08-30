@@ -233,7 +233,7 @@ class _EventCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$dateLabel · ${event.ticketCount} tickets · ${event.sellersCount} vend. · ${event.validatorsCount} val.',
+                    '$dateLabel · ${event.ticketCount} tickets',
                     style: const TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 12,

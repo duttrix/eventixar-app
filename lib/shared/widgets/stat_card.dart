@@ -8,12 +8,14 @@ class StatCard extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
+    this.subtitle,
     this.accentColor = AppColors.text,
     this.large = false,
   });
 
   final String label;
   final String value;
+  final String? subtitle;
   final Color accentColor;
   final bool large;
 
@@ -36,14 +38,18 @@ class StatCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: large ? 32 : 24,
-                fontWeight: FontWeight.w800,
-                color: accentColor,
-                height: 1.05,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: large ? 32 : 22,
+                  fontWeight: FontWeight.w800,
+                  color: accentColor,
+                  height: 1.05,
+                ),
               ),
             ),
             SizedBox(height: large ? 6 : 4),
@@ -59,6 +65,20 @@ class StatCard extends StatelessWidget {
                 height: 1.15,
               ),
             ),
+            if (subtitle != null && subtitle!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ),
       ),

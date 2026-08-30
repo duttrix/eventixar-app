@@ -28,6 +28,7 @@ class _OrganizerTicketsScreenState
   final Set<TicketStatus> _statusFilters = {};
   final Set<String> _selectedIds = {};
   bool _selectionMode = false;
+  String? _sellerFilterId;
 
   void _exitSelection() {
     setState(() {
@@ -91,11 +92,42 @@ class _OrganizerTicketsScreenState
     };
 
     final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
-    final visible = _statusFilters.isEmpty
+    var visible = _statusFilters.isEmpty
         ? sorted
         : sorted
               .where((t) => _statusFilters.contains(t.status))
               .toList(growable: false);
+    if (_sellerFilterId != null) {
+      visible = visible
+          .where((t) => t.sellerId == _sellerFilterId)
+          .toList(growable: false);
+    }
+
+    final withSellerBySeller = <String, int>{};
+    for (final ticket in sorted) {
+      if (ticket.status != TicketStatus.withSeller) continue;
+      final id = ticket.sellerId?.trim();
+      if (id == null || id.isEmpty) continue;
+      withSellerBySeller[id] = (withSellerBySeller[id] ?? 0) + 1;
+    }
+    final sellerFilterOptions = withSellerBySeller.entries
+        .map(
+          (e) => (
+            id: e.key,
+            name: sellerNames[e.key] ?? 'Vendedor',
+            count: e.value,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    if (_sellerFilterId != null &&
+        sellerFilterOptions.every((o) => o.id != _sellerFilterId)) {
+      sellerFilterOptions.add((
+        id: _sellerFilterId!,
+        name: sellerNames[_sellerFilterId!] ?? 'Vendedor',
+        count: 0,
+      ));
+    }
 
     final selectedTickets = visible
         .where((t) => _selectedIds.contains(t.id))
@@ -141,11 +173,36 @@ class _OrganizerTicketsScreenState
                     : (status) => setState(() {
                         if (_statusFilters.contains(status)) {
                           _statusFilters.remove(status);
+                          if (status == TicketStatus.withSeller) {
+                            _sellerFilterId = null;
+                          }
                         } else {
                           _statusFilters.add(status);
                         }
                       }),
               ),
+              if (_statusFilters.contains(TicketStatus.withSeller)) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String?>(
+                  initialValue: _sellerFilterId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Vendedor',
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Todos los vendedores'),
+                    ),
+                    for (final option in sellerFilterOptions)
+                      DropdownMenuItem<String?>(
+                        value: option.id,
+                        child: Text('${option.name} (${option.count})'),
+                      ),
+                  ],
+                  onChanged: (id) => setState(() => _sellerFilterId = id),
+                ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -159,7 +216,10 @@ class _OrganizerTicketsScreenState
                   ),
                   if (_statusFilters.isNotEmpty)
                     TextButton(
-                      onPressed: () => setState(_statusFilters.clear),
+                      onPressed: () => setState(() {
+                        _statusFilters.clear();
+                        _sellerFilterId = null;
+                      }),
                       child: const Text('Ver todos'),
                     ),
                   if (!event.isReadOnly && visible.isNotEmpty) ...[
