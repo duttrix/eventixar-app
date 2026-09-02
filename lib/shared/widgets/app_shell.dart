@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'duttrix_brand.dart';
+import 'help_whatsapp.dart';
 
 /// Drawer row: either a tappable item or a non-interactive section label.
 class ShellNavItem {
@@ -82,6 +83,7 @@ class AppShell extends StatelessWidget {
             Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
+        actions: const [HelpWhatsAppIconButton()],
       ),
       drawer: hasDrawer
           ? Drawer(

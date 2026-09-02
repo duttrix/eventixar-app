@@ -236,7 +236,7 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // App catalogs (products, etc.). Edit from Firebase Console.
+    // App catalogs (products, pricing, help). Edit from Firebase Console.
     match /config/{docId} {
       allow read: if true;
       allow write: if false;

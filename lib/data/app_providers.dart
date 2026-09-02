@@ -13,6 +13,7 @@ import 'firebase/event_repository.dart';
 import 'firebase/user_repository.dart';
 import 'models/collaborator.dart';
 import 'models/event.dart';
+import 'models/help_config.dart';
 import 'models/ticket.dart';
 import 'models/user.dart';
 
@@ -57,6 +58,11 @@ final currentOrganizerProvider = StreamProvider<AppUser?>((ref) {
 /// Pricing tiers from Firestore `config/eventPricing`.
 final eventPricingProvider = StreamProvider<EventPricingConfig?>((ref) {
   return ref.watch(catalogRepositoryProvider).watchEventPricing();
+});
+
+/// Support settings from Firestore `config/help`.
+final helpConfigProvider = StreamProvider<HelpConfig?>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchHelp();
 });
 
 /// Live events owned by the signed-in organizer.

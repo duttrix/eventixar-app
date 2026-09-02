@@ -37,6 +37,11 @@
 				</array>
 			</dict>
 		</array>
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>whatsapp</string>
+			<string>https</string>
+		</array>
 		<key>NSCameraUsageDescription</key>
 		<string>Duttrix usa la cámara para escanear el código QR de los tickets.</string>
 		<key>LSRequiresIPhoneOS</key>

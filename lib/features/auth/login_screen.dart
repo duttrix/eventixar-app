@@ -9,6 +9,7 @@ import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/brand_icons.dart';
 import '../../shared/widgets/duttrix_brand.dart';
+import '../../shared/widgets/help_whatsapp.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -260,6 +261,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                     const SizedBox(height: 32),
+                    const HelpWhatsAppTextButton(),
+                    const SizedBox(height: 16),
                     const Text(
                       'Si te invitaron como vendedor, validador o recaudador, '
                       'abrí el link que te compartieron: no necesitás cuenta.',

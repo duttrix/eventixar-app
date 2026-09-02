@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/event.dart';
+import '../models/help_config.dart';
 
 /// App-wide catalogs from Firestore (`config/...`).
 class CatalogRepository {
@@ -14,6 +15,9 @@ class CatalogRepository {
 
   DocumentReference<Map<String, dynamic>> get _eventPricing =>
       _firestore.collection('config').doc('eventPricing');
+
+  DocumentReference<Map<String, dynamic>> get _help =>
+      _firestore.collection('config').doc('help');
 
   /// Live suggestions for “qué se vende” (free text always allowed).
   Stream<List<String>> watchEventProducts() {
@@ -35,6 +39,11 @@ class CatalogRepository {
     return _pricingFromSnap(snap);
   }
 
+  /// Live support settings from `config/help`.
+  Stream<HelpConfig?> watchHelp() {
+    return _help.snapshots().map(_helpFromSnap);
+  }
+
   List<String> _productsFromSnap(
     DocumentSnapshot<Map<String, dynamic>> snap,
   ) {
@@ -54,5 +63,11 @@ class CatalogRepository {
     final config = EventPricingConfig.fromFirestore(data);
     if (config.tiers.isEmpty && config.overage == null) return null;
     return config;
+  }
+
+  HelpConfig? _helpFromSnap(DocumentSnapshot<Map<String, dynamic>> snap) {
+    final data = snap.data();
+    if (!snap.exists || data == null) return null;
+    return HelpConfig.fromFirestore(data);
   }
 }

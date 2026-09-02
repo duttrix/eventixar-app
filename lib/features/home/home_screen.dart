@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/user.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/help_whatsapp.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -68,6 +69,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       actions: [
+        const HelpWhatsAppIconButton(),
         IconButton(
           tooltip: 'Cerrar sesión',
           onPressed: () async {
