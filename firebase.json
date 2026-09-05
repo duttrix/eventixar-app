@@ -8,11 +8,19 @@
           "fileOutput": "android/app/google-services.json"
         }
       },
+      "ios": {
+        "default": {
+          "projectId": "eventixar",
+          "appId": "1:165106453677:ios:e732e998b9861780970a24",
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
       "dart": {
         "lib/firebase_options.dart": {
           "projectId": "eventixar",
           "configurations": {
-            "android": "1:165106453677:android:1d9d738c4976815d970a24"
+            "android": "1:165106453677:android:1d9d738c4976815d970a24",
+            "ios": "1:165106453677:ios:e732e998b9861780970a24"
           }
         }
       }

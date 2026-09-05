@@ -18,12 +18,22 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
+enum _LoginBusy { idle, google, apple, email }
+
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  bool _busy = false;
+  _LoginBusy _busy = _LoginBusy.idle;
+  bool _appleInFlight = false;
   bool _showEmailForm = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+
+  bool get _isBusy => _busy != _LoginBusy.idle;
+
+  bool _showAppleSignIn(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+  }
 
   @override
   void dispose() {
@@ -33,20 +43,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_isBusy) return;
+    setState(() => _busy = _LoginBusy.google);
     try {
       final user = await ref.read(sessionProvider.notifier).signInWithGoogle();
       if (!mounted) return;
       if (user == null) {
         // User dismissed the account picker — no toast.
-        setState(() => _busy = false);
+        setState(() => _busy = _LoginBusy.idle);
         return;
       }
       if (context.mounted) context.go('/home');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() => _busy = _LoginBusy.idle);
       final message = e is AuthFailure
           ? e.userMessage
           : 'No se pudo iniciar sesión con Google. Probá de nuevo.';
@@ -61,8 +71,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    if (_isBusy || _appleInFlight) return;
+    _appleInFlight = true;
+    try {
+      final user = await ref.read(sessionProvider.notifier).signInWithApple();
+      if (!mounted) return;
+      if (user == null) {
+        AppSnackBar.info(
+          context,
+          'Inicio con Apple cancelado. En el simulador, iniciá sesión con un '
+          'Apple ID en Ajustes.',
+        );
+        return;
+      }
+      if (context.mounted) context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is AuthFailure
+          ? e.userMessage
+          : 'No se pudo iniciar sesión con Apple. Probá de nuevo.';
+      AppSnackBar.error(
+        context,
+        message,
+        cause: e is AuthFailure ? null : e,
+        reportToCrashlytics: e is! AuthFailure,
+        crashReason: 'login_apple_failed',
+      );
+    } finally {
+      _appleInFlight = false;
+    }
+  }
+
   Future<void> _signInWithEmail() async {
-    if (_busy) return;
+    if (_isBusy) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
@@ -70,20 +112,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() => _busy = _LoginBusy.email);
     try {
       final user = await ref
           .read(sessionProvider.notifier)
           .signInWithEmailAndPassword(email: email, password: password);
       if (!mounted) return;
       if (user == null) {
-        setState(() => _busy = false);
+        setState(() => _busy = _LoginBusy.idle);
         return;
       }
       if (context.mounted) context.go('/home');
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() => _busy = _LoginBusy.idle);
       AppSnackBar.error(
         context,
         _emailAuthMessage(e),
@@ -91,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     } catch (e, st) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() => _busy = _LoginBusy.idle);
       AppSnackBar.error(
         context,
         'No se pudo iniciar sesión. Probá de nuevo.',
@@ -157,8 +199,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: _busy ? null : _signInWithGoogle,
-                        icon: _busy && !_showEmailForm
+                        onPressed: _isBusy ? null : _signInWithGoogle,
+                        icon: _busy == _LoginBusy.google
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
@@ -166,7 +208,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               )
                             : const GoogleLogo(size: 18),
                         label: Text(
-                          _busy && !_showEmailForm
+                          _busy == _LoginBusy.google
                               ? 'Conectando…'
                               : 'Continuar con Google',
                         ),
@@ -177,24 +219,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: null,
-                        icon: const AppleLogo(size: 18),
-                        label: const Text('Continuar con Apple (próximamente)'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.black54,
-                          disabledForegroundColor: Colors.white70,
+                    if (_showAppleSignIn(context)) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isBusy ? null : _signInWithApple,
+                          icon: _busy == _LoginBusy.apple
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const AppleLogo(size: 18),
+                          label: Text(
+                            _busy == _LoginBusy.apple
+                                ? 'Conectando…'
+                                : 'Continuar con Apple',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.black54,
+                            disabledForegroundColor: Colors.white70,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: _busy
+                      onPressed: _isBusy
                           ? null
                           : () => setState(() => _showEmailForm = !_showEmailForm),
                       style: TextButton.styleFrom(
@@ -209,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 4),
                       TextField(
                         controller: _emailController,
-                        enabled: !_busy,
+                        enabled: !_isBusy,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         textInputAction: TextInputAction.next,
@@ -221,7 +278,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: _passwordController,
-                        enabled: !_busy,
+                        enabled: !_isBusy,
                         obscureText: _obscurePassword,
                         autofillHints: const [AutofillHints.password],
                         textInputAction: TextInputAction.done,
@@ -247,8 +304,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
-                          onPressed: _busy ? null : _signInWithEmail,
-                          child: _busy
+                          onPressed: _isBusy ? null : _signInWithEmail,
+                          child: _busy == _LoginBusy.email
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,

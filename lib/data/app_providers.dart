@@ -684,6 +684,14 @@ class SessionController extends StateNotifier<SessionState> {
     return user;
   }
 
+  Future<User?> signInWithApple() async {
+    final user = await _ref.read(googleAuthServiceProvider).signInWithApple();
+    if (user == null) return null;
+    await _prepareOrganizerLogin();
+    await _applyFirebaseUser(user);
+    return user;
+  }
+
   Future<User?> signInWithEmailAndPassword({
     required String email,
     required String password,

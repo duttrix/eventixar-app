@@ -15,9 +15,10 @@ import 'data/app_providers.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
   await runZonedGuarded(() async {
-    final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
@@ -27,10 +28,14 @@ Future<void> main() async {
       return true;
     };
 
-    runApp(const ProviderScope(child: DuttrixApp()));
     FlutterNativeSplash.remove();
+    runApp(const ProviderScope(child: DuttrixApp()));
   }, (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    debugPrint('Startup error: $error\n$stack');
+    if (Firebase.apps.isNotEmpty) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
+    FlutterNativeSplash.remove();
   });
 }
 

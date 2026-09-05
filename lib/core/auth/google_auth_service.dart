@@ -40,6 +40,9 @@ class GoogleAuthService {
   static const _userGoogleFailure =
       'No se pudo iniciar sesión con Google. Probá de nuevo.';
 
+  static const _userAppleFailure =
+      'No se pudo iniciar sesión con Apple. Probá de nuevo.';
+
   void _debug(String message, {Object? error}) {
     if (!kDebugMode) return;
     debugPrint('[DuttrixAuth] $message');
@@ -168,6 +171,68 @@ class GoogleAuthService {
         reason: 'google_sign_in_unexpected',
       );
     }
+  }
+
+  /// Interactive Apple sign-in. Returns the Firebase [User] or null if cancelled.
+  Future<User?> signInWithApple() async {
+    await _breadcrumb('apple_sign_in.start');
+    try {
+      // Native sheet + Firebase nonce are handled by the Auth SDK. Using the
+      // plugin's getAppleIDCredential + signInWithCredential hangs/cancels
+      // (ASAuthorizationError 1001) on the iOS 18 scene-based embedding.
+      final provider = AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+      final result = await _auth.signInWithProvider(provider);
+      await _breadcrumb('apple_sign_in.ok');
+      return result.user;
+    } on AuthFailure {
+      rethrow;
+    } on FirebaseAuthException catch (e, st) {
+      _debug('FirebaseAuthException ${e.code}', error: e);
+      if (_isAppleCanceled(e)) {
+        await _breadcrumb('apple_sign_in.user_canceled');
+        return null;
+      }
+      await _failApple(
+        e,
+        st,
+        reason: 'firebase_auth_apple_provider',
+        information: {
+          'auth_code': e.code,
+          'auth_message': e.message,
+        },
+      );
+    } catch (e, st) {
+      _debug('unexpected Apple sign-in error', error: e);
+      await _failApple(
+        e,
+        st,
+        reason: 'apple_sign_in_unexpected',
+      );
+    }
+  }
+
+  static bool _isAppleCanceled(FirebaseAuthException e) {
+    final code = e.code.toLowerCase();
+    return code == 'canceled' ||
+        code == 'cancelled' ||
+        code == 'web-context-canceled';
+  }
+
+  Future<Never> _failApple(
+    Object error,
+    StackTrace stack, {
+    required String reason,
+    Map<String, Object?>? information,
+  }) async {
+    await CrashReporting.recordNonFatal(
+      error,
+      stack,
+      reason: reason,
+      information: information,
+    );
+    throw AuthFailure(_userAppleFailure, cause: error);
   }
 
   Future<void> signOut() async {

@@ -24,6 +24,8 @@
 		<string>????</string>
 		<key>CFBundleVersion</key>
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>GIDClientID</key>
+		<string>165106453677-ma9q59ur784udhj3mn10ihqu5esbbvq4.apps.googleusercontent.com</string>
 		<key>CFBundleURLTypes</key>
 		<array>
 			<dict>
@@ -34,6 +36,14 @@
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<string>eventixar</string>
+				</array>
+			</dict>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.165106453677-ma9q59ur784udhj3mn10ihqu5esbbvq4</string>
 				</array>
 			</dict>
 		</array>

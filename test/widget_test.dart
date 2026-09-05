@@ -21,6 +21,9 @@ class _NoAuthService extends GoogleAuthService {
   Future<User?> signInWithGoogle() async => null;
 
   @override
+  Future<User?> signInWithApple() async => null;
+
+  @override
   Future<void> signOut() async {}
 }
 
@@ -52,6 +55,6 @@ void main() {
     expect(find.text('GESTIÓN DE EVENTOS'), findsOneWidget);
     expect(find.textContaining('uttrix'), findsWidgets);
     expect(find.text('Continuar con Google'), findsOneWidget);
-    expect(find.text('Continuar con Apple (próximamente)'), findsOneWidget);
+    expect(find.text('Continuar con Apple (próximamente)'), findsNothing);
   });
 }
