@@ -1,6 +1,6 @@
 /// Remote help/support settings: Firestore `config/help`.
 ///
-/// Add fields here as we grow support (hours, email, etc.).
+/// Add fields here as we grow support (hours, etc.).
 class HelpConfig {
   const HelpConfig({this.phoneNumber});
 

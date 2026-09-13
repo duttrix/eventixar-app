@@ -41,6 +41,19 @@ class EventQuote {
 
   String get priceLabel => amount == 0 ? r'$0' : '\$${_format(amount)}';
 
+  EventQuote withDiscount(int percent) {
+    final clipped = percent.clamp(1, 99);
+    final discounted = (amount * (100 - clipped) / 100).round();
+    return EventQuote(
+      amount: discounted,
+      label: label,
+      breakdown: [
+        ...breakdown,
+        'Cupón $clipped% → \$${_format(discounted)}',
+      ],
+    );
+  }
+
   static String formatAmount(int n) => _format(n);
 
   static String _format(int n) {
@@ -238,11 +251,17 @@ class Event {
     this.coordinatorsCount = 0,
     this.notes = '',
     this.status = EventStatus.awaitingPayment,
-    this.paid = false,
     this.createdAt,
     this.updatedAt,
     this.ticketsGenerated = false,
     this.ticketDesign = TicketVisualStyle.classic,
+    this.transferNotifiedAt,
+    this.couponCode,
+    this.couponPercent,
+    this.couponSellerId,
+    this.couponOriginalAmount,
+    this.couponDiscountAmount,
+    this.couponFinalAmount,
   });
 
   final String id;
@@ -280,7 +299,6 @@ class Event {
   int coordinatorsCount;
 
   EventStatus status;
-  bool paid;
   DateTime? createdAt;
   DateTime? updatedAt;
 
@@ -289,6 +307,17 @@ class Event {
 
   /// Visual style applied to shared ticket images for this event.
   TicketVisualStyle ticketDesign;
+
+  /// Set when the organizer taps “Ya transferí” (does not enable the event).
+  DateTime? transferNotifiedAt;
+
+  /// Discount coupon applied on the pay screen (`sellers/{id}/coupons/{code}`).
+  String? couponCode;
+  int? couponPercent;
+  String? couponSellerId;
+  int? couponOriginalAmount;
+  int? couponDiscountAmount;
+  int? couponFinalAmount;
 
   /// Amount the collector receives per ticket for a given settle mode.
   double amountForSettleMode(TicketSettleMode mode) => switch (mode) {
@@ -346,11 +375,17 @@ class Event {
       coordinatorsCount: (data['coordinatorsCount'] as num?)?.toInt() ?? 0,
       notes: (data['notes'] as String?) ?? '',
       status: EventStatusX.fromFirestore(data['status'] as String?),
-      paid: data['paid'] == true,
       createdAt: _readTimestamp(data['createdAt']),
       updatedAt: _readTimestamp(data['updatedAt']),
       ticketsGenerated: data['ticketsGenerated'] == true,
       ticketDesign: TicketVisualStyle.fromFirestore(data['ticketDesign']),
+      transferNotifiedAt: _readTimestamp(data['transferNotifiedAt']),
+      couponCode: (data['couponCode'] as String?)?.trim(),
+      couponPercent: (data['couponPercent'] as num?)?.toInt(),
+      couponSellerId: (data['couponSellerId'] as String?)?.trim(),
+      couponOriginalAmount: (data['couponOriginalAmount'] as num?)?.toInt(),
+      couponDiscountAmount: (data['couponDiscountAmount'] as num?)?.toInt(),
+      couponFinalAmount: (data['couponFinalAmount'] as num?)?.toInt(),
     );
   }
 
@@ -378,7 +413,6 @@ class Event {
       'coordinatorsCount': coordinatorsCount,
       'notes': notes,
       'status': status.firestoreValue,
-      'paid': paid,
       'ticketsGenerated': ticketsGenerated,
       'ticketDesign': ticketDesign.toFirestoreMap(),
       'createdAt': ?createdAtValue,

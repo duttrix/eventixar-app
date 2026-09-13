@@ -63,9 +63,8 @@ class EventRepository {
     }
   }
 
-  /// Creates the event. If the organizer still has free slots, one is consumed
-  /// ([usedFreeSlot] = true). Otherwise the event stays in `awaitingPayment`
-  /// for checkout later.
+  /// Creates the event and always generates tickets.
+  /// Free slot → `active`. Otherwise → `awaitingPayment` until ops flip status.
   Future<({Event event, bool usedFreeSlot})> createEvent({
     required String ownerId,
     required String ownerEmail,
@@ -106,7 +105,6 @@ class EventRepository {
       coordinatorsCount: coordinatorsCount,
       notes: notes,
       status: EventStatus.awaitingPayment,
-      paid: false,
       ticketsGenerated: false,
       ticketDesign: ticketDesign ?? TicketVisualStyle.classic,
     );
@@ -125,11 +123,39 @@ class EventRepository {
       tx.update(userRef, {'freeEvents': remaining - 1});
       return true;
     });
+
+    await _generateTickets(eventId: ref.id, ticketCount: ticketCount);
+
+    if (usedFreeSlot) {
+      await ref.update({
+        'status': EventStatus.active.firestoreValue,
+        'ticketsGenerated': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      event
+        ..status = EventStatus.active
+        ..ticketsGenerated = true;
+    } else {
+      await ref.update({
+        'ticketsGenerated': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      event.ticketsGenerated = true;
+    }
+
     return (event: event, usedFreeSlot: usedFreeSlot);
   }
 
-  /// Marks the event as paid/active and creates ticket docs 1..ticketCount.
-  Future<Event> confirmPaymentAndGenerateTickets(String eventId) async {
+  /// Organizer told us they transferred. Event stays in awaitingPayment.
+  Future<void> recordTransferNotice(String eventId) async {
+    await _events.doc(eventId).update({
+      'transferNotifiedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Legacy: if an old event was flipped to active without tickets, create them.
+  Future<Event> ensureActiveEventReady(String eventId) async {
     final ref = _events.doc(eventId);
     final snap = await ref.get();
     final data = snap.data();
@@ -138,24 +164,16 @@ class EventRepository {
     }
 
     var event = Event.fromFirestore(snap.id, data);
-    if (event.paid && event.ticketsGenerated) {
-      return event;
-    }
+    if (event.ticketsGenerated) return event;
+    if (event.status != EventStatus.active) return event;
 
-    if (!event.ticketsGenerated) {
-      await _generateTickets(eventId: event.id, ticketCount: event.ticketCount);
-    }
-
-    final now = FieldValue.serverTimestamp();
+    await _generateTickets(eventId: event.id, ticketCount: event.ticketCount);
     await ref.update({
-      'paid': true,
       'status': EventStatus.active.firestoreValue,
       'ticketsGenerated': true,
-      'updatedAt': now,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
-
     event
-      ..paid = true
       ..status = EventStatus.active
       ..ticketsGenerated = true;
     return event;

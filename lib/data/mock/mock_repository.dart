@@ -233,7 +233,6 @@ class MockRepository extends ChangeNotifier {
       collectorsCount: collectorsCount,
       notes: notes,
       status: EventStatus.awaitingPayment,
-      paid: false,
     );
     events.add(event);
     ticketAggregate[event.id] = {
@@ -247,7 +246,6 @@ class MockRepository extends ChangeNotifier {
   void confirmPayment(String eventId) {
     final event = eventById(eventId);
     event
-      ..paid = true
       ..status = EventStatus.active
       ..ticketsGenerated = true;
     notifyListeners();
@@ -548,7 +546,6 @@ class MockRepository extends ChangeNotifier {
       validatorsCount: 2,
       notes: 'Retirar por la puerta lateral.',
       status: EventStatus.active,
-      paid: true,
       ticketsGenerated: true,
     );
 
@@ -567,7 +564,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 2,
       validatorsCount: 1,
       status: EventStatus.awaitingPayment,
-      paid: false,
     );
 
     final past = Event(
@@ -585,7 +581,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 2,
       validatorsCount: 1,
       status: EventStatus.finished,
-      paid: true,
     );
 
     final pastLocro = Event(
@@ -603,7 +598,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 3,
       validatorsCount: 2,
       status: EventStatus.finished,
-      paid: true,
     );
 
     final pastBingo = Event(
@@ -621,7 +615,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 4,
       validatorsCount: 2,
       status: EventStatus.finished,
-      paid: true,
     );
 
     final pastEmpanadas = Event(
@@ -639,7 +632,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 5,
       validatorsCount: 3,
       status: EventStatus.finished,
-      paid: true,
     );
 
     final pastPaella = Event(
@@ -657,7 +649,6 @@ class MockRepository extends ChangeNotifier {
       sellersCount: 2,
       validatorsCount: 1,
       status: EventStatus.finished,
-      paid: true,
     );
 
     events.addAll([active, awaiting, past, pastLocro, pastBingo, pastEmpanadas, pastPaella]);

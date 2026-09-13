@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/event.dart';
 import '../models/help_config.dart';
+import '../models/payment_config.dart';
 
 /// App-wide catalogs from Firestore (`config/...`).
 class CatalogRepository {
@@ -18,6 +19,9 @@ class CatalogRepository {
 
   DocumentReference<Map<String, dynamic>> get _help =>
       _firestore.collection('config').doc('help');
+
+  DocumentReference<Map<String, dynamic>> get _payment =>
+      _firestore.collection('config').doc('payment');
 
   /// Live suggestions for “qué se vende” (free text always allowed).
   Stream<List<String>> watchEventProducts() {
@@ -42,6 +46,11 @@ class CatalogRepository {
   /// Live support settings from `config/help`.
   Stream<HelpConfig?> watchHelp() {
     return _help.snapshots().map(_helpFromSnap);
+  }
+
+  /// Live bank transfer details from `config/payment`.
+  Stream<PaymentConfig?> watchPayment() {
+    return _payment.snapshots().map(_paymentFromSnap);
   }
 
   List<String> _productsFromSnap(
@@ -69,5 +78,14 @@ class CatalogRepository {
     final data = snap.data();
     if (!snap.exists || data == null) return null;
     return HelpConfig.fromFirestore(data);
+  }
+
+  PaymentConfig? _paymentFromSnap(
+    DocumentSnapshot<Map<String, dynamic>> snap,
+  ) {
+    final data = snap.data();
+    if (!snap.exists || data == null) return null;
+    final config = PaymentConfig.fromFirestore(data);
+    return config.isUsable ? config : null;
   }
 }

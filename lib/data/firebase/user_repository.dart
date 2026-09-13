@@ -63,4 +63,12 @@ class UserRepository {
       return AppUser.fromFirestore(uid, data);
     });
   }
+
+  /// Coupon sellers live in `sellers/{uid}` and must not use the organizer app.
+  Future<bool> isSellerAccount({required String uid, String? email}) async {
+    final mail = email?.trim().toLowerCase() ?? '';
+    if (mail.endsWith('@duttrix.app')) return true;
+    final snap = await _firestore.collection('sellers').doc(uid).get();
+    return snap.exists;
+  }
 }

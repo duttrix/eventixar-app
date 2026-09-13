@@ -5,6 +5,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Doc created by hand in Console: admins/{uid} after adding the Auth user.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminActivateUnpaidEvent() {
+      return isAdmin()
+        && resource.data.status == 'awaitingPayment'
+        && request.resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt']);
+    }
+
+    // Organizer cannot self-activate a pending-payment event.
+    function ownerKeepsUnpaidStatus() {
+      return resource.data.status != 'awaitingPayment'
+        || request.resource.data.status == resource.data.status;
+    }
+
     function isOwner(ownerId) {
       return isSignedIn() && request.auth.uid == ownerId;
     }
@@ -130,7 +150,6 @@ service cloud.firestore {
     // No free slots left: the event can be created unpaid and sit in "Por pagar".
     function isUnpaidEventCreate() {
       return remainingFreeEvents() == 0
-        && request.resource.data.paid == false
         && request.resource.data.status == 'awaitingPayment';
     }
 
@@ -184,15 +203,75 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /admins/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
+    function isSeller() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/sellers/$(request.auth.uid));
+    }
+
+    function couponMarkUsedByOrganizer() {
+      return isSignedIn()
+        && resource.data.used == false
+        && (!('status' in resource.data) || resource.data.status in ['unused', 'disponible', 'available'])
+        && request.resource.data.used == true
+        && request.resource.data.status == 'applied'
+        && request.resource.data.eventId is string
+        && request.resource.data.originalAmount is number
+        && request.resource.data.discountAmount is number
+        && request.resource.data.finalAmount is number
+        && request.resource.data.discountPercent == resource.data.discountPercent
+        && request.resource.data.code == resource.data.code
+        && isEventOwner(request.resource.data.eventId);
+    }
+
+    match /sellers/{sellerId} {
+      allow get: if isAdmin() || (isSignedIn() && request.auth.uid == sellerId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+
+      match /coupons/{code} {
+        allow get: if isAdmin()
+          || (isSignedIn() && request.auth.uid == sellerId)
+          || isSignedIn();
+        allow list: if isAdmin() || (isSignedIn() && request.auth.uid == sellerId);
+        allow create: if (isAdmin() || (isSignedIn() && request.auth.uid == sellerId))
+          && request.resource.data.code == code
+          && request.resource.data.discountPercent is number
+          && request.resource.data.discountPercent > 0
+          && request.resource.data.discountPercent < 100
+          && request.resource.data.used == false
+          && request.resource.data.status == 'available';
+        allow update: if isAdmin() || couponMarkUsedByOrganizer();
+        allow delete: if isAdmin() && resource.data.used == false;
+      }
+    }
+
+    // Pointer so the app can resolve a code without listing all coupons.
+    match /couponIndex/{code} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isAdmin() || isSeller();
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
     match /events/{eventId} {
       allow get: if true;
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (isAdmin() && resource.data.status == 'awaitingPayment');
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid
         && (consumesFreeEventCredit() || isUnpaidEventCreate());
-      allow update: if isSignedIn()
-        && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId;
+      allow update: if adminActivateUnpaidEvent()
+        || (isSignedIn()
+            && resource.data.ownerId == request.auth.uid
+            && request.resource.data.ownerId == resource.data.ownerId
+            && ownerKeepsUnpaidStatus());
       allow delete: if false;
 
       match /tickets/{ticketId} {
@@ -236,10 +315,11 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // App catalogs (products, pricing, help). Edit from Firebase Console.
+    // App catalogs. Public read; only admins edit from /admin.
     match /config/{docId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin()
+        && docId in ['eventPricing', 'eventProducts', 'help', 'payment'];
     }
 
     match /{document=**} {

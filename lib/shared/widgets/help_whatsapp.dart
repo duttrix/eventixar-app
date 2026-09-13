@@ -7,8 +7,14 @@ import '../../data/app_providers.dart';
 import 'app_snackbar.dart';
 
 /// Opens a WhatsApp chat with [digits] (`https://wa.me/{digits}`).
-Future<void> openHelpWhatsApp(BuildContext context, String digits) async {
-  final uri = Uri.https('wa.me', '/$digits');
+Future<void> openWhatsApp(
+  BuildContext context,
+  String digits, {
+  String? text,
+}) async {
+  final uri = Uri.https('wa.me', '/$digits', {
+    if (text != null && text.isNotEmpty) 'text': text,
+  });
   try {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
@@ -37,7 +43,7 @@ class HelpWhatsAppIconButton extends ConsumerWidget {
     if (phone == null) return const SizedBox.shrink();
     return IconButton(
       tooltip: 'Ayuda',
-      onPressed: () => openHelpWhatsApp(context, phone),
+      onPressed: () => openWhatsApp(context, phone),
       icon: const Icon(Icons.help_outline),
     );
   }
@@ -52,7 +58,7 @@ class HelpWhatsAppTextButton extends ConsumerWidget {
     final phone = _helpPhone(ref);
     if (phone == null) return const SizedBox.shrink();
     return TextButton.icon(
-      onPressed: () => openHelpWhatsApp(context, phone),
+      onPressed: () => openWhatsApp(context, phone),
       icon: const Icon(Icons.help_outline, size: 18),
       label: const Text('Ayuda'),
       style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),

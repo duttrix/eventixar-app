@@ -54,6 +54,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
       if (context.mounted) context.go('/home');
+    } on SellerLoginBlocked catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = _LoginBusy.idle);
+      AppSnackBar.warning(context, e.userMessage);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = _LoginBusy.idle);
@@ -86,6 +90,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
       if (context.mounted) context.go('/home');
+    } on SellerLoginBlocked catch (e) {
+      if (!mounted) return;
+      AppSnackBar.warning(context, e.userMessage);
     } catch (e) {
       if (!mounted) return;
       final message = e is AuthFailure
@@ -123,6 +130,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return;
       }
       if (context.mounted) context.go('/home');
+    } on SellerLoginBlocked catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = _LoginBusy.idle);
+      AppSnackBar.warning(context, e.userMessage);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _busy = _LoginBusy.idle);

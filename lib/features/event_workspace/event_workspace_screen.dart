@@ -34,7 +34,7 @@ enum EventTab {
   collectors,
 }
 
-/// Organizer workspace for one paid/active event.
+/// Organizer workspace for one active event.
 class EventWorkspaceScreen extends ConsumerStatefulWidget {
   const EventWorkspaceScreen({super.key, required this.eventId});
 
@@ -47,9 +47,20 @@ class EventWorkspaceScreen extends ConsumerStatefulWidget {
 
 class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
   EventTab _selected = EventTab.summary;
+  bool _ensuringTickets = false;
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(eventProvider(widget.eventId), (previous, next) {
+      final event = next.asData?.value;
+      if (event == null || _ensuringTickets) return;
+      if (event.status != EventStatus.active || event.ticketsGenerated) return;
+      _ensuringTickets = true;
+      ref.read(eventRepositoryProvider).ensureActiveEventReady(event.id).whenComplete(() {
+        _ensuringTickets = false;
+      });
+    });
+
     return AsyncBody(
       value: ref.watch(eventProvider(widget.eventId)),
       builder: (context, event) => _buildWorkspace(context, event),

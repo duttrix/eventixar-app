@@ -29,13 +29,6 @@ class AppUser {
 
   bool get canCreateFreeEvent => freeEvents > 0;
 
-  String get freeEventsLabel {
-    if (freeEvents == 1) {
-      return 'Te queda 1 evento gratis';
-    }
-    return 'Te quedan $freeEvents eventos gratis';
-  }
-
   /// Convenience for UI that still says "name".
   String get name => displayName;
 

@@ -9,11 +9,13 @@ import '../core/monitoring/crash_reporting.dart';
 import '../core/session/collaborator_session_storage.dart';
 import 'firebase/catalog_repository.dart';
 import 'firebase/collaborator_repository.dart';
+import 'firebase/coupon_repository.dart';
 import 'firebase/event_repository.dart';
 import 'firebase/user_repository.dart';
 import 'models/collaborator.dart';
 import 'models/event.dart';
 import 'models/help_config.dart';
+import 'models/payment_config.dart';
 import 'models/ticket.dart';
 import 'models/user.dart';
 
@@ -33,6 +35,10 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository();
+});
+
+final couponRepositoryProvider = Provider<CouponRepository>((ref) {
+  return CouponRepository();
 });
 
 final collaboratorRepositoryProvider = Provider<CollaboratorRepository>((ref) {
@@ -63,6 +69,11 @@ final eventPricingProvider = StreamProvider<EventPricingConfig?>((ref) {
 /// Support settings from Firestore `config/help`.
 final helpConfigProvider = StreamProvider<HelpConfig?>((ref) {
   return ref.watch(catalogRepositoryProvider).watchHelp();
+});
+
+/// Bank transfer details from Firestore `config/payment`.
+final paymentConfigProvider = StreamProvider<PaymentConfig?>((ref) {
+  return ref.watch(catalogRepositoryProvider).watchPayment();
 });
 
 /// Live events owned by the signed-in organizer.
@@ -466,6 +477,13 @@ Future<void> settleTicketsAction(
 }
 
 /// Organizer Firebase session, or deeplink collaborator access.
+class SellerLoginBlocked implements Exception {
+  const SellerLoginBlocked();
+
+  String get userMessage =>
+      'Esta cuenta es de vendedor. Entrá en eventixar.web.app/vendedor';
+}
+
 class SessionState {
   const SessionState({
     this.userEmail,
@@ -627,7 +645,7 @@ class SessionController extends StateNotifier<SessionState> {
     final auth = _ref.read(googleAuthServiceProvider);
     final current = auth.currentUser;
     if (current != null) {
-      unawaited(_applyFirebaseUser(current));
+      unawaited(_onAuthChanged(current));
     }
     _authSub = auth.authStateChanges().listen((user) {
       unawaited(_onAuthChanged(user));
@@ -636,7 +654,11 @@ class SessionController extends StateNotifier<SessionState> {
 
   Future<void> _onAuthChanged(User? user) async {
     if (user != null) {
-      await _applyFirebaseUser(user);
+      try {
+        await _applyFirebaseUser(user);
+      } on SellerLoginBlocked {
+        // Already signed out. Stay on login.
+      }
       return;
     }
     // Don't wipe collaborator deeplink sessions when Firebase has no user.
@@ -651,6 +673,16 @@ class SessionController extends StateNotifier<SessionState> {
     // A collaborator session owns this device until explicit logout —
     // unless we just cleared it during organizer Google sign-in.
     if (state.collaboratorToken != null) return;
+
+    final seller = await _ref.read(userRepositoryProvider).isSellerAccount(
+          uid: user.uid,
+          email: user.email,
+        );
+    if (seller) {
+      await _ref.read(googleAuthServiceProvider).signOut();
+      throw const SellerLoginBlocked();
+    }
+
     final profile = AppUser.fromAuth(user);
     state = SessionState(
       userEmail: profile.email,

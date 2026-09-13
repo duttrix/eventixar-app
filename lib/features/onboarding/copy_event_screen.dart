@@ -108,7 +108,6 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
       if (!mounted) return;
 
       if (created.usedFreeSlot) {
-        await eventRepo.confirmPaymentAndGenerateTickets(created.event.id);
         if (!mounted) return;
         AppSnackBar.success(
           context,

@@ -107,19 +107,13 @@ class HomeScreen extends ConsumerWidget {
             child: ElevatedButton.icon(
               onPressed: () => context.push('/create-event'),
               icon: const Icon(Icons.add),
-              label: const Text('Crear evento nuevo'),
-            ),
-          ),
-          if (organizer != null && organizer.canCreateFreeEvent) ...[
-            const SizedBox(height: 8),
-            Text(
-              organizer.freeEventsLabel,
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 13,
+              label: Text(
+                organizer != null && organizer.canCreateFreeEvent
+                    ? 'Crear evento nuevo (${organizer.freeEvents} gratis)'
+                    : 'Crear evento nuevo',
               ),
             ),
-          ],
+          ),
           const SizedBox(height: 28),
           _EventSection(
             title: 'Activos',

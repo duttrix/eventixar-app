@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
@@ -87,7 +86,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       if (!mounted) return;
 
       if (created.usedFreeSlot) {
-        await repo.confirmPaymentAndGenerateTickets(created.event.id);
         if (!mounted) return;
         AppSnackBar.success(
           context,
@@ -99,7 +97,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
       AppSnackBar.info(
         context,
-        'El evento quedó pendiente de pago. Lo encontrás en Por pagar.',
+        'Evento creado. Quedó pendiente de pago. Lo encontrás en Por pagar.',
       );
       context.go('/home');
     } on FirebaseException catch (e) {
@@ -130,16 +128,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (organizer != null && organizer.canCreateFreeEvent) ...[
-            Text(
-              organizer.freeEventsLabel,
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
           SectionCard(
             title: 'Datos del evento',
             child: Column(
@@ -289,7 +277,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Crear evento'),
+                  : Text(
+                      organizer != null && organizer.canCreateFreeEvent
+                          ? 'Crear evento (${organizer.freeEvents} gratis)'
+                          : 'Crear evento',
+                    ),
             ),
           ),
           const SizedBox(height: 24),
