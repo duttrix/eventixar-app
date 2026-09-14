@@ -1,4 +1,5 @@
 # Miscellaneous
+node_modules/
 *.class
 *.lock
 *.log
