@@ -208,11 +208,6 @@ service cloud.firestore {
       allow list, write: if false;
     }
 
-    function isSeller() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/sellers/$(request.auth.uid));
-    }
-
     function couponMarkUsedByOrganizer() {
       return isSignedIn()
         && resource.data.used == false
@@ -239,7 +234,7 @@ service cloud.firestore {
           || (isSignedIn() && request.auth.uid == sellerId)
           || isSignedIn();
         allow list: if isAdmin() || (isSignedIn() && request.auth.uid == sellerId);
-        allow create: if (isAdmin() || (isSignedIn() && request.auth.uid == sellerId))
+        allow create: if ((isSignedIn() && request.auth.uid == sellerId) || isAdmin())
           && request.resource.data.code == code
           && request.resource.data.discountPercent is number
           && request.resource.data.discountPercent > 0
@@ -255,7 +250,11 @@ service cloud.firestore {
     match /couponIndex/{code} {
       allow get: if isSignedIn();
       allow list: if false;
-      allow create: if isAdmin() || isSeller();
+      allow create: if request.resource.data.sellerId is string
+        && (
+          (isSignedIn() && request.resource.data.sellerId == request.auth.uid)
+          || isAdmin()
+        );
       allow delete: if isAdmin();
       allow update: if false;
     }
