@@ -47,6 +47,7 @@ class CouponRepository {
     required String eventId,
     required String eventName,
     required String code,
+    String? organizerName,
   }) async {
     final normalized = normalizeCode(code);
     if (normalized.isEmpty) {
@@ -98,6 +99,25 @@ class CouponRepository {
       final originalAmount = quote.amount;
       final finalAmount = discounted.amount;
       final discountAmount = originalAmount - finalAmount;
+      final ownerId = (eventData['ownerId'] as String?)?.trim() ?? '';
+      var resolvedOrganizer = organizerName?.trim() ?? '';
+      if (ownerId.isNotEmpty) {
+        final userSnap = await tx.get(
+          _firestore.collection('users').doc(ownerId),
+        );
+        final userData = userSnap.data();
+        final fromDoc = (userData?['displayName'] as String?)?.trim() ??
+            (userData?['name'] as String?)?.trim() ??
+            '';
+        if (fromDoc.isNotEmpty) {
+          resolvedOrganizer = fromDoc;
+        } else if (resolvedOrganizer.isEmpty) {
+          final email = (userData?['email'] as String?) ?? '';
+          resolvedOrganizer = email.contains('@')
+              ? email.split('@').first
+              : email;
+        }
+      }
 
       tx.update(couponRef, {
         'used': true,
@@ -105,6 +125,8 @@ class CouponRepository {
         'usedAt': FieldValue.serverTimestamp(),
         'eventId': eventId,
         'eventName': eventName,
+        'organizerId': ownerId.isEmpty ? null : ownerId,
+        'organizerName': resolvedOrganizer,
         'originalAmount': originalAmount,
         'discountAmount': discountAmount,
         'finalAmount': finalAmount,

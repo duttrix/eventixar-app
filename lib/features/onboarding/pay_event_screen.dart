@@ -227,9 +227,14 @@ class _PayEventScreenState extends ConsumerState<PayEventScreen> {
   Future<void> _applyCoupon(Event event) async {
     setState(() => _applyingCoupon = true);
     try {
+      final session = ref.read(sessionProvider);
+      final organizerName = (session.displayName ?? '').trim().isEmpty
+          ? (session.userEmail ?? '')
+          : session.displayName!;
       await ref.read(couponRepositoryProvider).applyToEvent(
             eventId: event.id,
             eventName: event.name,
+            organizerName: organizerName,
             code: _couponController.text,
           );
       if (!mounted) return;
