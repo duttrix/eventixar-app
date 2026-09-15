@@ -59,4 +59,69 @@ class UserRepository {
     final snap = await _firestore.collection('sellers').doc(uid).get();
     return snap.exists;
   }
+
+  /// Deletes every Firestore doc owned by this organizer (events, tickets,
+  /// collaborators, invite tokens, access, user profile).
+  Future<void> deleteOwnedData(String uid) async {
+    final events = await _firestore
+        .collection('events')
+        .where('ownerId', isEqualTo: uid)
+        .get();
+    for (final eventDoc in events.docs) {
+      await _deleteEventTree(eventDoc.id);
+    }
+    await _users.doc(uid).delete();
+  }
+
+  Future<void> _deleteEventTree(String eventId) async {
+    final eventRef = _firestore.collection('events').doc(eventId);
+    final tickets = eventRef.collection('tickets');
+    final collaborators = eventRef.collection('collaborators');
+    final access = eventRef.collection('access');
+    final tokens = _firestore.collection('tokens');
+
+    final tokenIds = <String>{};
+    final accessSnap = await access.get();
+    for (final doc in accessSnap.docs) {
+      final token = doc.data()['token'];
+      if (token is String && token.isNotEmpty) tokenIds.add(token);
+    }
+    final collabSnap = await collaborators.get();
+    for (final doc in collabSnap.docs) {
+      final token = doc.data()['token'];
+      if (token is String && token.isNotEmpty) tokenIds.add(token);
+    }
+
+    await _deleteRefs(tokenIds.map(tokens.doc));
+    await _deleteQuery(tickets);
+    await _deleteQuery(access);
+    await _deleteQuery(collaborators);
+    await eventRef.delete();
+  }
+
+  Future<void> _deleteQuery(Query<Map<String, dynamic>> query) async {
+    while (true) {
+      final snap = await query.limit(400).get();
+      if (snap.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      if (snap.docs.length < 400) return;
+    }
+  }
+
+  Future<void> _deleteRefs(Iterable<DocumentReference<Map<String, dynamic>>> refs) async {
+    final list = refs.toList(growable: false);
+    const chunk = 400;
+    for (var i = 0; i < list.length; i += chunk) {
+      final batch = _firestore.batch();
+      final end = (i + chunk < list.length) ? i + chunk : list.length;
+      for (var j = i; j < end; j++) {
+        batch.delete(list[j]);
+      }
+      await batch.commit();
+    }
+  }
 }

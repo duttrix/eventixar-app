@@ -774,6 +774,43 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
+  /// Organizer-only: wipe Firestore data, revoke Apple token, delete Auth user.
+  ///
+  /// Returns `false` if the user cancelled the Apple/Google confirmation sheet.
+  Future<bool> deleteAccount() async {
+    final uid = state.userUid;
+    if (uid == null) {
+      throw StateError('Solo el organizador puede eliminar la cuenta.');
+    }
+
+    final auth = _ref.read(googleAuthServiceProvider);
+    late final String? appleCode;
+    try {
+      appleCode = await auth.reauthenticateForDeletion();
+    } on AccountDeletionCanceled {
+      return false;
+    }
+
+    await _ref.read(userRepositoryProvider).deleteOwnedData(uid);
+    try {
+      await auth.deleteCurrentUser(appleAuthorizationCode: appleCode);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw AuthFailure(
+          'Por seguridad, cerrá sesión, volvé a entrar y eliminá la cuenta de nuevo.',
+          cause: e,
+        );
+      }
+      rethrow;
+    }
+
+    await _ref.read(collaboratorSessionStorageProvider).clear();
+    state = const SessionState();
+    unawaited(CrashReporting.setUserId(null));
+    unawaited(CrashReporting.setEventId(null));
+    return true;
+  }
+
   void setCurrentEvent(String? eventId) {
     state = state.copyWith(
       currentEventId: eventId,

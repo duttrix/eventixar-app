@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/user.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/help_whatsapp.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -33,7 +34,14 @@ class HomeScreen extends ConsumerWidget {
           ),
           error: (e, _) => Scaffold(
             appBar: _appBar(context, ref, email, displayName: displayName),
-            body: Center(child: Text('Error al cargar eventos: $e')),
+            body: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Center(child: Text('Error al cargar eventos: $e')),
+                const SizedBox(height: 32),
+                const _DeleteAccountButton(),
+              ],
+            ),
           ),
           data: (events) => _buildScaffold(
             context,
@@ -148,6 +156,9 @@ class HomeScreen extends ConsumerWidget {
               context.push('/event/${event.id}/copy');
             },
           ),
+          const SizedBox(height: 32),
+          const _DeleteAccountButton(),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -266,5 +277,82 @@ class _EmptyHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(text, style: const TextStyle(color: AppColors.textMuted));
+  }
+}
+
+class _DeleteAccountButton extends ConsumerStatefulWidget {
+  const _DeleteAccountButton();
+
+  @override
+  ConsumerState<_DeleteAccountButton> createState() =>
+      _DeleteAccountButtonState();
+}
+
+class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
+  bool _busy = false;
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar cuenta'),
+        content: const Text(
+          'Se van a borrar tu cuenta, tus eventos, tickets, '
+          'colaboradores y links de acceso. Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar cuenta'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final deleted =
+          await ref.read(sessionProvider.notifier).deleteAccount();
+      if (!mounted) return;
+      if (deleted) {
+        context.go('/login');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.error(
+        context,
+        'No se pudo eliminar la cuenta: $e',
+        cause: e,
+        crashReason: 'organizer_delete_account_failed',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _busy ? null : _delete,
+        icon: _busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.delete_outline),
+        label: const Text('Eliminar cuenta'),
+      ),
+    );
   }
 }

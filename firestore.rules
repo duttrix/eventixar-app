@@ -203,7 +203,7 @@ service cloud.firestore {
         && request.resource.data.freeEvents is int
         && request.resource.data.freeEvents == defaultFreeEvents();
       allow update: if isAdmin() || (isOwner(userId) && userUpdateAllowed());
-      allow delete: if false;
+      allow delete: if isOwner(userId);
     }
 
     match /admins/{uid} {
@@ -270,7 +270,7 @@ service cloud.firestore {
             && resource.data.ownerId == request.auth.uid
             && request.resource.data.ownerId == resource.data.ownerId
             && ownerKeepsUnpaidStatus());
-      allow delete: if false;
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       match /tickets/{ticketId} {
         allow create: if isEventOwner(eventId);
@@ -280,7 +280,7 @@ service cloud.firestore {
           || ticketReturnToPoolUpdate()
           || ticketCollectorReturnedUpdate();
         allow get, list: if true;
-        allow delete: if false;
+        allow delete: if isEventOwner(eventId);
       }
 
       match /collaborators/{collaboratorId} {
