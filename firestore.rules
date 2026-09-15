@@ -234,7 +234,7 @@ service cloud.firestore {
           || (isSignedIn() && request.auth.uid == sellerId)
           || isSignedIn();
         allow list: if isAdmin() || (isSignedIn() && request.auth.uid == sellerId);
-        allow create: if ((isSignedIn() && request.auth.uid == sellerId) || isAdmin())
+        allow create: if isAdmin()
           && request.resource.data.code == code
           && request.resource.data.discountPercent is number
           && request.resource.data.discountPercent > 0
@@ -250,11 +250,7 @@ service cloud.firestore {
     match /couponIndex/{code} {
       allow get: if isSignedIn();
       allow list: if false;
-      allow create: if request.resource.data.sellerId is string
-        && (
-          (isSignedIn() && request.resource.data.sellerId == request.auth.uid)
-          || isAdmin()
-        );
+      allow create: if isAdmin() && request.resource.data.sellerId is string;
       allow delete: if isAdmin();
       allow update: if false;
     }
