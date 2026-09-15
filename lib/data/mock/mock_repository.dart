@@ -232,7 +232,7 @@ class MockRepository extends ChangeNotifier {
       validatorsCount: validatorsCount,
       collectorsCount: collectorsCount,
       notes: notes,
-      status: EventStatus.awaitingPayment,
+      status: EventStatus.active,
     );
     events.add(event);
     ticketAggregate[event.id] = {

@@ -13,7 +13,9 @@ class AppUser {
     this.freeEvents = defaultFreeEvents,
   });
 
-  /// How many events a new organizer can create without paying.
+  /// Initial `users/{uid}.freeEvents` for a new organizer.
+  /// Create/pay only reads that field; raising it (e.g. to 3) grants more free events.
+  /// Keep in sync with `defaultFreeEvents()` in firestore.rules.
   static const int defaultFreeEvents = 2;
 
   /// Firebase Auth uid (doc id in Firestore). Mock users use a synthetic id.
@@ -76,7 +78,7 @@ class AppUser {
       photoUrl: data['photoUrl'] as String?,
       createdAt: _readTimestamp(data['createdAt']),
       lastLoginAt: _readTimestamp(data['lastLoginAt']),
-      freeEvents: _readInt(data['freeEvents'], 0),
+      freeEvents: _readInt(data['freeEvents'], defaultFreeEvents),
     );
   }
 

@@ -5,6 +5,7 @@ import '../models/collaborator.dart';
 import '../models/event.dart';
 import '../models/ticket.dart';
 import '../models/ticket_design.dart';
+import '../models/user.dart';
 
 /// Firestore access for organizer events + ticket bootstrap.
 class EventRepository {
@@ -63,8 +64,8 @@ class EventRepository {
     }
   }
 
-  /// Creates the event and always generates tickets.
-  /// Free slot → `active`. Otherwise → `awaitingPayment` until ops flip status.
+  /// Creates the full event (tickets included).
+  /// Uses a free slot when `users.freeEvents` > 0 (`active`); otherwise `awaitingPayment`.
   Future<({Event event, bool usedFreeSlot})> createEvent({
     required String ownerId,
     required String ownerEmail,
@@ -104,7 +105,7 @@ class EventRepository {
       collectorsCount: collectorsCount,
       coordinatorsCount: coordinatorsCount,
       notes: notes,
-      status: EventStatus.awaitingPayment,
+      status: EventStatus.active,
       ticketsGenerated: false,
       ticketDesign: ticketDesign ?? TicketVisualStyle.classic,
     );
@@ -112,37 +113,27 @@ class EventRepository {
     final userRef = _users.doc(ownerId);
     final usedFreeSlot = await _firestore.runTransaction((tx) async {
       final userSnap = await tx.get(userRef);
+      final raw = userSnap.data()?['freeEvents'];
       final remaining =
-          (userSnap.data()?['freeEvents'] as num?)?.toInt() ?? 0;
-
+          raw is num ? raw.toInt() : AppUser.defaultFreeEvents;
+      final useFree = remaining > 0;
+      event.status =
+          useFree ? EventStatus.active : EventStatus.awaitingPayment;
       tx.set(
         ref,
         event.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
       );
-      if (remaining <= 0) return false;
+      if (!useFree) return false;
       tx.update(userRef, {'freeEvents': remaining - 1});
       return true;
     });
 
     await _generateTickets(eventId: ref.id, ticketCount: ticketCount);
-
-    if (usedFreeSlot) {
-      await ref.update({
-        'status': EventStatus.active.firestoreValue,
-        'ticketsGenerated': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      event
-        ..status = EventStatus.active
-        ..ticketsGenerated = true;
-    } else {
-      await ref.update({
-        'ticketsGenerated': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      event.ticketsGenerated = true;
-    }
-
+    await ref.update({
+      'ticketsGenerated': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    event.ticketsGenerated = true;
     return (event: event, usedFreeSlot: usedFreeSlot);
   }
 

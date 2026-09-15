@@ -9,12 +9,16 @@ class ProductTypeaheadField extends StatefulWidget {
     required this.controller,
     required this.suggestions,
     this.enabled = true,
+    this.labelText = 'Qué se vende',
+    this.errorText,
     this.onChanged,
   });
 
   final TextEditingController controller;
   final List<String> suggestions;
   final bool enabled;
+  final String labelText;
+  final String? errorText;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -25,12 +29,25 @@ class _ProductTypeaheadFieldState extends State<ProductTypeaheadField> {
   final _focusNode = FocusNode();
 
   @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
   void dispose() {
-    _focusNode.dispose();
+    _focusNode
+      ..removeListener(_onFocusChange)
+      ..dispose();
     super.dispose();
   }
 
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
   Iterable<String> _filtered(String query) {
+    if (!_focusNode.hasFocus) return const Iterable.empty();
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return widget.suggestions;
     return widget.suggestions.where((s) => s.toLowerCase().contains(q));
@@ -55,10 +72,11 @@ class _ProductTypeaheadFieldState extends State<ProductTypeaheadField> {
           focusNode: focusNode,
           enabled: widget.enabled,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Qué se vende',
+          decoration: InputDecoration(
+            labelText: widget.labelText,
             hintText: 'Escribí o elegí una sugerencia',
-            suffixIcon: Icon(Icons.search, size: 20),
+            suffixIcon: const Icon(Icons.search, size: 20),
+            errorText: widget.errorText,
           ),
           onChanged: widget.onChanged,
           onSubmitted: (_) => onFieldSubmitted(),

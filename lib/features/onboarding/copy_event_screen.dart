@@ -106,22 +106,17 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
       }
 
       if (!mounted) return;
-
-      if (created.usedFreeSlot) {
-        if (!mounted) return;
-        AppSnackBar.success(
-          context,
-          'Evento duplicado. Se generaron $ticketCount tickets.',
-        );
-        context.go('/event/${created.event.id}');
-        return;
-      }
-
-      AppSnackBar.info(
+      AppSnackBar.success(
         context,
-        'Evento duplicado. Quedó pendiente de pago.',
+        created.usedFreeSlot
+            ? 'Evento duplicado. Se generaron $ticketCount tickets.'
+            : 'Evento duplicado. Se generaron $ticketCount tickets. Completá el pago para activarlo.',
       );
-      context.go('/home');
+      if (created.usedFreeSlot) {
+        context.go('/event/${created.event.id}');
+      } else {
+        context.go('/create-event/pay/${created.event.id}');
+      }
     } on FirebaseException catch (e) {
       if (!mounted) return;
       AppSnackBar.error(context, 'No se pudo duplicar: $e', cause: e);
@@ -159,6 +154,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
     List<Collaborator> team,
     bool teamLoading,
   ) {
+    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
     int countFor(CollaboratorRole role) =>
         team.where((c) => c.role == role).length;
 
@@ -204,6 +200,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     final now = DateTime.now();
                     final picked = await showDatePicker(
                       context: context,
@@ -211,6 +208,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
                       firstDate: now,
                       lastDate: now.add(const Duration(days: 365)),
                     );
+                    if (!context.mounted) return;
                     if (picked != null) setState(() => _eventDate = picked);
                   },
                   child: InputDecorator(
@@ -284,7 +282,11 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Duplicar evento'),
+                  : Text(
+                      organizer != null && organizer.canCreateFreeEvent
+                          ? 'Duplicar evento (${organizer.freeEvents} gratis)'
+                          : 'Duplicar evento',
+                    ),
             ),
           ),
           const SizedBox(height: 24),

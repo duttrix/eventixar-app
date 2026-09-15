@@ -135,15 +135,20 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    // Keep in sync with AppUser.defaultFreeEvents in the Flutter app.
+    function defaultFreeEvents() {
+      return 2;
+    }
+
     function remainingFreeEvents() {
       return 'freeEvents' in get(ownerUserPath()).data
         ? get(ownerUserPath()).data.freeEvents
-        : 0;
+        : defaultFreeEvents();
     }
 
     function consumesFreeEventCredit() {
-      return remainingFreeEvents() is int
-        && remainingFreeEvents() > 0
+      return remainingFreeEvents() > 0
+        && request.resource.data.status == 'active'
         && getAfter(ownerUserPath()).data.freeEvents == remainingFreeEvents() - 1;
     }
 
@@ -169,20 +174,18 @@ service cloud.firestore {
         ]);
     }
 
-    // Client may backfill a missing quota (0..2) or consume one slot.
-    // It must never raise freeEvents once the field exists.
+    // Client may fill a missing quota with the default, or consume one slot.
+    // It must never raise freeEvents once the field exists (console/admin can).
     function freeEventsChangeAllowed() {
       return !('freeEvents' in request.resource.data.diff(resource.data).affectedKeys())
         || isFreeEventsBackfill()
         || isFreeEventDecrement();
     }
 
-    // Must stay in sync with AppUser.defaultFreeEvents in the Flutter app.
     function isFreeEventsBackfill() {
       return !('freeEvents' in resource.data)
         && request.resource.data.freeEvents is int
-        && request.resource.data.freeEvents >= 0
-        && request.resource.data.freeEvents <= 2;
+        && request.resource.data.freeEvents == defaultFreeEvents();
     }
 
     function isFreeEventDecrement() {
@@ -195,11 +198,11 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId)
         && request.resource.data.freeEvents is int
-        && request.resource.data.freeEvents == 2;
-      allow update: if isOwner(userId) && userUpdateAllowed();
+        && request.resource.data.freeEvents == defaultFreeEvents();
+      allow update: if isAdmin() || (isOwner(userId) && userUpdateAllowed());
       allow delete: if false;
     }
 

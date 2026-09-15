@@ -8,8 +8,7 @@ import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/product_typeahead_field.dart';
 import '../../shared/widgets/section_card.dart';
 
-/// Create-event form. With a free slot the event is enabled immediately;
-/// otherwise it stays in "Por pagar" until checkout.
+/// Create-event form. A free slot opens the workspace; otherwise checkout.
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
 
@@ -19,6 +18,7 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   bool _submitting = false;
+  bool _attempted = false;
 
   final _nameController = TextEditingController();
   final _productController = TextEditingController();
@@ -50,20 +50,33 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       _eventDate != null &&
       (int.tryParse(_countController.text) ?? 0) > 0;
 
+  String? get _nameError =>
+      _attempted && _nameController.text.trim().isEmpty ? 'Obligatorio' : null;
+
+  String? get _productError =>
+      _attempted && _productController.text.trim().isEmpty ? 'Obligatorio' : null;
+
+  String? get _countError {
+    if (!_attempted) return null;
+    final count = int.tryParse(_countController.text) ?? 0;
+    return count > 0 ? null : 'Ingresá una cantidad';
+  }
+
+  String? get _dateError =>
+      _attempted && _eventDate == null ? 'Obligatorio' : null;
+
   Future<void> _submit() async {
     final session = ref.read(sessionProvider);
     final uid = session.userUid;
-    if (uid == null || _eventDate == null || _submitting) return;
+    if (uid == null || _submitting) return;
 
     if (!_formValid) {
-      AppSnackBar.warning(
-        context,
-        'Completá nombre, qué se vende, fecha y cantidad de tickets.',
-      );
+      setState(() => _attempted = true);
       return;
     }
 
-    setState(() => _submitting = true);
+    _submitting = true;
+    setState(() {});
     try {
       final repo = ref.read(eventRepositoryProvider);
       final created = await repo.createEvent(
@@ -84,22 +97,17 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       );
 
       if (!mounted) return;
-
-      if (created.usedFreeSlot) {
-        if (!mounted) return;
-        AppSnackBar.success(
-          context,
-          'Evento creado. Se generaron ${created.event.ticketCount} tickets.',
-        );
-        context.go('/event/${created.event.id}');
-        return;
-      }
-
-      AppSnackBar.info(
+      AppSnackBar.success(
         context,
-        'Evento creado. Quedó pendiente de pago. Lo encontrás en Por pagar.',
+        created.usedFreeSlot
+            ? 'Evento creado. Se generaron ${created.event.ticketCount} tickets.'
+            : 'Evento creado. Se generaron ${created.event.ticketCount} tickets. Completá el pago para activarlo.',
       );
-      context.go('/home');
+      if (created.usedFreeSlot) {
+        context.go('/event/${created.event.id}');
+      } else {
+        context.go('/create-event/pay/${created.event.id}');
+      }
     } on FirebaseException catch (e) {
       if (!mounted) return;
       AppSnackBar.error(context, 'No se pudo crear el evento: $e', cause: e);
@@ -135,9 +143,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               children: [
                 TextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nombre del evento',
+                  decoration: InputDecoration(
+                    labelText: 'Nombre del evento *',
                     hintText: 'Ej. Pollo a beneficio',
+                    errorText: _nameError,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -145,6 +154,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 ProductTypeaheadField(
                   controller: _productController,
                   suggestions: products,
+                  labelText: 'Qué se vende *',
+                  errorText: _productError,
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
@@ -175,14 +186,16 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                 TextField(
                   controller: _countController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Cantidad de tickets',
+                  decoration: InputDecoration(
+                    labelText: 'Cantidad de tickets *',
+                    errorText: _countError,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     final now = DateTime.now();
                     final picked = await showDatePicker(
                       context: context,
@@ -191,11 +204,13 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       firstDate: now,
                       lastDate: now.add(const Duration(days: 365)),
                     );
+                    if (!context.mounted) return;
                     if (picked != null) setState(() => _eventDate = picked);
                   },
                   child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Fecha del evento',
+                    decoration: InputDecoration(
+                      labelText: 'Fecha del evento *',
+                      errorText: _dateError,
                     ),
                     child: Text(
                       _eventDate == null
@@ -210,10 +225,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     Expanded(
                       child: InkWell(
                         onTap: () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showTimePicker(
                             context: context,
                             initialTime: _pickupFrom,
                           );
+                          if (!context.mounted) return;
                           if (picked != null) {
                             setState(() => _pickupFrom = picked);
                           }
@@ -230,10 +247,12 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     Expanded(
                       child: InkWell(
                         onTap: () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
                           final picked = await showTimePicker(
                             context: context,
                             initialTime: _pickupTo,
                           );
+                          if (!context.mounted) return;
                           if (picked != null) {
                             setState(() => _pickupTo = picked);
                           }
