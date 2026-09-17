@@ -142,12 +142,7 @@ class _OrganizerTicketsScreenState
         .where((t) => t.status.isSellable && t.status != TicketStatus.reserved)
         .toList();
     final assignable = selectedTickets
-        .where(
-          (t) =>
-              t.status.isAssignablePool ||
-              t.status == TicketStatus.withSeller ||
-              t.status == TicketStatus.reserved,
-        )
+        .where((t) => t.status.canAssignToSeller)
         .toList();
     final returnable = selectedTickets
         .where(
@@ -712,7 +707,7 @@ class _OrganizerTicketsScreenState
           title: const Text('Cambiar vendedor'),
           content: Text(
             'Algunos tickets ya tienen vendedor o están reservados. '
-            'Al reasignar a ${chosen.name} se liberan y pasan al nuevo vendedor.',
+            'Pasan a ${chosen.name} y se mantiene el destinatario de la reserva.',
           ),
           actions: [
             TextButton(
@@ -733,19 +728,6 @@ class _OrganizerTicketsScreenState
       await _runBusy(
         message: 'Asignando a ${chosen.name}...',
         work: (_) async {
-          final toRelease = eligible
-              .where((t) => !t.status.isAssignablePool)
-              .map((t) => t.id)
-              .toList(growable: false);
-          if (toRelease.isNotEmpty) {
-            await returnTicketsToPoolAction(
-              ref,
-              eventId: event.id,
-              ticketIds: toRelease,
-              actorId: organizerId,
-              actorRole: 'organizer',
-            );
-          }
           await claimTicketsForSellerAction(
             ref,
             eventId: event.id,
@@ -1001,10 +983,7 @@ class _OrganizerTicketsScreenState
     required String organizerName,
   }) async {
     if (event.isReadOnly) return;
-    final canAssign =
-        ticket.status.isAssignablePool ||
-        ticket.status == TicketStatus.withSeller ||
-        ticket.status == TicketStatus.reserved;
+    final canAssign = ticket.status.canAssignToSeller;
     if (!canAssign) return;
 
     final chosen = await _pickSeller(
@@ -1030,8 +1009,8 @@ class _OrganizerTicketsScreenState
           title: const Text('Cambiar vendedor'),
           content: Text(
             ticket.status == TicketStatus.reserved
-                ? 'El ticket #${ticket.number} está reservado. Al cambiar de '
-                      'vendedor se libera la reserva y el destinatario.'
+                ? 'El ticket #${ticket.number} está reservado. Pasa a '
+                      '${chosen.name} y se mantiene el destinatario.'
                 : 'El ticket #${ticket.number} pasa a ${chosen.name}.',
           ),
           actions: [
@@ -1053,15 +1032,6 @@ class _OrganizerTicketsScreenState
       await _runBusy(
         message: 'Asignando a ${chosen.name}...',
         work: (_) async {
-          if (!ticket.status.isAssignablePool) {
-            await returnTicketsToPoolAction(
-              ref,
-              eventId: event.id,
-              ticketIds: [ticket.id],
-              actorId: organizerId,
-              actorRole: 'organizer',
-            );
-          }
           await claimTicketsForSellerAction(
             ref,
             eventId: event.id,
@@ -1428,11 +1398,7 @@ class _OrganizerTicketCard extends StatelessWidget {
           ticket.status == TicketStatus.delivered ||
           ticket.status == TicketStatus.withSeller);
 
-  bool get _canAssignSeller =>
-      !readOnly &&
-      (ticket.status.isAssignablePool ||
-          ticket.status == TicketStatus.withSeller ||
-          ticket.status == TicketStatus.reserved);
+  bool get _canAssignSeller => !readOnly && ticket.status.canAssignToSeller;
 
   bool get _canClearReservation =>
       !readOnly && ticket.status == TicketStatus.reserved;

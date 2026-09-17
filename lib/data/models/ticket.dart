@@ -62,6 +62,12 @@ extension TicketStatusX on TicketStatus {
   bool get isAssignablePool =>
       this == TicketStatus.unassigned || this == TicketStatus.returned;
 
+  /// Can be given to a seller without dropping the reservation name.
+  bool get canAssignToSeller =>
+      isAssignablePool ||
+      this == TicketStatus.withSeller ||
+      this == TicketStatus.reserved;
+
   /// Can be reserved or collected by a seller (pool, assigned, or already reserved).
   bool get isSellable =>
       isAssignablePool ||

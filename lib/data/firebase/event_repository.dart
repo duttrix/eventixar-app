@@ -332,9 +332,8 @@ class EventRepository {
     return range;
   }
 
-  /// Claims free-pool tickets for [sellerId] (`unassigned`/`returned` → `withSeller`).
-  ///
-  /// Used when the organizer sells from the pool without a collaborator doc.
+  /// Assigns tickets to [sellerId]. Pool tickets become `withSeller`.
+  /// Reserved tickets stay reserved and keep [Ticket.buyerName].
   Future<void> claimTicketsForSeller({
     required String eventId,
     required Iterable<String> ticketIds,
@@ -371,21 +370,24 @@ class EventRepository {
           throw StateError('Ticket ${slice[j]} no encontrado.');
         }
         final status = TicketStatusX.fromFirestore(data['status'] as String?);
-        if (!status.isAssignablePool) {
+        if (!status.canAssignToSeller) {
           throw StateError(
-            'Ticket #${data['number']} ya no está en el pool.',
+            'Ticket #${data['number']} no se puede asignar a un vendedor.',
           );
         }
+        final nextStatus = status == TicketStatus.reserved
+            ? TicketStatus.reserved
+            : TicketStatus.withSeller;
         batch.update(snap.reference, {
-          'status': TicketStatus.withSeller.firestoreValue,
+          'status': nextStatus.firestoreValue,
           'sellerId': sellerId,
-          'assignedByCollaboratorId': null,
+          'assignedByCollaboratorId': actorRole == 'coordinator' ? actorId : null,
           'history': FieldValue.arrayUnion([
             TicketHistoryEntry(
               at: DateTime.now(),
               action: TicketHistoryAction.assigned,
               fromStatus: status,
-              toStatus: TicketStatus.withSeller,
+              toStatus: nextStatus,
               actorId: resolvedActorId,
               actorRole: actorRole,
               actorName: actorName,
