@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -116,7 +117,9 @@ class _CollaboratorFormDialogState extends State<_CollaboratorFormDialog> {
     super.initState();
     final existing = widget.existing;
     _name = TextEditingController(text: existing?.name ?? '');
-    _phone = TextEditingController(text: existing?.phone ?? '');
+    _phone = TextEditingController(
+      text: (existing?.phone ?? '').replaceAll(RegExp(r'\D'), ''),
+    );
     _notes = TextEditingController(text: existing?.notes ?? '');
   }
 
@@ -166,8 +169,11 @@ class _CollaboratorFormDialogState extends State<_CollaboratorFormDialog> {
             TextField(
               controller: _phone,
               keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
                 labelText: 'Celular (WhatsApp)',
+                prefixText: '+54 9 ',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
               ),
             ),
             const SizedBox(height: 12),

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/phone/ar_whatsapp_phone.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
@@ -20,30 +21,15 @@ class TicketShare {
   TicketShare._();
 
   /// Fixed Argentine mobile prefix for WhatsApp (`+54 9…`).
-  static const whatsAppArPrefix = '549';
+  static const whatsAppArPrefix = ArWhatsAppPhone.prefix;
 
   /// Local AR mobile digits → full `wa.me` number (`549…`, no `+`).
-  ///
-  /// Expects the area + number only (e.g. `11 2345-6789`). Strips a leading
-  /// `0` / `54` / `549` if the user pasted a full number by mistake.
-  static String? normalizeWhatsAppPhone(String raw) {
-    var digits = raw.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return null;
-    if (digits.startsWith('00')) digits = digits.substring(2);
-    if (digits.startsWith(whatsAppArPrefix)) {
-      digits = digits.substring(whatsAppArPrefix.length);
-    } else if (digits.startsWith('54')) {
-      digits = digits.substring(2);
-      if (digits.startsWith('9')) digits = digits.substring(1);
-    }
-    if (digits.startsWith('0')) digits = digits.substring(1);
-    if (digits.length < 8 || digits.length > 10) return null;
-    return '$whatsAppArPrefix$digits';
-  }
+  static String? normalizeWhatsAppPhone(String raw) =>
+      ArWhatsAppPhone.toWaMeDigits(raw);
 
   /// Display form with `+`, e.g. `+5491123456789`.
   static String formatWhatsAppPhone(String normalizedDigits) =>
-      normalizedDigits.startsWith('+') ? normalizedDigits : '+$normalizedDigits';
+      ArWhatsAppPhone.display(normalizedDigits);
 
   /// Renders [TicketSharePreview] off-screen and returns a PNG.
   static Future<Uint8List> renderPng(

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/phone/ar_whatsapp_phone.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import 'app_snackbar.dart';
+import 'help_whatsapp.dart';
 import 'section_card.dart';
 import 'ticket_status_style.dart';
 
@@ -54,6 +56,17 @@ class AccessShare {
       return;
     }
     final text = messageFor(person, eventName: eventName, token: token);
+    final wa = ArWhatsAppPhone.toWaMeDigits(person.phone);
+    if (wa != null) {
+      await openWhatsApp(context, wa, text: text);
+      return;
+    }
+    if (person.phone.trim().isNotEmpty && context.mounted) {
+      AppSnackBar.info(
+        context,
+        'No pudimos armar el WhatsApp con ese número. Elegí cómo enviarlo.',
+      );
+    }
     await Share.share(text);
   }
 
