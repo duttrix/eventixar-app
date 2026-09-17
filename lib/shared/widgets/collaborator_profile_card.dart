@@ -19,7 +19,6 @@ class CollaboratorProfileCard extends ConsumerWidget {
     required this.eventId,
     required this.collaboratorId,
     this.expectedRole,
-    this.onDeleted,
   });
 
   final String eventId;
@@ -27,8 +26,6 @@ class CollaboratorProfileCard extends ConsumerWidget {
 
   /// When set, the card only renders if the collaborator has this role.
   final CollaboratorRole? expectedRole;
-
-  final VoidCallback? onDeleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,11 +96,6 @@ class CollaboratorProfileCard extends ConsumerWidget {
               collaborator: collaborator,
               eventName: event.name,
               token: token,
-              onDeleted:
-                  onDeleted ??
-                  () {
-                    if (context.mounted) Navigator.of(context).maybePop();
-                  },
             ),
         ],
       ),

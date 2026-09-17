@@ -256,24 +256,6 @@ Future<Collaborator> regenerateCollaboratorToken(
       .regenerateToken(eventId: eventId, collaboratorId: collaboratorId);
 }
 
-/// Deletes a collaborator. Seller tickets still unsold go back to the pool;
-/// sold ones keep their status and drop the seller link.
-Future<void> deleteCollaboratorAction(
-  WidgetRef ref, {
-  required String eventId,
-  required Collaborator collaborator,
-}) async {
-  if (collaborator.role == CollaboratorRole.seller) {
-    await ref
-        .read(eventRepositoryProvider)
-        .releaseTicketsFromSeller(eventId: eventId, sellerId: collaborator.id);
-  }
-
-  await ref
-      .read(collaboratorRepositoryProvider)
-      .delete(eventId: eventId, collaboratorId: collaborator.id);
-}
-
 Future<void> assignTicketRangeAction(
   WidgetRef ref, {
   required String eventId,

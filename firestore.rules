@@ -104,10 +104,6 @@ service cloud.firestore {
         && request.resource.data.role == 'seller';
     }
 
-    function sellerOnlyDelete() {
-      return resource.data.role == 'seller';
-    }
-
     // Portal invite token for a seller (no Auth). Do not require exists():
     // in a batch, exists() sees the DB *before* the write; existsAfter would
     // be needed. Role on the token doc is enough for the current trust model.
@@ -286,7 +282,7 @@ service cloud.firestore {
       match /collaborators/{collaboratorId} {
         allow create: if isEventOwner(eventId) || sellerOnlyCreate();
         allow update: if isEventOwner(eventId) || sellerOnlyUpdate();
-        allow delete: if isEventOwner(eventId) || sellerOnlyDelete();
+        allow delete: if isEventOwner(eventId);
         allow get, list: if true;
       }
 
