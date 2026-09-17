@@ -5,6 +5,7 @@ import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -103,6 +104,16 @@ class _DuttrixAppState extends ConsumerState<DuttrixApp>
       title: 'Duttrix',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: const Locale('es', 'AR'),
+      supportedLocales: const [
+        Locale('es', 'AR'),
+        Locale('es'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: router,
     );
   }
