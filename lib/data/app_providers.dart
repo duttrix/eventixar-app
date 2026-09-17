@@ -541,6 +541,7 @@ class SessionController extends StateNotifier<SessionState> {
 
   final Ref _ref;
   StreamSubscription<User?>? _authSub;
+  bool _accountDeletionInProgress = false;
 
   Future<void> _initialize() async {
     final storage = _ref.read(collaboratorSessionStorageProvider);
@@ -653,6 +654,7 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   Future<void> _onAuthChanged(User? user) async {
+    if (_accountDeletionInProgress) return;
     if (user != null) {
       try {
         await _applyFirebaseUser(user);
@@ -774,41 +776,24 @@ class SessionController extends StateNotifier<SessionState> {
     }
   }
 
-  /// Organizer-only: wipe Firestore data, revoke Apple token, delete Auth user.
-  ///
-  /// Returns `false` if the user cancelled the Apple/Google confirmation sheet.
-  Future<bool> deleteAccount() async {
+  /// Organizer-only: wipe Firestore data, delete Auth user, return to login.
+  Future<void> deleteAccount() async {
     final uid = state.userUid;
     if (uid == null) {
       throw StateError('Solo el organizador puede eliminar la cuenta.');
     }
 
-    final auth = _ref.read(googleAuthServiceProvider);
-    late final String? appleCode;
+    _accountDeletionInProgress = true;
     try {
-      appleCode = await auth.reauthenticateForDeletion();
-    } on AccountDeletionCanceled {
-      return false;
+      await _ref.read(userRepositoryProvider).deleteOwnedData(uid);
+      await _ref.read(googleAuthServiceProvider).deleteCurrentUser();
+      await _ref.read(collaboratorSessionStorageProvider).clear();
+      state = const SessionState();
+      unawaited(CrashReporting.setUserId(null));
+      unawaited(CrashReporting.setEventId(null));
+    } finally {
+      _accountDeletionInProgress = false;
     }
-
-    await _ref.read(userRepositoryProvider).deleteOwnedData(uid);
-    try {
-      await auth.deleteCurrentUser(appleAuthorizationCode: appleCode);
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        throw AuthFailure(
-          'Por seguridad, cerrá sesión, volvé a entrar y eliminá la cuenta de nuevo.',
-          cause: e,
-        );
-      }
-      rethrow;
-    }
-
-    await _ref.read(collaboratorSessionStorageProvider).clear();
-    state = const SessionState();
-    unawaited(CrashReporting.setUserId(null));
-    unawaited(CrashReporting.setEventId(null));
-    return true;
   }
 
   void setCurrentEvent(String? eventId) {

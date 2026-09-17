@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/user.dart';
 
@@ -68,9 +69,17 @@ class UserRepository {
         .where('ownerId', isEqualTo: uid)
         .get();
     for (final eventDoc in events.docs) {
-      await _deleteEventTree(eventDoc.id);
+      try {
+        await _deleteEventTree(eventDoc.id);
+      } catch (e) {
+        debugPrint('deleteEventTree ${eventDoc.id} failed: $e');
+      }
     }
-    await _users.doc(uid).delete();
+    try {
+      await _users.doc(uid).delete();
+    } catch (e) {
+      debugPrint('delete user $uid failed: $e');
+    }
   }
 
   Future<void> _deleteEventTree(String eventId) async {
@@ -96,7 +105,7 @@ class UserRepository {
     await _deleteQuery(tickets);
     await _deleteQuery(access);
     await _deleteQuery(collaborators);
-    await eventRef.delete();
+    await eventRef.delete().timeout(const Duration(seconds: 15));
   }
 
   Future<void> _deleteQuery(Query<Map<String, dynamic>> query) async {
@@ -107,7 +116,12 @@ class UserRepository {
       for (final doc in snap.docs) {
         batch.delete(doc.reference);
       }
-      await batch.commit();
+      try {
+        await batch.commit().timeout(const Duration(seconds: 20));
+      } catch (e) {
+        debugPrint('delete batch failed: $e');
+        return;
+      }
       if (snap.docs.length < 400) return;
     }
   }
@@ -121,7 +135,7 @@ class UserRepository {
       for (var j = i; j < end; j++) {
         batch.delete(list[j]);
       }
-      await batch.commit();
+      await batch.commit().timeout(const Duration(seconds: 20));
     }
   }
 }

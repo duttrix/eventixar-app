@@ -17,11 +17,6 @@ class AuthFailure implements Exception {
   String toString() => userMessage;
 }
 
-/// User cancelled the reauthentication sheet (Apple / Google).
-class AccountDeletionCanceled implements Exception {
-  const AccountDeletionCanceled();
-}
-
 /// Google Sign-In → Firebase Auth for organizers.
 class GoogleAuthService {
   GoogleAuthService({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
@@ -241,86 +236,35 @@ class GoogleAuthService {
   }
 
   Future<void> signOut() async {
-    await _ensureInitialized();
-    await Future.wait([
-      _auth.signOut(),
-      _googleSignIn.signOut(),
-    ]);
-  }
-
-  /// Fresh sign-in required by Apple / Firebase before account deletion.
-  ///
-  /// Returns an Apple authorization code when the provider is Apple, so the
-  /// token can be revoked after Firestore data is gone.
-  Future<String?> reauthenticateForDeletion() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw AuthFailure('No hay una sesión de organizador.');
-    }
-
-    final providers = user.providerData.map((p) => p.providerId).toSet();
     try {
-      if (providers.contains('apple.com')) {
-        final provider = AppleAuthProvider()
-          ..addScope('email')
-          ..addScope('name');
-        final result = await user.reauthenticateWithProvider(provider);
-        return result.additionalUserInfo?.authorizationCode;
-      }
-      if (providers.contains('google.com')) {
-        await _ensureInitialized();
-        final account = await _googleSignIn.authenticate();
-        final idToken = account.authentication.idToken;
-        if (idToken == null) {
-          throw AuthFailure(_userGoogleFailure);
-        }
-        await user.reauthenticateWithCredential(
-          GoogleAuthProvider.credential(idToken: idToken),
-        );
-        return null;
-      }
-    } on AccountDeletionCanceled {
-      rethrow;
-    } on FirebaseAuthException catch (e) {
-      if (_isAppleCanceled(e)) throw const AccountDeletionCanceled();
-      rethrow;
-    } on GoogleSignInException catch (e) {
-      final detail = e.description?.trim();
-      if (e.code == GoogleSignInExceptionCode.canceled &&
-          (detail == null || detail.isEmpty)) {
-        throw const AccountDeletionCanceled();
-      }
-      rethrow;
-    }
-    return null;
+      await _auth.signOut().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    if (!_initialized) return;
+    try {
+      await _googleSignIn.signOut().timeout(const Duration(seconds: 2));
+    } catch (_) {}
   }
 
-  /// Revokes the Apple token when possible, then deletes the Firebase Auth user.
-  Future<void> deleteCurrentUser({String? appleAuthorizationCode}) async {
-    final code = appleAuthorizationCode?.trim();
-    if (code != null &&
-        code.isNotEmpty &&
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.iOS ||
-            defaultTargetPlatform == TargetPlatform.macOS)) {
+  /// Deletes the Firebase Auth user when possible, then signs out.
+  /// Never blocks the UI: Auth/Google can hang on Android.
+  Future<void> deleteCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user != null) {
       try {
-        await _auth.revokeTokenWithAuthorizationCode(code);
+        await user.delete().timeout(const Duration(seconds: 6));
       } catch (e, st) {
         await CrashReporting.recordNonFatal(
           e,
           st,
-          reason: 'apple_token_revoke_failed',
+          reason: 'auth_user_delete_failed',
+          information: {
+            if (e is FirebaseAuthException) 'auth_code': e.code,
+            'error': e.toString(),
+          },
         );
       }
     }
-
-    final user = _auth.currentUser;
-    if (user != null) {
-      await user.delete();
-    }
-    try {
-      await signOut();
-    } catch (_) {}
+    await signOut();
   }
 
   User? get currentUser => _auth.currentUser;

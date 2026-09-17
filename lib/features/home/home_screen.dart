@@ -8,6 +8,7 @@ import '../../data/models/event.dart';
 import '../../data/models/user.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
+import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_whatsapp.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -289,8 +290,6 @@ class _DeleteAccountButton extends ConsumerStatefulWidget {
 }
 
 class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
-  bool _busy = false;
-
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -317,14 +316,14 @@ class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => _busy = true);
     try {
-      final deleted =
-          await ref.read(sessionProvider.notifier).deleteAccount();
+      await runBusyFullscreen(
+        context,
+        message: 'Eliminando cuenta…',
+        work: () => ref.read(sessionProvider.notifier).deleteAccount(),
+      );
       if (!mounted) return;
-      if (deleted) {
-        context.go('/login');
-      }
+      context.go('/login');
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.error(
@@ -333,8 +332,6 @@ class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
         cause: e,
         crashReason: 'organizer_delete_account_failed',
       );
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -343,14 +340,14 @@ class _DeleteAccountButtonState extends ConsumerState<_DeleteAccountButton> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _busy ? null : _delete,
-        icon: _busy
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.delete_outline),
+        onPressed: _delete,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.dangerText,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.dangerBg,
+          disabledForegroundColor: Colors.white,
+        ),
+        icon: const Icon(Icons.delete_outline),
         label: const Text('Eliminar cuenta'),
       ),
     );
