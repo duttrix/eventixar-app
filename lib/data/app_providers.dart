@@ -145,17 +145,16 @@ final eventTicketAggregateProvider =
 
 /// Invite token for one collaborator (works for organizer and portals).
 final collaboratorAccessTokenProvider =
-    FutureProvider.family<String, ({String eventId, String collaboratorId})>((
+    StreamProvider.family<String, ({String eventId, String collaboratorId})>((
       ref,
       args,
-    ) async {
-      return await ref
-              .read(collaboratorRepositoryProvider)
-              .getAccessToken(
-                eventId: args.eventId,
-                collaboratorId: args.collaboratorId,
-              ) ??
-          '';
+    ) {
+      return ref
+          .watch(collaboratorRepositoryProvider)
+          .watchAccessToken(
+            eventId: args.eventId,
+            collaboratorId: args.collaboratorId,
+          );
     });
 
 /// collaboratorId → invite token. Owner lists the access subcollection.
@@ -242,6 +241,17 @@ Future<Collaborator> setSellerCoordinatorAction(
         eventId: eventId,
         sellerId: sellerId,
         coordinatorId: coordinatorId,
+      );
+}
+
+Future<String> ensureCollaboratorAccessToken(
+  WidgetRef ref, {
+  required String eventId,
+  required String collaboratorId,
+}) {
+  return ref.read(collaboratorRepositoryProvider).ensureAccessToken(
+        eventId: eventId,
+        collaboratorId: collaboratorId,
       );
 }
 

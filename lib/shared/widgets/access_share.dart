@@ -17,7 +17,7 @@ export 'ticket_status_style.dart';
 class AccessShare {
   AccessShare._();
 
-  static const IconData shareIcon = Icons.ios_share;
+  static const IconData shareIcon = Icons.share;
 
   static String messageFor(
     Collaborator person, {

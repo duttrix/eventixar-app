@@ -69,6 +69,51 @@ class CollaboratorRepository {
     return token is String ? token : null;
   }
 
+  /// Single invite token. `get` is public; `list` is owner-only.
+  Stream<String> watchAccessToken({
+    required String eventId,
+    required String collaboratorId,
+  }) {
+    return _access(eventId).doc(collaboratorId).snapshots().map((snap) {
+      final token = snap.data()?['token'];
+      return token is String ? token : '';
+    });
+  }
+
+  /// Returns the invite token, creating `/tokens` + `/access` if a coordinator
+  /// (or an older create) left the seller without a shareable link.
+  Future<String> ensureAccessToken({
+    required String eventId,
+    required String collaboratorId,
+  }) async {
+    await _ensureWritable(eventId);
+    final existing = await getAccessToken(
+      eventId: eventId,
+      collaboratorId: collaboratorId,
+    );
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final snap = await _collaborators(eventId).doc(collaboratorId).get();
+    final data = snap.data();
+    if (!snap.exists || data == null) {
+      throw StateError('Colaborador $collaboratorId no encontrado.');
+    }
+
+    final token = _generateToken();
+    final now = FieldValue.serverTimestamp();
+    await _tokens.doc(token).set({
+      'eventId': eventId,
+      'collaboratorId': collaboratorId,
+      'role': data['role'],
+      'createdAt': now,
+    });
+    await _access(eventId).doc(collaboratorId).set({
+      'token': token,
+      'createdAt': now,
+    });
+    return token;
+  }
+
   Future<List<Collaborator>> listForEvent(String eventId) async {
     final snap = await _collaborators(eventId).get();
     final list = snap.docs
@@ -143,15 +188,18 @@ class CollaboratorRepository {
       collaborator.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
     );
 
-    final batch = _firestore.batch();
-    batch.set(_tokens.doc(token), {
+    // Token and access after the seller doc: a coordinator has no Auth, and a
+    // same-batch write can leave the person without a shareable link.
+    await _tokens.doc(token).set({
       'eventId': eventId,
       'collaboratorId': ref.id,
       'role': role.firestoreValue,
       'createdAt': now,
     });
-    batch.set(_access(eventId).doc(ref.id), {'token': token, 'createdAt': now});
-    await batch.commit();
+    await _access(eventId).doc(ref.id).set({
+      'token': token,
+      'createdAt': now,
+    });
     return collaborator;
   }
 

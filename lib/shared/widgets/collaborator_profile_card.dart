@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/phone/ar_whatsapp_phone.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
@@ -30,11 +31,12 @@ class CollaboratorProfileCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventProvider(eventId));
     final collabsAsync = ref.watch(eventCollaboratorsProvider(eventId));
-    final token =
-        ref
-            .watch(eventAccessTokensProvider(eventId))
-            .valueOrNull?[collaboratorId] ??
-        '';
+    final tokenAsync = ref.watch(
+      collaboratorAccessTokenProvider((
+        eventId: eventId,
+        collaboratorId: collaboratorId,
+      )),
+    );
 
     if (eventAsync.isLoading || collabsAsync.isLoading) {
       return const SectionCard(
@@ -67,42 +69,67 @@ class CollaboratorProfileCard extends ConsumerWidget {
 
     final collaborator = match;
     final readOnly = event.isReadOnly;
+    final phoneLabel = ArWhatsAppPhone.displayFromRaw(collaborator.phone);
 
     return SectionCard(
-      title: collaborator.name,
-      trailing: readOnly
-          ? null
-          : IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _showEditDialog(context, ref, collaborator),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (collaborator.phone.isNotEmpty) ...[
-            Text(
-              'Celular: ${collaborator.phone}',
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 8),
-          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      collaborator.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (phoneLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        phoneLabel,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (!readOnly)
+                IconButton(
+                  tooltip: 'Editar',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _showEditDialog(context, ref, collaborator),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+            ],
+          ),
           if (collaborator.notes.isNotEmpty) ...[
+            const SizedBox(height: 6),
             Text(
-              'Notas: ${collaborator.notes}',
-              style: const TextStyle(color: AppColors.textSecondary),
+              collaborator.notes,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
             ),
-            const SizedBox(height: 12),
           ],
-          if (!readOnly)
+          if (!readOnly) ...[
+            const SizedBox(height: 10),
             CollaboratorAccessActions(
               collaborator: collaborator,
               eventName: event.name,
-              token: token,
+              token: tokenAsync.valueOrNull ?? '',
+              tokenLoading: tokenAsync.isLoading,
             ),
+          ],
         ],
       ),
     );

@@ -34,4 +34,15 @@ class ArWhatsAppPhone {
 
   static String display(String waMeDigits) =>
       waMeDigits.startsWith('+') ? waMeDigits : '+$waMeDigits';
+
+  /// Label for the profile card, e.g. `+54 9 1123456789`.
+  static String? displayFromRaw(String raw) {
+    final wa = toWaMeDigits(raw);
+    if (wa != null) {
+      return '+54 9 ${wa.substring(prefix.length)}';
+    }
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    return '+54 9 $digits';
+  }
 }

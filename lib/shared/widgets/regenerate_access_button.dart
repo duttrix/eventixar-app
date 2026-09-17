@@ -100,16 +100,21 @@ class _RegenerateAccessButtonState
       );
     }
 
-    return TextButton.icon(
+    return OutlinedButton.icon(
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.standard,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+      ),
       onPressed: _busy ? null : _regenerate,
       icon: _busy
           ? const SizedBox(
-              width: 16,
-              height: 16,
+              width: 18,
+              height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.link_off, size: 18),
-      label: const Text('Regenerar acceso'),
+          : const Icon(Icons.refresh, size: 20),
+      label: const Text('Regenerar'),
     );
   }
 }

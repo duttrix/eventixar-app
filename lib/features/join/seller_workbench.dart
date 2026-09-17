@@ -52,11 +52,36 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
   final Set<TicketStatus> _statusFilters = {};
+  bool _selectionMode = false;
 
   bool get _isOrganizerSelf =>
       widget.actorRole == 'organizer' &&
       widget.lockedSellerId != null &&
       widget.lockedSellerId == widget.actorId;
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _enterSelection([Ticket? first]) {
+    setState(() {
+      _selectionMode = true;
+      if (first != null) _selectedIds.add(first.id);
+    });
+  }
+
+  void _toggleSelected(Ticket ticket) {
+    setState(() {
+      if (_selectedIds.contains(ticket.id)) {
+        _selectedIds.remove(ticket.id);
+      } else {
+        _selectedIds.add(ticket.id);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +217,8 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   onTap: () => setState(() {
                     _selectedSeller = s;
                     _selectedIds.clear();
+                    _selectionMode = false;
+                    _statusFilters.clear();
                   }),
                 ),
               ),
@@ -273,193 +300,205 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         .where((t) => _selectedIds.contains(t.id))
         .toList(growable: false);
     final hasSelection = selectedTickets.isNotEmpty;
+    final showBar = !event.isReadOnly && _selectionMode && hasSelection;
+    final allVisibleSelected =
+        selectableTickets.isNotEmpty &&
+        selectableTickets.every((t) => _selectedIds.contains(t.id));
 
     return _wrap(
-      ListView(
-        padding: const EdgeInsets.all(16),
+      Column(
         children: [
-          if (!widget.embedded) ...[
-            EventDetailsCard(event: event),
-            const SizedBox(height: 12),
-          ],
-          TicketStatusCard.summary(
-            tickets: sorted,
-            selected: _statusFilters,
-            includePoolStatuses: canSelfAssign,
-            emptyLabel: canSelfAssign
-                ? 'Todavía no hay tickets en este evento.'
-                : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
-            onStatusTap: sorted.isEmpty
-                ? null
-                : (status) => setState(() {
-                    if (_statusFilters.contains(status)) {
-                      _statusFilters.remove(status);
-                    } else {
-                      _statusFilters.add(status);
-                    }
-                  }),
-          ),
-          const SizedBox(height: 12),
-          if (!event.isReadOnly)
-            Row(
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: !hasSelection
-                        ? null
-                        : () => _printTickets(
-                            context,
-                            event,
-                            selectedTickets,
-                            sellerNames: sellerNames,
-                          ),
-                    icon: const Icon(Icons.print_outlined),
-                    label: Text(
-                      hasSelection
-                          ? 'Imprimir (${selectedTickets.length})'
-                          : 'Imprimir',
-                    ),
-                  ),
+                if (!widget.embedded) ...[
+                  EventDetailsCard(event: event),
+                  const SizedBox(height: 12),
+                ],
+                TicketStatusCard.summary(
+                  tickets: sorted,
+                  selected: _statusFilters,
+                  includePoolStatuses: canSelfAssign,
+                  emptyLabel: canSelfAssign
+                      ? 'Todavía no hay tickets en este evento.'
+                      : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
+                  onStatusTap: sorted.isEmpty
+                      ? null
+                      : (status) => setState(() {
+                          if (_statusFilters.contains(status)) {
+                            _statusFilters.remove(status);
+                          } else {
+                            _statusFilters.add(status);
+                          }
+                        }),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: !hasSelection
-                        ? null
-                        : () => _shareTickets(
-                            context,
-                            event,
-                            selectedTickets,
-                            sellerNames: sellerNames,
-                          ),
-                    icon: const Icon(AccessShare.shareIcon),
-                    label: Text(
-                      hasSelection
-                          ? 'Compartir (${selectedTickets.length})'
-                          : 'Compartir',
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _statusFilters.isEmpty
+                            ? 'Tickets (${sorted.length})'
+                            : 'Tickets (${visible.length} de ${sorted.length})',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
-                  ),
+                    if (_statusFilters.isNotEmpty)
+                      TextButton(
+                        onPressed: () => setState(_statusFilters.clear),
+                        child: const Text('Ver todos'),
+                      ),
+                    if (selectableTickets.isNotEmpty) ...[
+                      if (_selectionMode) ...[
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              if (allVisibleSelected) {
+                                _selectedIds.clear();
+                              } else {
+                                _selectedIds
+                                  ..clear()
+                                  ..addAll(
+                                    selectableTickets.map((t) => t.id),
+                                  );
+                              }
+                            });
+                          },
+                          child: Text(
+                            allVisibleSelected ? 'Ninguno' : 'Todos',
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _exitSelection,
+                          child: const Text('Cancelar'),
+                        ),
+                      ] else
+                        TextButton(
+                          onPressed: () => _enterSelection(),
+                          child: const Text('Seleccionar'),
+                        ),
+                    ],
+                  ],
                 ),
+                const SizedBox(height: 10),
+                if (sorted.isEmpty)
+                  Text(
+                    canSelfAssign
+                        ? 'Todavía no hay tickets en este evento.'
+                        : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
+                    style: const TextStyle(color: AppColors.textMuted),
+                  )
+                else if (visible.isEmpty)
+                  const Text(
+                    'Ningún ticket con esos estados.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  )
+                else
+                  for (final ticket in visible)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _SellerTicketCard(
+                        ticket: ticket,
+                        event: event,
+                        selectionMode: _selectionMode,
+                        selected: _selectedIds.contains(ticket.id),
+                        showUnassignedStatus: hasSellers,
+                        assignedSellerLabel: assignedSellerLabel(ticket),
+                        canReserve:
+                            !_selectionMode &&
+                            isOperable(ticket) &&
+                            ticket.status.isSellable &&
+                            ticket.status != TicketStatus.reserved,
+                        canCollect:
+                            !_selectionMode &&
+                            isOperable(ticket) &&
+                            ticket.status.isSellable,
+                        canClearReservation:
+                            !_selectionMode &&
+                            isOperable(ticket) &&
+                            ticket.status == TicketStatus.reserved,
+                        canSetBuyer:
+                            !_selectionMode &&
+                            isOperable(ticket) &&
+                            (ticket.status == TicketStatus.collected ||
+                                ticket.status == TicketStatus.reserved ||
+                                ticket.status == TicketStatus.settled ||
+                                ticket.status == TicketStatus.delivered),
+                        canShare: !_selectionMode && !event.isReadOnly,
+                        onToggleSelect: event.isReadOnly
+                            ? null
+                            : () {
+                                if (!_selectionMode) {
+                                  _enterSelection(ticket);
+                                } else {
+                                  _toggleSelected(ticket);
+                                }
+                              },
+                        onLongPress: event.isReadOnly
+                            ? null
+                            : () {
+                                if (!_selectionMode) {
+                                  _enterSelection(ticket);
+                                } else {
+                                  _toggleSelected(ticket);
+                                }
+                              },
+                        onReserve: () => _reserveTicket(
+                          context,
+                          event: event,
+                          sellerId: sellerIdFor(ticket),
+                          ticket: ticket,
+                        ),
+                        onCollect: () => _collectTicket(
+                          context,
+                          event: event,
+                          sellerId: sellerIdFor(ticket),
+                          ticket: ticket,
+                        ),
+                        onClearReservation: () => _clearReservation(
+                          context,
+                          event: event,
+                          ticket: ticket,
+                          returnToPool: clearReservationReturnsToPool(ticket),
+                        ),
+                        clearReservationTooltip:
+                            clearReservationReturnsToPool(ticket)
+                            ? 'Devolver al pool'
+                            : 'Liberar reserva',
+                        onShare: () => _shareTickets(context, event, [
+                          ticket,
+                        ], sellerNames: sellerNames),
+                        onPrint: () => _printTickets(context, event, [
+                          ticket,
+                        ], sellerNames: sellerNames),
+                        onSetBuyer: () => _setTicketBuyer(
+                          context,
+                          event: event,
+                          ticket: ticket,
+                        ),
+                      ),
+                    ),
               ],
             ),
-          if (!event.isReadOnly) const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _statusFilters.isEmpty
-                      ? 'Tickets (${sorted.length})'
-                      : 'Tickets (${visible.length} de ${sorted.length})',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              if (_statusFilters.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(_statusFilters.clear),
-                  child: const Text('Ver todos'),
-                ),
-              if (selectableTickets.isNotEmpty) ...[
-                TextButton(
-                  onPressed: () => setState(() {
-                    _selectedIds
-                      ..clear()
-                      ..addAll(selectableTickets.map((t) => t.id));
-                  }),
-                  child: const Text('Todos'),
-                ),
-                TextButton(
-                  onPressed: hasSelection
-                      ? () => setState(_selectedIds.clear)
-                      : null,
-                  child: const Text('Ninguno'),
-                ),
-              ],
-            ],
           ),
-          const SizedBox(height: 10),
-          if (sorted.isEmpty)
-            Text(
-              canSelfAssign
-                  ? 'Todavía no hay tickets en este evento.'
-                  : 'Cuando se asigne un rango, los tickets van a aparecer acá.',
-              style: const TextStyle(color: AppColors.textMuted),
-            )
-          else if (visible.isEmpty)
-            const Text(
-              'Ningún ticket con esos estados.',
-              style: TextStyle(color: AppColors.textMuted),
-            )
-          else
-            for (final ticket in visible)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SellerTicketCard(
-                  ticket: ticket,
-                  event: event,
-                  selected:
-                      selectableTickets.any((t) => t.id == ticket.id) &&
-                      _selectedIds.contains(ticket.id),
-                  selectionEnabled: selectableTickets.any(
-                    (t) => t.id == ticket.id,
-                  ),
-                  showUnassignedStatus: hasSellers,
-                  assignedSellerLabel: assignedSellerLabel(ticket),
-                  canReserve:
-                      isOperable(ticket) &&
-                      ticket.status.isSellable &&
-                      ticket.status != TicketStatus.reserved,
-                  canCollect: isOperable(ticket) && ticket.status.isSellable,
-                  canClearReservation:
-                      isOperable(ticket) &&
-                      ticket.status == TicketStatus.reserved,
-                  canSetBuyer:
-                      isOperable(ticket) &&
-                      (ticket.status == TicketStatus.collected ||
-                          ticket.status == TicketStatus.reserved ||
-                          ticket.status == TicketStatus.settled ||
-                          ticket.status == TicketStatus.delivered),
-                  canShare: !event.isReadOnly,
-                  onToggleSelect:
-                      selectableTickets.any((t) => t.id == ticket.id)
-                      ? () => setState(() {
-                          if (_selectedIds.contains(ticket.id)) {
-                            _selectedIds.remove(ticket.id);
-                          } else {
-                            _selectedIds.add(ticket.id);
-                          }
-                        })
-                      : null,
-                  onReserve: () => _reserveTicket(
-                    context,
-                    event: event,
-                    sellerId: sellerIdFor(ticket),
-                    ticket: ticket,
-                  ),
-                  onCollect: () => _collectTicket(
-                    context,
-                    event: event,
-                    sellerId: sellerIdFor(ticket),
-                    ticket: ticket,
-                  ),
-                  onClearReservation: () => _clearReservation(
-                    context,
-                    event: event,
-                    ticket: ticket,
-                    returnToPool: clearReservationReturnsToPool(ticket),
-                  ),
-                  clearReservationTooltip: clearReservationReturnsToPool(ticket)
-                      ? 'Devolver al pool'
-                      : 'Liberar reserva',
-                  onShare: () => _shareTickets(context, event, [
-                    ticket,
-                  ], sellerNames: sellerNames),
-                  onPrint: () => _printTickets(context, event, [
-                    ticket,
-                  ], sellerNames: sellerNames),
-                  onSetBuyer: () =>
-                      _setTicketBuyer(context, event: event, ticket: ticket),
-                ),
+          if (showBar)
+            _SellerBulkBar(
+              selectedCount: selectedTickets.length,
+              onPrint: () => _printTickets(
+                context,
+                event,
+                selectedTickets,
+                sellerNames: sellerNames,
               ),
+              onShare: () => _shareTickets(
+                context,
+                event,
+                selectedTickets,
+                sellerNames: sellerNames,
+              ),
+              onClear: _exitSelection,
+            ),
         ],
       ),
       appBar: AppBar(
@@ -470,6 +509,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                 onPressed: () => setState(() {
                   _selectedSeller = null;
                   _selectedIds.clear();
+                  _selectionMode = false;
                   _statusFilters.clear();
                 }),
               )
@@ -938,12 +978,68 @@ class _ShareDetails {
   final String buyerName;
 }
 
+class _SellerBulkBar extends StatelessWidget {
+  const _SellerBulkBar({
+    required this.selectedCount,
+    required this.onPrint,
+    required this.onShare,
+    required this.onClear,
+  });
+
+  final int selectedCount;
+  final VoidCallback onPrint;
+  final VoidCallback onShare;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      color: AppColors.card,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$selectedCount seleccionados',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Imprimir',
+                onPressed: onPrint,
+                icon: const Icon(Icons.print_outlined),
+              ),
+              IconButton(
+                tooltip: 'Compartir',
+                onPressed: onShare,
+                icon: const Icon(AccessShare.shareIcon),
+              ),
+              IconButton(
+                tooltip: 'Cancelar selección',
+                onPressed: onClear,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SellerTicketCard extends StatelessWidget {
   const _SellerTicketCard({
     required this.ticket,
     required this.event,
     required this.selected,
-    required this.selectionEnabled,
+    required this.selectionMode,
     required this.showUnassignedStatus,
     required this.canReserve,
     required this.canCollect,
@@ -957,6 +1053,7 @@ class _SellerTicketCard extends StatelessWidget {
     required this.onPrint,
     required this.onSetBuyer,
     this.onToggleSelect,
+    this.onLongPress,
     this.clearReservationTooltip = 'Liberar reserva',
     this.assignedSellerLabel,
   });
@@ -964,7 +1061,7 @@ class _SellerTicketCard extends StatelessWidget {
   final Ticket ticket;
   final Event event;
   final bool selected;
-  final bool selectionEnabled;
+  final bool selectionMode;
   final bool showUnassignedStatus;
   final bool canReserve;
   final bool canCollect;
@@ -972,6 +1069,7 @@ class _SellerTicketCard extends StatelessWidget {
   final bool canSetBuyer;
   final bool canShare;
   final VoidCallback? onToggleSelect;
+  final VoidCallback? onLongPress;
   final VoidCallback onReserve;
   final VoidCallback onCollect;
   final VoidCallback onClearReservation;
@@ -991,33 +1089,37 @@ class _SellerTicketCard extends StatelessWidget {
     return Material(
       color: AppColors.card,
       borderRadius: BorderRadius.circular(14),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? AppColors.accent : AppColors.border,
-            width: selected ? 1.5 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: selectionMode ? onToggleSelect : null,
+        onLongPress: onLongPress,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected && selectionMode
+                  ? AppColors.accent
+                  : AppColors.border,
+              width: selected && selectionMode ? 1.5 : 1,
+            ),
+            color: selected && selectionMode
+                ? AppColors.accentBg.withValues(alpha: 0.35)
+                : null,
           ),
-          color: selected ? AppColors.accentBg.withValues(alpha: 0.35) : null,
-        ),
-        padding: const EdgeInsets.fromLTRB(6, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  value: selected,
-                  onChanged: selectionEnabled
-                      ? (_) => onToggleSelect?.call()
-                      : null,
-                  visualDensity: VisualDensity.compact,
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onToggleSelect,
+          padding: EdgeInsets.fromLTRB(selectionMode ? 6 : 14, 12, 8, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (selectionMode)
+                    Checkbox(
+                      value: selected,
+                      onChanged: (_) => onToggleSelect?.call(),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1074,68 +1176,74 @@ class _SellerTicketCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
-                if (canShare) ...[
-                  IconButton(
-                    tooltip: 'Compartir',
-                    onPressed: onShare,
-                    icon: const Icon(AccessShare.shareIcon, size: 20),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    tooltip: 'Imprimir',
-                    onPressed: onPrint,
-                    icon: const Icon(Icons.print_outlined, size: 20),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ],
-            ),
-            if (canReserve || canCollect || canClearReservation) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  if (canReserve)
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: onReserve,
-                        child: const Text('Reservar'),
-                      ),
-                    ),
-                  if (canReserve && canCollect) const SizedBox(width: 8),
-                  if (canCollect)
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: onCollect,
-                        child: const Text('Cobrar'),
-                      ),
-                    ),
-                  if (canClearReservation) ...[
-                    if (canCollect) const SizedBox(width: 8),
+                  if (canShare) ...[
                     IconButton(
-                      tooltip: clearReservationTooltip,
-                      onPressed: onClearReservation,
-                      icon: const Icon(Icons.close),
+                      tooltip: 'Compartir',
+                      onPressed: onShare,
+                      icon: const Icon(AccessShare.shareIcon, size: 20),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      tooltip: 'Imprimir',
+                      onPressed: onPrint,
+                      icon: const Icon(Icons.print_outlined, size: 20),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ],
                 ],
               ),
-            ],
-            if (canSetBuyer) ...[
-              SizedBox(
-                height: (canReserve || canCollect || canClearReservation)
-                    ? 8
-                    : 10,
-              ),
-              OutlinedButton.icon(
-                onPressed: onSetBuyer,
-                icon: const Icon(Icons.person_outline, size: 18),
-                label: Text(
-                  buyer.isEmpty ? 'Destinatario' : 'Editar destinatario',
+              if (canReserve || canCollect || canClearReservation) ...[
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Row(
+                    children: [
+                      if (canReserve)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: onReserve,
+                            child: const Text('Reservar'),
+                          ),
+                        ),
+                      if (canReserve && canCollect) const SizedBox(width: 8),
+                      if (canCollect)
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: onCollect,
+                            child: const Text('Cobrar'),
+                          ),
+                        ),
+                      if (canClearReservation) ...[
+                        if (canCollect) const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: clearReservationTooltip,
+                          onPressed: onClearReservation,
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
+              if (canSetBuyer) ...[
+                SizedBox(
+                  height: (canReserve || canCollect || canClearReservation)
+                      ? 8
+                      : 10,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: OutlinedButton.icon(
+                    onPressed: onSetBuyer,
+                    icon: const Icon(Icons.person_outline, size: 18),
+                    label: Text(
+                      buyer.isEmpty ? 'Destinatario' : 'Editar destinatario',
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
