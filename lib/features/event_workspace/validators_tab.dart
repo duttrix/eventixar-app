@@ -6,9 +6,8 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
-import '../../shared/widgets/busy_dialog.dart';
+import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
 import 'validator_detail_screen.dart';
 
@@ -34,7 +33,7 @@ class ValidatorsTab extends ConsumerWidget {
           : BottomSystemInset(
               child: FloatingActionButton.extended(
                 onPressed: eventAsync.hasValue
-                    ? () => _showCreateDialog(
+                    ? () => _createValidator(
                         context,
                         ref,
                         eventName: eventAsync.requireValue.name,
@@ -159,91 +158,25 @@ class ValidatorsTab extends ConsumerWidget {
     );
   }
 
-  void _showCreateDialog(
+  Future<void> _createValidator(
     BuildContext context,
     WidgetRef ref, {
     required String eventName,
-  }) {
-    final nameController = TextEditingController();
-    final notesController = TextEditingController();
-
-    showDialog<void>(
+  }) async {
+    final created = await showCollaboratorFormDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuevo validador'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Retiro en puerta lateral',
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Al crearlo vas a poder compartir un acceso. Abre el link sin registrarse.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-              ),
-            ],
-          ),
+      ref: ref,
+      eventId: eventId,
+      role: CollaboratorRole.validator,
+      eventName: eventName,
+    );
+    if (created == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ValidatorDetailScreen(
+          eventId: eventId,
+          validatorId: created.id,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              final notes = notesController.text.trim();
-              Navigator.pop(dialogContext);
-              try {
-                final v = await runBusyDialog(
-                  context,
-                  message: 'Creando validador...',
-                  work: (_) => inviteCollaborator(
-                    ref,
-                    eventId: eventId,
-                    role: CollaboratorRole.validator,
-                    name: name,
-                    phone: '',
-                    notes: notes,
-                  ),
-                );
-                if (!context.mounted) return;
-                await AccessShare.share(
-                  context,
-                  v,
-                  eventName: eventName,
-                  token: v.token,
-                );
-                if (!context.mounted) return;
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => ValidatorDetailScreen(
-                      eventId: eventId,
-                      validatorId: v.id,
-                    ),
-                  ),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                AppSnackBar.error(context, '$e', cause: e);
-              }
-            },
-            child: const Text('Crear y compartir acceso'),
-          ),
-        ],
       ),
     );
   }

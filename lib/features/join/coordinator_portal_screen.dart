@@ -5,9 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
-import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/app_snackbar.dart';
-import '../../shared/widgets/busy_dialog.dart';
+import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
 
 /// Coordinator portal: manage all sellers for an event (no organizer account).
@@ -76,7 +74,7 @@ class CoordinatorPortalScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddSeller(
+        onPressed: () => _createSeller(
           context,
           ref,
           eventId: eventId,
@@ -141,91 +139,23 @@ class CoordinatorPortalScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddSeller(
+  Future<void> _createSeller(
     BuildContext context,
     WidgetRef ref, {
     required String eventId,
     required String coordinatorId,
     required String eventName,
     required String token,
-  }) {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final notesController = TextEditingController();
-
-    showDialog<void>(
+  }) async {
+    final seller = await showCollaboratorFormDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuevo vendedor'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Celular (WhatsApp)',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Notas'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              final phone = phoneController.text.trim();
-              final notes = notesController.text.trim();
-              Navigator.pop(dialogContext);
-              try {
-                final seller = await runBusyDialog(
-                  context,
-                  message: 'Creando vendedor...',
-                  work: (_) => inviteCollaborator(
-                    ref,
-                    eventId: eventId,
-                    role: CollaboratorRole.seller,
-                    name: name,
-                    phone: phone,
-                    notes: notes,
-                    createdByCoordinatorId: coordinatorId,
-                  ),
-                );
-                if (!context.mounted) return;
-                await AccessShare.copy(
-                  context,
-                  seller,
-                  eventName: eventName,
-                  token: seller.token,
-                );
-                if (!context.mounted) return;
-                context.push('/coordinator/$token/sellers/${seller.id}');
-              } catch (e) {
-                if (!context.mounted) return;
-                AppSnackBar.error(context, '$e', cause: e);
-              }
-            },
-            child: const Text('Crear y compartir'),
-          ),
-        ],
-      ),
+      ref: ref,
+      eventId: eventId,
+      role: CollaboratorRole.seller,
+      eventName: eventName,
+      createdByCoordinatorId: coordinatorId,
     );
+    if (seller == null || !context.mounted) return;
+    context.push('/coordinator/$token/sellers/${seller.id}');
   }
 }

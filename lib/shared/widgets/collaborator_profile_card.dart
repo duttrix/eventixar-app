@@ -4,9 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
-import 'app_snackbar.dart';
-import 'busy_dialog.dart';
 import 'collaborator_access_actions.dart';
+import 'collaborator_form_dialog.dart';
 import 'section_card.dart';
 
 /// Shared profile card for collaborator detail screens.
@@ -84,6 +83,13 @@ class CollaboratorProfileCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (collaborator.phone.isNotEmpty) ...[
+            Text(
+              'Celular: ${collaborator.phone}',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (collaborator.notes.isNotEmpty) ...[
             Text(
               'Notas: ${collaborator.notes}',
@@ -102,82 +108,17 @@ class CollaboratorProfileCard extends ConsumerWidget {
     );
   }
 
-  void _showEditDialog(
+  Future<void> _showEditDialog(
     BuildContext context,
     WidgetRef ref,
     Collaborator collaborator,
   ) {
-    final nameController = TextEditingController(text: collaborator.name);
-    final notesController = TextEditingController(text: collaborator.notes);
-    final notesHint = switch (collaborator.role) {
-      CollaboratorRole.seller => 'Ej. Vende en el barrio Alberdi',
-      CollaboratorRole.validator => 'Ej. Retiro en puerta lateral',
-      CollaboratorRole.collector => 'Ej. Recauda los viernes en sede',
-      CollaboratorRole.coordinator => 'Ej. Zona norte',
-    };
-
-    showDialog<void>(
+    return showCollaboratorFormDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Editar ${collaborator.role.label.toLowerCase()}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: 'Notas',
-                  hintText: notesHint,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              final notes = notesController.text.trim();
-              Navigator.pop(dialogContext);
-              try {
-                await runBusyDialog(
-                  context,
-                  message: 'Guardando...',
-                  work: (_) => saveCollaborator(
-                    ref,
-                    eventId: eventId,
-                    collaboratorId: collaborator.id,
-                    name: name,
-                    phone: collaborator.phone,
-                    notes: notes,
-                  ),
-                );
-                if (!context.mounted) return;
-                AppSnackBar.success(
-                  context,
-                  '${collaborator.role.label} actualizado.',
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                AppSnackBar.error(context, '$e', cause: e);
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+      ref: ref,
+      eventId: eventId,
+      role: collaborator.role,
+      existing: collaborator,
     );
   }
 }

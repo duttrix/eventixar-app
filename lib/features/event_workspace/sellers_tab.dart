@@ -7,9 +7,8 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
-import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
-import '../../shared/widgets/busy_dialog.dart';
+import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
 
 /// Organizer roster of sellers: create, open detail, share access.
@@ -31,7 +30,7 @@ class SellersTab extends ConsumerWidget {
           ? null
           : BottomSystemInset(
               child: FloatingActionButton.extended(
-                onPressed: () => _showAddDialog(context, ref),
+                onPressed: () => _createSeller(context, ref),
                 icon: const Icon(Icons.person_add_alt_1_outlined),
                 label: const Text('Agregar'),
               ),
@@ -140,74 +139,17 @@ class SellersTab extends ConsumerWidget {
     );
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final nameController = TextEditingController();
-    final notesController = TextEditingController();
-
-    showDialog<void>(
+  Future<void> _createSeller(BuildContext context, WidgetRef ref) async {
+    final event = ref.read(eventProvider(eventId)).valueOrNull;
+    if (event == null) return;
+    final seller = await showCollaboratorFormDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuevo vendedor'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas',
-                  hintText: 'Ej. Vende en el barrio Alberdi',
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Después vas a poder asignar tickets y compartir el acceso desde su ficha.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              final notes = notesController.text.trim();
-              Navigator.pop(dialogContext);
-              try {
-                final seller = await runBusyDialog(
-                  context,
-                  message: 'Creando vendedor...',
-                  work: (_) => inviteCollaborator(
-                    ref,
-                    eventId: eventId,
-                    role: CollaboratorRole.seller,
-                    name: name,
-                    phone: '',
-                    notes: notes,
-                  ),
-                );
-                if (!context.mounted) return;
-                context.push('/event/$eventId/sellers/${seller.id}');
-              } catch (e) {
-                if (!context.mounted) return;
-                AppSnackBar.error(context, '$e', cause: e);
-              }
-            },
-            child: const Text('Crear'),
-          ),
-        ],
-      ),
+      ref: ref,
+      eventId: eventId,
+      role: CollaboratorRole.seller,
+      eventName: event.name,
     );
+    if (seller == null || !context.mounted) return;
+    context.push('/event/$eventId/sellers/${seller.id}');
   }
 }

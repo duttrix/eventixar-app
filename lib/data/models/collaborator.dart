@@ -11,6 +11,13 @@ extension CollaboratorRoleX on CollaboratorRole {
     CollaboratorRole.coordinator => 'Coordinador',
   };
 
+  String get notesHint => switch (this) {
+    CollaboratorRole.seller => 'Ej. Vende en el barrio Alberdi',
+    CollaboratorRole.validator => 'Ej. Retiro en puerta lateral',
+    CollaboratorRole.collector => 'Ej. Recauda los viernes en sede',
+    CollaboratorRole.coordinator => 'Ej. Zona norte',
+  };
+
   String get firestoreValue => name;
 
   static CollaboratorRole fromFirestore(String? value) {
