@@ -9,10 +9,12 @@ import '../../data/models/ticket.dart';
 import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
+import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/section_card.dart';
-import '../../shared/widgets/status_badge.dart';
+import '../../shared/widgets/ticket_list_card.dart';
+import '../../shared/widgets/ticket_selection_bar.dart';
 import '../../shared/widgets/ticket_share.dart';
 
 /// Shared sell UI for the seller portal and the organizer workspace.
@@ -155,7 +157,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       sellers: sellers,
       canGoBack: lockedId == null,
       canSelfAssign: _isOrganizerSelf,
-      hasSellers: sellers.isNotEmpty,
     );
   }
 
@@ -242,7 +243,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     required List<Collaborator> sellers,
     required bool canGoBack,
     required bool canSelfAssign,
-    required bool hasSellers,
   }) {
     final sellerNames = {for (final s in sellers) s.id: s.name};
     if (canSelfAssign) {
@@ -293,6 +293,17 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         .toList(growable: false);
     final hasSelection = selectedTickets.isNotEmpty;
     final showBar = !event.isReadOnly && _selectionMode && hasSelection;
+    final reservable = selectedTickets
+        .where(
+          (t) =>
+              isOperable(t) &&
+              t.status.isSellable &&
+              t.status != TicketStatus.reserved,
+        )
+        .toList(growable: false);
+    final collectible = selectedTickets
+        .where((t) => isOperable(t) && t.status.isSellable)
+        .toList(growable: false);
     final allVisibleSelected =
         selectableTickets.isNotEmpty &&
         selectableTickets.every((t) => _selectedIds.contains(t.id));
@@ -336,11 +347,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
-                    if (_statusFilters.isNotEmpty)
-                      TextButton(
-                        onPressed: () => setState(_statusFilters.clear),
-                        child: const Text('Ver todos'),
-                      ),
                     if (selectableTickets.isNotEmpty) ...[
                       if (_selectionMode) ...[
                         TextButton(
@@ -390,43 +396,20 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   for (final ticket in visible)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _SellerTicketCard(
+                      child: TicketListCard(
                         ticket: ticket,
                         event: event,
+                        readOnly: event.isReadOnly || !isOperable(ticket),
                         selectionMode: _selectionMode,
                         selected: _selectedIds.contains(ticket.id),
-                        showUnassignedStatus: hasSellers,
-                        assignedSellerLabel: assignedSellerLabel(ticket),
-                        canReserve:
-                            !_selectionMode &&
-                            isOperable(ticket) &&
-                            ticket.status.isSellable &&
-                            ticket.status != TicketStatus.reserved,
-                        canCollect:
-                            !_selectionMode &&
-                            isOperable(ticket) &&
-                            ticket.status.isSellable,
-                        canClearReservation:
-                            !_selectionMode &&
-                            isOperable(ticket) &&
-                            ticket.status == TicketStatus.reserved,
-                        canSetBuyer:
-                            !_selectionMode &&
-                            isOperable(ticket) &&
-                            (ticket.status == TicketStatus.collected ||
-                                ticket.status == TicketStatus.reserved ||
-                                ticket.status == TicketStatus.settled ||
-                                ticket.status == TicketStatus.delivered),
-                        canShare: !_selectionMode && !event.isReadOnly,
-                        onToggleSelect: event.isReadOnly
-                            ? null
-                            : () {
-                                if (!_selectionMode) {
-                                  _enterSelection(ticket);
-                                } else {
-                                  _toggleSelected(ticket);
-                                }
-                              },
+                        sellerLabel: assignedSellerLabel(ticket),
+                        onToggleSelect: () {
+                          if (!_selectionMode) {
+                            _enterSelection(ticket);
+                          } else {
+                            _toggleSelected(ticket);
+                          }
+                        },
                         onLongPress: event.isReadOnly
                             ? null
                             : () {
@@ -436,16 +419,21 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                                   _toggleSelected(ticket);
                                 }
                               },
+                        onCollect: () => _collectTicket(
+                          context,
+                          event: event,
+                          sellerId: sellerIdFor(ticket),
+                          ticket: ticket,
+                        ),
                         onReserve: () => _reserveTicket(
                           context,
                           event: event,
                           sellerId: sellerIdFor(ticket),
                           ticket: ticket,
                         ),
-                        onCollect: () => _collectTicket(
+                        onSetBuyer: () => _setTicketBuyer(
                           context,
                           event: event,
-                          sellerId: sellerIdFor(ticket),
                           ticket: ticket,
                         ),
                         onClearReservation: () => _clearReservation(
@@ -454,39 +442,42 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                           ticket: ticket,
                           returnToPool: clearReservationReturnsToPool(ticket),
                         ),
-                        clearReservationTooltip:
+                        clearReservationLabel:
                             clearReservationReturnsToPool(ticket)
                             ? 'Devolver al pool'
                             : 'Liberar reserva',
-                        onShare: () => _shareTickets(context, event, [
-                          ticket,
-                        ], sellerNames: sellerNames),
                         onPrint: () => _printTickets(context, event, [
                           ticket,
                         ], sellerNames: sellerNames),
-                        onSetBuyer: () => _setTicketBuyer(
-                          context,
-                          event: event,
-                          ticket: ticket,
-                        ),
+                        onShare: () => _shareTickets(context, event, [
+                          ticket,
+                        ], sellerNames: sellerNames),
                       ),
                     ),
               ],
             ),
           ),
           if (showBar)
-            _SellerBulkBar(
+            TicketSelectionBar(
               selectedCount: selectedTickets.length,
-              onPrint: () => _printTickets(
-                context,
-                event,
-                selectedTickets,
-                sellerNames: sellerNames,
-              ),
-              onShare: () => _shareTickets(
-                context,
-                event,
-                selectedTickets,
+              primaryLabel: collectible.isEmpty
+                  ? 'Cobrar'
+                  : collectible.length == selectedTickets.length
+                  ? 'Cobrar (${collectible.length})'
+                  : 'Cobrar (${collectible.length} de ${selectedTickets.length})',
+              onPrimary: collectible.isEmpty
+                  ? null
+                  : () => _bulkCollect(
+                      event: event,
+                      selected: selectedTickets,
+                      eligible: collectible,
+                      sellerId: sellerId,
+                    ),
+              onMore: () => _openBulkMore(
+                event: event,
+                selected: selectedTickets,
+                reservable: reservable,
+                sellerIdFor: sellerIdFor,
                 sellerNames: sellerNames,
               ),
               onClear: _exitSelection,
@@ -560,6 +551,230 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       setState(() => _selectedIds.remove(ticket.id));
     } catch (e) {
       if (!context.mounted) return;
+      AppSnackBar.error(context, '$e', cause: e);
+    }
+  }
+
+  Future<bool> _confirmEligible({
+    required String title,
+    required String confirmLabel,
+    required List<Ticket> selected,
+    required List<Ticket> eligible,
+    required String actionVerb,
+  }) async {
+    if (eligible.isEmpty) {
+      AppSnackBar.warning(
+        context,
+        'Ningún ticket seleccionado se puede $actionVerb.',
+      );
+      return false;
+    }
+
+    final skipped = selected.length - eligible.length;
+    final body = skipped == 0
+        ? 'Se van a $actionVerb ${eligible.length} '
+              'ticket${eligible.length == 1 ? '' : 's'}.'
+        : 'Se van a $actionVerb ${eligible.length} de ${selected.length}.\n'
+              'Se omiten $skipped que no aplican.';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text('$confirmLabel (${eligible.length})'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _openBulkMore({
+    required Event event,
+    required List<Ticket> selected,
+    required List<Ticket> reservable,
+    required String Function(Ticket) sellerIdFor,
+    required Map<String, String> sellerNames,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Text(
+                    '${selected.length} seleccionados',
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
+                  ),
+                ),
+                ListTile(
+                  enabled: reservable.isNotEmpty,
+                  leading: const Icon(Icons.bookmark_add_outlined),
+                  title: Text(
+                    reservable.isEmpty
+                        ? 'Reservar'
+                        : reservable.length == selected.length
+                        ? 'Reservar (${reservable.length})'
+                        : 'Reservar (${reservable.length} de ${selected.length})',
+                  ),
+                  onTap: reservable.isEmpty
+                      ? null
+                      : () {
+                          Navigator.pop(sheetContext);
+                          _bulkReserve(
+                            event: event,
+                            selected: selected,
+                            eligible: reservable,
+                            sellerIdFor: sellerIdFor,
+                          );
+                        },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.print_outlined),
+                  title: Text('Imprimir (${selected.length})'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _printTickets(
+                      context,
+                      event,
+                      selected,
+                      sellerNames: sellerNames,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(AccessShare.shareIcon),
+                  title: Text('Compartir (${selected.length})'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _shareTickets(
+                      context,
+                      event,
+                      selected,
+                      sellerNames: sellerNames,
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _bulkReserve({
+    required Event event,
+    required List<Ticket> selected,
+    required List<Ticket> eligible,
+    required String Function(Ticket) sellerIdFor,
+  }) async {
+    final ok = await _confirmEligible(
+      title: 'Reservar tickets',
+      confirmLabel: 'Continuar',
+      selected: selected,
+      eligible: eligible,
+      actionVerb: 'reservar',
+    );
+    if (!ok || !mounted) return;
+
+    final buyerName = await _askBuyerName(
+      context,
+      title: 'Destinatario para ${eligible.length} tickets',
+      requiredName: true,
+      confirmLabel: 'Reservar',
+    );
+    if (buyerName == null || !mounted) return;
+
+    try {
+      await runBusyDialog(
+        context,
+        message: 'Reservando 0 de ${eligible.length}...',
+        work: (setLabel) async {
+          for (var i = 0; i < eligible.length; i++) {
+            final ticket = eligible[i];
+            setLabel('Reservando ${i + 1} de ${eligible.length}...');
+            await reserveTicketsAction(
+              ref,
+              eventId: event.id,
+              ticketIds: [ticket.id],
+              buyerName: buyerName,
+              sellerId: sellerIdFor(ticket),
+              actorId: widget.actorId,
+              actorRole: widget.actorRole,
+            );
+          }
+        },
+      );
+      if (!mounted) return;
+      _exitSelection();
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        'reservado${eligible.length == 1 ? '' : 's'}.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.error(context, '$e', cause: e);
+    }
+  }
+
+  Future<void> _bulkCollect({
+    required Event event,
+    required List<Ticket> selected,
+    required List<Ticket> eligible,
+    required String sellerId,
+  }) async {
+    final ok = await _confirmEligible(
+      title: 'Cobrar tickets',
+      confirmLabel: 'Cobrar',
+      selected: selected,
+      eligible: eligible,
+      actionVerb: 'cobrar',
+    );
+    if (!ok || !mounted) return;
+
+    try {
+      await runBusyDialog(
+        context,
+        message: 'Cobrando ${eligible.length} tickets...',
+        work: (_) async {
+          await _claimPoolTicketsIfNeeded(sellerId: sellerId, tickets: eligible);
+          await collectTicketsAction(
+            ref,
+            eventId: event.id,
+            ticketIds: eligible.map((t) => t.id),
+            actorId: widget.actorId,
+            actorRole: widget.actorRole,
+          );
+        },
+      );
+      if (!mounted) return;
+      _exitSelection();
+      AppSnackBar.success(
+        context,
+        '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '
+        'cobrado${eligible.length == 1 ? '' : 's'}.',
+      );
+    } catch (e) {
+      if (!mounted) return;
       AppSnackBar.error(context, '$e', cause: e);
     }
   }
@@ -960,276 +1175,4 @@ class _ShareDetails {
   const _ShareDetails({required this.buyerName});
 
   final String buyerName;
-}
-
-class _SellerBulkBar extends StatelessWidget {
-  const _SellerBulkBar({
-    required this.selectedCount,
-    required this.onPrint,
-    required this.onShare,
-    required this.onClear,
-  });
-
-  final int selectedCount;
-  final VoidCallback onPrint;
-  final VoidCallback onShare;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 8,
-      color: AppColors.card,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$selectedCount seleccionados',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Imprimir',
-                onPressed: onPrint,
-                icon: const Icon(Icons.print_outlined),
-              ),
-              IconButton(
-                tooltip: 'Compartir',
-                onPressed: onShare,
-                icon: const Icon(AccessShare.shareIcon),
-              ),
-              IconButton(
-                tooltip: 'Cancelar selección',
-                onPressed: onClear,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SellerTicketCard extends StatelessWidget {
-  const _SellerTicketCard({
-    required this.ticket,
-    required this.event,
-    required this.selected,
-    required this.selectionMode,
-    required this.showUnassignedStatus,
-    required this.canReserve,
-    required this.canCollect,
-    required this.canClearReservation,
-    required this.canSetBuyer,
-    required this.canShare,
-    required this.onReserve,
-    required this.onCollect,
-    required this.onClearReservation,
-    required this.onShare,
-    required this.onPrint,
-    required this.onSetBuyer,
-    this.onToggleSelect,
-    this.onLongPress,
-    this.clearReservationTooltip = 'Liberar reserva',
-    this.assignedSellerLabel,
-  });
-
-  final Ticket ticket;
-  final Event event;
-  final bool selected;
-  final bool selectionMode;
-  final bool showUnassignedStatus;
-  final bool canReserve;
-  final bool canCollect;
-  final bool canClearReservation;
-  final bool canSetBuyer;
-  final bool canShare;
-  final VoidCallback? onToggleSelect;
-  final VoidCallback? onLongPress;
-  final VoidCallback onReserve;
-  final VoidCallback onCollect;
-  final VoidCallback onClearReservation;
-  final VoidCallback onShare;
-  final VoidCallback onPrint;
-  final VoidCallback onSetBuyer;
-  final String clearReservationTooltip;
-  final String? assignedSellerLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final buyer = ticket.buyerName.trim();
-    final sellerLabel = assignedSellerLabel?.trim() ?? '';
-    final showStatus =
-        ticket.status != TicketStatus.unassigned || showUnassignedStatus;
-
-    return Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: selectionMode ? onToggleSelect : null,
-        onLongPress: onLongPress,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected && selectionMode
-                  ? AppColors.accent
-                  : AppColors.border,
-              width: selected && selectionMode ? 1.5 : 1,
-            ),
-            color: selected && selectionMode
-                ? AppColors.accentBg.withValues(alpha: 0.35)
-                : null,
-          ),
-          padding: EdgeInsets.fromLTRB(selectionMode ? 6 : 14, 12, 8, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (selectionMode)
-                    Checkbox(
-                      value: selected,
-                      onChanged: (_) => onToggleSelect?.call(),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Ticket #${ticket.number}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                            if (showStatus) ...[
-                              const SizedBox(width: 8),
-                              StatusBadge(
-                                label: ticket.status.label,
-                                tone: ticketStatusTone(ticket.status),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12,
-                          ),
-                        ),
-                        if (sellerLabel.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'Vendedor: $sellerLabel',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                        if (buyer.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'Para: $buyer',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (canShare) ...[
-                    IconButton(
-                      tooltip: 'Compartir',
-                      onPressed: onShare,
-                      icon: const Icon(AccessShare.shareIcon, size: 20),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    IconButton(
-                      tooltip: 'Imprimir',
-                      onPressed: onPrint,
-                      icon: const Icon(Icons.print_outlined, size: 20),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ],
-              ),
-              if (canReserve || canCollect || canClearReservation) ...[
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Row(
-                    children: [
-                      if (canReserve)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: onReserve,
-                            child: const Text('Reservar'),
-                          ),
-                        ),
-                      if (canReserve && canCollect) const SizedBox(width: 8),
-                      if (canCollect)
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: onCollect,
-                            child: const Text('Cobrar'),
-                          ),
-                        ),
-                      if (canClearReservation) ...[
-                        if (canCollect) const SizedBox(width: 8),
-                        IconButton(
-                          tooltip: clearReservationTooltip,
-                          onPressed: onClearReservation,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-              if (canSetBuyer) ...[
-                SizedBox(
-                  height: (canReserve || canCollect || canClearReservation)
-                      ? 8
-                      : 10,
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: OutlinedButton.icon(
-                    onPressed: onSetBuyer,
-                    icon: const Icon(Icons.person_outline, size: 18),
-                    label: Text(
-                      buyer.isEmpty ? 'Destinatario' : 'Editar destinatario',
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
