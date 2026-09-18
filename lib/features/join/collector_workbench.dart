@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
@@ -11,6 +10,7 @@ import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/event_details_card.dart';
+import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -88,15 +88,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       appBar: AppBar(
         title: Text(widget.actorLabel),
         actions: [
-          if (widget.showLogout)
-            IconButton(
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-            ),
+          if (widget.showLogout) const LogoutIconButton(),
         ],
       ),
       body: ListView(
@@ -197,15 +189,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
           }),
         ),
         actions: [
-          if (widget.showLogout)
-            IconButton(
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-            ),
+          if (widget.showLogout) const LogoutIconButton(),
         ],
       ),
       body: ListView(

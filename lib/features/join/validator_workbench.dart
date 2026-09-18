@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/event_details_card.dart';
+import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/qr_scan_screen.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
@@ -360,15 +360,7 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
       appBar: AppBar(
         title: Text(widget.actorLabel),
         actions: [
-          if (widget.showLogout)
-            IconButton(
-              tooltip: 'Cerrar sesión',
-              onPressed: () async {
-                await ref.read(sessionProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              },
-              icon: const Icon(Icons.logout),
-            ),
+          if (widget.showLogout) const LogoutIconButton(),
         ],
       ),
     );

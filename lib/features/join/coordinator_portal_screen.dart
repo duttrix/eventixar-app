@@ -7,6 +7,7 @@ import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
 import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
+import '../../shared/widgets/logout_icon_button.dart';
 
 /// Coordinator portal: manage all sellers for an event (no organizer account).
 class CoordinatorPortalScreen extends ConsumerWidget {
@@ -63,15 +64,7 @@ class CoordinatorPortalScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(coordinator.name),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await ref.read(sessionProvider.notifier).logout();
-              if (context.mounted) context.go('/login');
-            },
-            child: const Text('Salir'),
-          ),
-        ],
+        actions: const [LogoutIconButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _createSeller(

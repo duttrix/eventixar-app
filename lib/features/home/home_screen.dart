@@ -10,6 +10,7 @@ import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_whatsapp.dart';
+import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
@@ -77,16 +78,9 @@ class HomeScreen extends ConsumerWidget {
           const Text('Mis eventos'),
         ],
       ),
-      actions: [
-        const HelpWhatsAppIconButton(),
-        IconButton(
-          tooltip: 'Cerrar sesión',
-          onPressed: () async {
-            await ref.read(sessionProvider.notifier).logout();
-            if (context.mounted) context.go('/login');
-          },
-          icon: const Icon(Icons.logout),
-        ),
+      actions: const [
+        HelpWhatsAppIconButton(),
+        LogoutIconButton(),
       ],
     );
   }
