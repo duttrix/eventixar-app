@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import '../../shared/widgets/add_collaborator_fab.dart';
 import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/logout_icon_button.dart';
@@ -66,7 +67,7 @@ class CoordinatorPortalScreen extends ConsumerWidget {
         title: Text(coordinator.name),
         actions: const [LogoutIconButton()],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AddCollaboratorFab(
         onPressed: () => _createSeller(
           context,
           ref,
@@ -75,8 +76,6 @@ class CoordinatorPortalScreen extends ConsumerWidget {
           eventName: eventName,
           token: token,
         ),
-        icon: const Icon(Icons.person_add_alt_1_outlined),
-        label: const Text('Agregar vendedor'),
       ),
       body: sellersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

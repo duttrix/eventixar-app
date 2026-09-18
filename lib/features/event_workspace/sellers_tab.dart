@@ -7,6 +7,7 @@ import '../../data/models/collaborator.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/access_share.dart';
+import '../../shared/widgets/add_collaborator_fab.dart';
 import '../../shared/widgets/bottom_system_inset.dart';
 import '../../shared/widgets/collaborator_form_dialog.dart';
 import '../../shared/widgets/help_callout.dart';
@@ -28,13 +29,7 @@ class SellersTab extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       floatingActionButton: readOnly
           ? null
-          : BottomSystemInset(
-              child: FloatingActionButton.extended(
-                onPressed: () => _createSeller(context, ref),
-                icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: const Text('Agregar'),
-              ),
-            ),
+          : AddCollaboratorFab(onPressed: () => _createSeller(context, ref)),
       body: sellersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('No se pudo cargar: $e')),
