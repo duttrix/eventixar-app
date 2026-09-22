@@ -49,9 +49,8 @@ class CollectorsTab extends ConsumerWidget {
               const HelpCallout(
                 message:
                     'Los recaudadores rinden lo cobrado por los vendedores '
-                    '(ticket completo o solo ganancia) y pueden devolver '
-                    'tickets al pool. Abrí cada uno para compartir acceso, '
-                    'editar datos o ver lo rendido.',
+                    '(ticket completo o solo ganancia). Abrí cada uno para '
+                    'compartir acceso, editar datos o ver lo rendido.',
               ),
               const SizedBox(height: 20),
               Text(

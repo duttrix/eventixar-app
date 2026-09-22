@@ -103,9 +103,8 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             child: Text(
               widget.actorRole == 'organizer'
                   ? 'Estás rindiendo como organizador. Elegí un vendedor.'
-                  : 'Elegí un vendedor para rendir tickets (en poder, '
-                        'reservados o cobrados) o devolverlos al pool '
-                        '(para que un coordinador los reasigne).',
+                  : 'Elegí un vendedor para rendir lo cobrado '
+                        '(ticket completo o solo ganancia).',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ),
@@ -265,158 +264,89 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
           ),
           const SizedBox(height: 12),
           if (!event.isReadOnly)
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: selectedToSettle.isEmpty
-                        ? null
-                        : () async {
-                            final mode = await showDialog<TicketSettleMode>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text('¿Qué rinde el vendedor?'),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Text(
-                                      'Vas a rendir ${selectedToSettle.length} ticket'
-                                      '${selectedToSettle.length == 1 ? '' : 's'} '
-                                      '(quedan como vendidos).',
-                                    ),
-                                    const SizedBox(height: 16),
-                                    FilledButton(
-                                      onPressed: () => Navigator.pop(
-                                        dialogContext,
-                                        TicketSettleMode.full,
-                                      ),
-                                      child: Text(
-                                        'Ticket completo · '
-                                        '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    OutlinedButton(
-                                      onPressed: () => Navigator.pop(
-                                        dialogContext,
-                                        TicketSettleMode.profit,
-                                      ),
-                                      child: Text(
-                                        'Solo ganancia · '
-                                        '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(dialogContext),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                ],
+            FilledButton.icon(
+              onPressed: selectedToSettle.isEmpty
+                  ? null
+                  : () async {
+                      final mode = await showDialog<TicketSettleMode>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('¿Qué rinde el vendedor?'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Vas a rendir ${selectedToSettle.length} ticket'
+                                '${selectedToSettle.length == 1 ? '' : 's'} '
+                                '(quedan como vendidos).',
                               ),
-                            );
-                            if (mode == null || !context.mounted) return;
-                            try {
-                              await settleTicketsAction(
-                                ref,
-                                eventId: event.id,
-                                ticketIds: selectedToSettle.map((t) => t.id),
-                                collectorId: widget.actorId,
-                                settleMode: mode,
-                                actorRole: widget.actorRole,
-                              );
-                              if (!context.mounted) return;
-                              setState(() {
-                                _selectedIds.removeWhere(
-                                  (id) =>
-                                      selectedToSettle.any((t) => t.id == id),
-                                );
-                              });
-                              final unit = event.amountForSettleMode(mode);
-                              AppSnackBar.success(
-                                context,
-                                'Rendiste ${selectedToSettle.length} tickets '
-                                '(${mode.label.toLowerCase()} · '
-                                '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
-                              );
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              AppSnackBar.error(context, '$e', cause: e);
-                            }
-                          },
-                    icon: const Icon(Icons.fact_check_outlined),
-                    label: Text(
-                      selectedToSettle.isEmpty
-                          ? 'Rendir'
-                          : 'Rendir (${selectedToSettle.length})',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: selectedTickets.isEmpty
-                        ? null
-                        : () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text('Marcar como devuelto'),
-                                content: Text(
-                                  'Vas a devolver ${selectedTickets.length} ticket'
-                                  '${selectedTickets.length == 1 ? '' : 's'} al pool. '
-                                  'Quedan libres para que un coordinador los reasigne.',
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(
+                                  dialogContext,
+                                  TicketSettleMode.full,
                                 ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(dialogContext, false),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(dialogContext, true),
-                                    child: const Text('Devolver'),
-                                  ),
-                                ],
+                                child: Text(
+                                  'Ticket completo · '
+                                  '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
+                                ),
                               ),
-                            );
-                            if (confirmed != true || !context.mounted) return;
-                            try {
-                              await markTicketsReturnedAction(
-                                ref,
-                                eventId: event.id,
-                                ticketIds: selectedTickets.map((t) => t.id),
-                                actorId: widget.actorId,
-                                actorRole: widget.actorRole,
-                              );
-                              if (!context.mounted) return;
-                              setState(_selectedIds.clear);
-                              AppSnackBar.success(
-                                context,
-                                '${selectedTickets.length} ticket'
-                                '${selectedTickets.length == 1 ? '' : 's'} '
-                                'vuelve${selectedTickets.length == 1 ? '' : 'n'} '
-                                'al pool (devuelto).',
-                              );
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              AppSnackBar.error(context, '$e', cause: e);
-                            }
-                          },
-                    icon: const Icon(Icons.undo),
-                    label: Text(
-                      selectedTickets.isEmpty
-                          ? 'Devolver'
-                          : 'Devolver (${selectedTickets.length})',
-                    ),
-                  ),
-                ),
-              ],
+                              const SizedBox(height: 8),
+                              OutlinedButton(
+                                onPressed: () => Navigator.pop(
+                                  dialogContext,
+                                  TicketSettleMode.profit,
+                                ),
+                                child: Text(
+                                  'Solo ganancia · '
+                                  '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
+                                ),
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('Cancelar'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (mode == null || !context.mounted) return;
+                      try {
+                        await settleTicketsAction(
+                          ref,
+                          eventId: event.id,
+                          ticketIds: selectedToSettle.map((t) => t.id),
+                          collectorId: widget.actorId,
+                          settleMode: mode,
+                          actorRole: widget.actorRole,
+                        );
+                        if (!context.mounted) return;
+                        setState(() {
+                          _selectedIds.removeWhere(
+                            (id) => selectedToSettle.any((t) => t.id == id),
+                          );
+                        });
+                        final unit = event.amountForSettleMode(mode);
+                        AppSnackBar.success(
+                          context,
+                          'Rendiste ${selectedToSettle.length} tickets '
+                          '(${mode.label.toLowerCase()} · '
+                          '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        AppSnackBar.error(context, '$e', cause: e);
+                      }
+                    },
+              icon: const Icon(Icons.fact_check_outlined),
+              label: Text(
+                selectedToSettle.isEmpty
+                    ? 'Rendir'
+                    : 'Rendir (${selectedToSettle.length})',
+              ),
             ),
           if (!event.isReadOnly) const SizedBox(height: 8),
           Row(
