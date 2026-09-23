@@ -46,6 +46,10 @@ class AppColors {
   static const Color settleText = Color(0xFF3949AB);
   static const Color settleBg = Color(0xFFE8EAF6);
 
+  /// Profit-only settle (violet — apart from withSeller amber and full settle).
+  static const Color profitText = Color(0xFF6D28D9);
+  static const Color profitBg = Color(0xFFEDE9FE);
+
   /// Delivered / validado tickets (rose — clearly apart from cobrado green).
   static const Color deliveredText = Color(0xFF9D174D);
   static const Color deliveredBg = Color(0xFFFCE7F3);

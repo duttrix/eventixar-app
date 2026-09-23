@@ -11,7 +11,7 @@ import '../../shared/widgets/collaborator_profile_card.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-enum _CollectorTicketFilter { validated, full, profit }
+enum _CollectorTicketFilter { validated, settled }
 
 /// Organizer view of one collector: access actions + tickets they settled.
 class CollectorDetailScreen extends ConsumerStatefulWidget {
@@ -48,10 +48,8 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
       switch (filter) {
         case _CollectorTicketFilter.validated:
           if (ticket.status == TicketStatus.delivered) return true;
-        case _CollectorTicketFilter.full:
-          if (_isFullSettle(ticket)) return true;
-        case _CollectorTicketFilter.profit:
-          if (_isProfitSettle(ticket)) return true;
+        case _CollectorTicketFilter.settled:
+          if (_isFullSettle(ticket) || _isProfitSettle(ticket)) return true;
       }
     }
     return false;
@@ -196,37 +194,19 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                         }
                       }),
                     ),
-                  if (fullCount > 0)
+                  if (fullCount + profitCount > 0)
                     _CollectorFilterChip(
                       label: 'Rendido',
-                      count: fullCount,
-                      selected: _filters.contains(_CollectorTicketFilter.full),
+                      count: fullCount + profitCount,
+                      selected:
+                          _filters.contains(_CollectorTicketFilter.settled),
                       style: collectorFilterStyle(
                         validated: false,
                         fullSettle: true,
                         profitSettle: false,
                       ),
                       onTap: () => setState(() {
-                        final f = _CollectorTicketFilter.full;
-                        if (_filters.contains(f)) {
-                          _filters.remove(f);
-                        } else {
-                          _filters.add(f);
-                        }
-                      }),
-                    ),
-                  if (profitCount > 0)
-                    _CollectorFilterChip(
-                      label: 'Solo ganancia',
-                      count: profitCount,
-                      selected: _filters.contains(_CollectorTicketFilter.profit),
-                      style: collectorFilterStyle(
-                        validated: false,
-                        fullSettle: false,
-                        profitSettle: true,
-                      ),
-                      onTap: () => setState(() {
-                        final f = _CollectorTicketFilter.profit;
+                        final f = _CollectorTicketFilter.settled;
                         if (_filters.contains(f)) {
                           _filters.remove(f);
                         } else {
@@ -329,7 +309,7 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                             ),
                           ),
                           StatusBadge(
-                            label: ticket.status.label,
+                            label: ticket.statusDisplayLabel,
                             tone: ticketTone(ticket),
                           ),
                         ],

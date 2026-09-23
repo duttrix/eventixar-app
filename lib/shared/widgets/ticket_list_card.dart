@@ -27,6 +27,7 @@ class TicketListCard extends StatelessWidget {
     this.clearReservationLabel = 'Liberar reserva',
     this.onPrint,
     this.onShare,
+    this.selectable = true,
   });
 
   final Ticket ticket;
@@ -46,6 +47,7 @@ class TicketListCard extends StatelessWidget {
   final String clearReservationLabel;
   final VoidCallback? onPrint;
   final VoidCallback? onShare;
+  final bool selectable;
 
   bool get _canCollect =>
       onCollect != null && !readOnly && ticket.status.isSellable;
@@ -105,21 +107,26 @@ class TicketListCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: selectionMode ? onToggleSelect : null,
+        onTap: selectionMode && selectable ? onToggleSelect : null,
         onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
           ),
-          padding: EdgeInsets.fromLTRB(selectionMode ? 6 : 14, 12, 8, 12),
+          padding: EdgeInsets.fromLTRB(
+            selectionMode && selectable ? 6 : 14,
+            12,
+            8,
+            12,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (selectionMode)
+                  if (selectionMode && selectable)
                     Checkbox(
                       value: selected,
                       onChanged: (_) => onToggleSelect(),

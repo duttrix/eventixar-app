@@ -217,7 +217,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-/// Read-only chips for collector tickets: Validados / Rendido / Solo ganancia.
+/// Read-only chips for collector tickets: Validados / Rendido.
 class CollectorTicketSummary extends StatelessWidget {
   const CollectorTicketSummary({super.key, required this.tickets});
 
@@ -242,10 +242,11 @@ class CollectorTicketSummary extends StatelessWidget {
     final validatedCount = tickets
         .where((t) => t.status == TicketStatus.delivered)
         .length;
-    final fullCount = tickets.where(_isFullSettle).length;
-    final profitCount = tickets.where(_isProfitSettle).length;
+    final settledCount = tickets
+        .where((t) => _isFullSettle(t) || _isProfitSettle(t))
+        .length;
 
-    if (validatedCount == 0 && fullCount == 0 && profitCount == 0) {
+    if (validatedCount == 0 && settledCount == 0) {
       return Text(
         'Tickets: ${tickets.length}',
         style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
@@ -266,24 +267,14 @@ class CollectorTicketSummary extends StatelessWidget {
               profitSettle: false,
             ),
           ),
-        if (fullCount > 0)
+        if (settledCount > 0)
           _SummaryChip(
             label: 'Rendido',
-            count: fullCount,
+            count: settledCount,
             style: collectorFilterStyle(
               validated: false,
               fullSettle: true,
               profitSettle: false,
-            ),
-          ),
-        if (profitCount > 0)
-          _SummaryChip(
-            label: 'Solo ganancia',
-            count: profitCount,
-            style: collectorFilterStyle(
-              validated: false,
-              fullSettle: false,
-              profitSettle: true,
             ),
           ),
       ],

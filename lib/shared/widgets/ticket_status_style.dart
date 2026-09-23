@@ -36,13 +36,14 @@ TicketStatusStyle ticketStatusStyle(TicketStatus status) {
   return TicketStatusStyle.fromTone(tone);
 }
 
-/// Visual style for a ticket, including settle-mode nuance.
+/// Visual style for a ticket.
 ///
-/// `settled` + `Solo ganancia` → warn; `settled` full → settle indigo.
+/// Profit settle stays `settled`, but uses a violet tone so it does not
+/// look like “en poder del vendedor” (amber) or full settle (indigo).
 TicketStatusStyle ticketStyle(Ticket ticket) {
   if (ticket.status == TicketStatus.settled &&
       ticket.settleMode == TicketSettleMode.profit) {
-    return TicketStatusStyle.fromTone(BadgeTone.warn);
+    return TicketStatusStyle.fromTone(BadgeTone.profit);
   }
   return ticketStatusStyle(ticket.status);
 }
@@ -53,7 +54,7 @@ TicketStatusStyle collectorFilterStyle({
   required bool fullSettle,
   required bool profitSettle,
 }) {
-  if (profitSettle) return TicketStatusStyle.fromTone(BadgeTone.warn);
+  if (profitSettle) return TicketStatusStyle.fromTone(BadgeTone.profit);
   if (fullSettle) return ticketStatusStyle(TicketStatus.settled);
   if (validated) return ticketStatusStyle(TicketStatus.delivered);
   return TicketStatusStyle.fromTone(BadgeTone.neutral);

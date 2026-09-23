@@ -238,10 +238,11 @@ class Ticket {
   double resolvedSettledAmount(double fallbackFullPrice) =>
       settledAmount ?? fallbackFullPrice;
 
-  /// Badge / list label; for settled tickets distinguishes full vs profit only.
+  /// Badge / list label; profit settle stays inside “Rendido”.
   String get statusDisplayLabel {
     if (status != TicketStatus.settled) return status.label;
-    return settleMode?.label ?? 'Rendido';
+    if (settleMode == TicketSettleMode.profit) return 'Rendido (ganancia)';
+    return 'Rendido';
   }
 
   /// Payload encoded in the ticket QR for validators (not a buyer deeplink).

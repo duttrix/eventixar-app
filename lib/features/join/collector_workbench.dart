@@ -12,7 +12,8 @@ import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/section_card.dart';
-import '../../shared/widgets/status_badge.dart';
+import '../../shared/widgets/ticket_list_card.dart';
+import '../../shared/widgets/ticket_selection_bar.dart';
 
 /// Shared collect / settle UI for collector portal and organizer workspace.
 class CollectorWorkbench extends ConsumerStatefulWidget {
@@ -42,11 +43,36 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
   final Set<TicketStatus> _statusFilters = {};
+  bool _selectionMode = false;
 
   static bool _isSettleable(TicketStatus status) =>
       status == TicketStatus.collected ||
       status == TicketStatus.withSeller ||
       status == TicketStatus.reserved;
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _enterSelection([Ticket? first]) {
+    setState(() {
+      _selectionMode = true;
+      if (first != null) _selectedIds.add(first.id);
+    });
+  }
+
+  void _toggleSelected(Ticket ticket) {
+    setState(() {
+      if (_selectedIds.contains(ticket.id)) {
+        _selectedIds.remove(ticket.id);
+      } else {
+        _selectedIds.add(ticket.id);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,9 +113,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.actorLabel),
-        actions: [
-          if (widget.showLogout) const LogoutIconButton(),
-        ],
+        actions: [if (widget.showLogout) const LogoutIconButton()],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -130,6 +154,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                   _selectedSeller = seller;
                   _selectedIds.clear();
                   _statusFilters.clear();
+                  _selectionMode = false;
                 }),
               ),
         ],
@@ -149,15 +174,22 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
         : sorted
               .where((t) => _statusFilters.contains(t.status))
               .toList(growable: false);
-    final selectableVisible = visible
+    final selectableTickets = event.isReadOnly
+        ? const <Ticket>[]
+        : visible
+              .where((t) => _isSettleable(t.status))
+              .toList(growable: false);
+    final selectedTickets = selectableTickets
+        .where((t) => _selectedIds.contains(t.id))
+        .toList(growable: false);
+    final selectedToSettle = selectedTickets
         .where((t) => _isSettleable(t.status))
         .toList(growable: false);
-    final selectedTickets = sorted
-        .where((t) => _isSettleable(t.status) && _selectedIds.contains(t.id))
-        .toList(growable: false);
-    final selectedToSettle = selectedTickets;
-    final fullAmount = event.ticketPrice;
-    final profitAmount = event.ticketProfit;
+    final hasSelection = selectedTickets.isNotEmpty;
+    final showBar = !event.isReadOnly && _selectionMode && hasSelection;
+    final allVisibleSelected =
+        selectableTickets.isNotEmpty &&
+        selectableTickets.every((t) => _selectedIds.contains(t.id));
 
     bool isFullSettle(Ticket ticket) =>
         ticket.settleMode == TicketSettleMode.full ||
@@ -185,241 +217,256 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             _selectedSeller = null;
             _selectedIds.clear();
             _statusFilters.clear();
+            _selectionMode = false;
           }),
         ),
-        actions: [
-          if (widget.showLogout) const LogoutIconButton(),
-        ],
+        actions: [if (widget.showLogout) const LogoutIconButton()],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
         children: [
-          if (widget.showLogout) ...[
-            EventDetailsCard(event: event),
-            const SizedBox(height: 12),
-          ],
-          TicketStatusCard.summary(
-            tickets: sorted,
-            selected: _statusFilters,
-            emptyLabel: 'Este vendedor no tiene tickets.',
-            onStatusTap: sorted.isEmpty
-                ? null
-                : (status) => setState(() {
-                    if (_statusFilters.contains(status)) {
-                      _statusFilters.remove(status);
-                      if (_isSettleable(status)) {
-                        _selectedIds.removeWhere(
-                          (id) => tickets.any(
-                            (t) => t.id == id && t.status == status,
-                          ),
-                        );
-                      }
-                    } else {
-                      _statusFilters.add(status);
-                      if (_isSettleable(status)) {
-                        _selectedIds.addAll(
-                          tickets
-                              .where((t) => t.status == status)
-                              .map((t) => t.id),
-                        );
-                      }
-                    }
-                  }),
-          ),
-          const SizedBox(height: 12),
-          SectionCard(
-            title: 'Rendición',
-            child: fullTickets.isEmpty && profitTickets.isEmpty
-                ? const Text(
-                    'Todavía no rindió tickets.',
-                    style: TextStyle(color: AppColors.textMuted),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (fullTickets.isNotEmpty) ...[
-                        _SettleSummaryRow(
-                          label: 'Rendido completo (${fullTickets.length})',
-                          amount: formatMoney(fullSettledTotal),
-                          style: collectorFilterStyle(
-                            validated: false,
-                            fullSettle: true,
-                            profitSettle: false,
-                          ),
-                        ),
-                        if (profitTickets.isNotEmpty) const SizedBox(height: 8),
-                      ],
-                      if (profitTickets.isNotEmpty)
-                        _SettleSummaryRow(
-                          label: 'Solo ganancia (${profitTickets.length})',
-                          amount: formatMoney(profitSettledTotal),
-                          style: collectorFilterStyle(
-                            validated: false,
-                            fullSettle: false,
-                            profitSettle: true,
-                          ),
-                        ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 12),
-          if (!event.isReadOnly)
-            FilledButton.icon(
-              onPressed: selectedToSettle.isEmpty
-                  ? null
-                  : () async {
-                      final mode = await showDialog<TicketSettleMode>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: const Text('¿Qué rinde el vendedor?'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Vas a rendir ${selectedToSettle.length} ticket'
-                                '${selectedToSettle.length == 1 ? '' : 's'} '
-                                '(quedan como vendidos).',
-                              ),
-                              const SizedBox(height: 16),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(
-                                  dialogContext,
-                                  TicketSettleMode.full,
-                                ),
-                                child: Text(
-                                  'Ticket completo · '
-                                  '\$${(selectedToSettle.length * fullAmount).toStringAsFixed(0)}',
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
+              children: [
+                if (widget.showLogout) ...[
+                  EventDetailsCard(event: event),
+                  const SizedBox(height: 12),
+                ],
+                TicketStatusCard.summary(
+                  tickets: sorted,
+                  selected: _statusFilters,
+                  emptyLabel: 'Este vendedor no tiene tickets.',
+                  onStatusTap: sorted.isEmpty
+                      ? null
+                      : (status) => setState(() {
+                          if (_statusFilters.contains(status)) {
+                            _statusFilters.remove(status);
+                          } else {
+                            _statusFilters.add(status);
+                          }
+                        }),
+                ),
+                const SizedBox(height: 12),
+                SectionCard(
+                  title: 'Rendición',
+                  child: fullTickets.isEmpty && profitTickets.isEmpty
+                      ? const Text(
+                          'Todavía no rindió tickets.',
+                          style: TextStyle(color: AppColors.textMuted),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (fullTickets.isNotEmpty) ...[
+                              _SettleSummaryRow(
+                                label:
+                                    'Rendido completo (${fullTickets.length})',
+                                amount: formatMoney(fullSettledTotal),
+                                style: collectorFilterStyle(
+                                  validated: false,
+                                  fullSettle: true,
+                                  profitSettle: false,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              OutlinedButton(
-                                onPressed: () => Navigator.pop(
-                                  dialogContext,
-                                  TicketSettleMode.profit,
-                                ),
-                                child: Text(
-                                  'Solo ganancia · '
-                                  '\$${(selectedToSettle.length * profitAmount).toStringAsFixed(0)}',
-                                ),
-                              ),
+                              if (profitTickets.isNotEmpty)
+                                const SizedBox(height: 8),
                             ],
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              child: const Text('Cancelar'),
-                            ),
+                            if (profitTickets.isNotEmpty)
+                              _SettleSummaryRow(
+                                label:
+                                    'Solo ganancia (${profitTickets.length})',
+                                amount: formatMoney(profitSettledTotal),
+                                style: collectorFilterStyle(
+                                  validated: false,
+                                  fullSettle: false,
+                                  profitSettle: true,
+                                ),
+                              ),
                           ],
                         ),
-                      );
-                      if (mode == null || !context.mounted) return;
-                      try {
-                        await settleTicketsAction(
-                          ref,
-                          eventId: event.id,
-                          ticketIds: selectedToSettle.map((t) => t.id),
-                          collectorId: widget.actorId,
-                          settleMode: mode,
-                          actorRole: widget.actorRole,
-                        );
-                        if (!context.mounted) return;
-                        setState(() {
-                          _selectedIds.removeWhere(
-                            (id) => selectedToSettle.any((t) => t.id == id),
-                          );
-                        });
-                        final unit = event.amountForSettleMode(mode);
-                        AppSnackBar.success(
-                          context,
-                          'Rendiste ${selectedToSettle.length} tickets '
-                          '(${mode.label.toLowerCase()} · '
-                          '\$${(selectedToSettle.length * unit).toStringAsFixed(0)}).',
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        AppSnackBar.error(context, '$e', cause: e);
-                      }
-                    },
-              icon: const Icon(Icons.fact_check_outlined),
-              label: Text(
-                selectedToSettle.isEmpty
-                    ? 'Rendir'
-                    : 'Rendir (${selectedToSettle.length})',
-              ),
-            ),
-          if (!event.isReadOnly) const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _statusFilters.isEmpty
-                      ? 'Tickets (${sorted.length})'
-                      : 'Tickets (${visible.length} de ${sorted.length})',
-                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-              if (_statusFilters.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(() {
-                    _statusFilters.clear();
-                  }),
-                  child: const Text('Ver todos'),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _statusFilters.isEmpty
+                            ? 'Tickets (${sorted.length})'
+                            : 'Tickets (${visible.length} de ${sorted.length})',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    if (selectableTickets.isNotEmpty) ...[
+                      if (_selectionMode) ...[
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              if (allVisibleSelected) {
+                                _selectedIds.clear();
+                              } else {
+                                _selectedIds
+                                  ..clear()
+                                  ..addAll(selectableTickets.map((t) => t.id));
+                              }
+                            });
+                          },
+                          child: Text(allVisibleSelected ? 'Ninguno' : 'Todos'),
+                        ),
+                        TextButton(
+                          onPressed: _exitSelection,
+                          child: const Text('Cancelar'),
+                        ),
+                      ] else
+                        TextButton(
+                          onPressed: () => _enterSelection(),
+                          child: const Text('Seleccionar'),
+                        ),
+                    ],
+                  ],
                 ),
-              if (!event.isReadOnly && selectableVisible.isNotEmpty) ...[
-                TextButton(
-                  onPressed: () => setState(() {
-                    _selectedIds.addAll(selectableVisible.map((t) => t.id));
-                  }),
-                  child: const Text('Todos'),
-                ),
-                TextButton(
-                  onPressed: selectedTickets.isEmpty
-                      ? null
-                      : () => setState(() {
-                          _selectedIds.removeWhere(
-                            (id) => selectableVisible.any((t) => t.id == id),
-                          );
-                        }),
-                  child: const Text('Ninguno'),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (visible.isEmpty)
-            const Text(
-              'Ningún ticket con esos estados.',
-              style: TextStyle(color: AppColors.textMuted),
-            )
-          else
-            for (final ticket in visible)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _CollectorTicketCard(
-                  ticket: ticket,
-                  event: event,
-                  selected: _selectedIds.contains(ticket.id),
-                  selectable: !event.isReadOnly && _isSettleable(ticket.status),
-                  collectorName: ticket.collectorId == null
-                      ? null
-                      : (ticket.collectorId == widget.actorId
-                            ? widget.actorLabel
-                            : null),
-                  onToggle: !event.isReadOnly && _isSettleable(ticket.status)
-                      ? () => setState(() {
-                          if (_selectedIds.contains(ticket.id)) {
-                            _selectedIds.remove(ticket.id);
+                const SizedBox(height: 10),
+                if (sorted.isEmpty)
+                  const Text(
+                    'Este vendedor no tiene tickets.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  )
+                else if (visible.isEmpty)
+                  const Text(
+                    'Ningún ticket con esos estados.',
+                    style: TextStyle(color: AppColors.textMuted),
+                  )
+                else
+                  for (final ticket in visible)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TicketListCard(
+                        ticket: ticket,
+                        event: event,
+                        readOnly: true,
+                        selectionMode: _selectionMode,
+                        selectable: !event.isReadOnly &&
+                            _isSettleable(ticket.status),
+                        selected: _selectedIds.contains(ticket.id),
+                        onToggleSelect: () {
+                          if (!_isSettleable(ticket.status)) return;
+                          if (!_selectionMode) {
+                            _enterSelection(ticket);
                           } else {
-                            _selectedIds.add(ticket.id);
+                            _toggleSelected(ticket);
                           }
-                        })
-                      : null,
-                ),
-              ),
+                        },
+                        onLongPress: event.isReadOnly ||
+                                !_isSettleable(ticket.status)
+                            ? null
+                            : () {
+                                if (!_selectionMode) {
+                                  _enterSelection(ticket);
+                                } else {
+                                  _toggleSelected(ticket);
+                                }
+                              },
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          if (showBar)
+            TicketSelectionBar(
+              selectedCount: selectedTickets.length,
+              primaryLabel: selectedToSettle.isEmpty
+                  ? 'Rendir'
+                  : selectedToSettle.length == selectedTickets.length
+                  ? 'Rendir (${selectedToSettle.length})'
+                  : 'Rendir (${selectedToSettle.length} de ${selectedTickets.length})',
+              onPrimary: selectedToSettle.isEmpty
+                  ? null
+                  : () => _settleSelected(
+                      event: event,
+                      selected: selectedTickets,
+                      eligible: selectedToSettle,
+                    ),
+              onClear: _exitSelection,
+            ),
         ],
       ),
     );
+  }
+
+  Future<void> _settleSelected({
+    required Event event,
+    required List<Ticket> selected,
+    required List<Ticket> eligible,
+  }) async {
+    if (eligible.isEmpty) return;
+    final fullAmount = event.ticketPrice;
+    final profitAmount = event.ticketProfit;
+    final mode = await showDialog<TicketSettleMode>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Qué rinde el vendedor?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              eligible.length == selected.length
+                  ? 'Vas a rendir ${eligible.length} ticket'
+                        '${eligible.length == 1 ? '' : 's'} '
+                        '(quedan como vendidos).'
+                  : 'Vas a rendir ${eligible.length} de ${selected.length}. '
+                        'Se omiten los que ya están rendidos.',
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, TicketSettleMode.full),
+              child: Text(
+                'Ticket completo · '
+                '\$${(eligible.length * fullAmount).toStringAsFixed(0)}',
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, TicketSettleMode.profit),
+              child: Text(
+                'Solo ganancia · '
+                '\$${(eligible.length * profitAmount).toStringAsFixed(0)}',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (mode == null || !mounted) return;
+    try {
+      await settleTicketsAction(
+        ref,
+        eventId: event.id,
+        ticketIds: eligible.map((t) => t.id),
+        collectorId: widget.actorId,
+        settleMode: mode,
+        actorRole: widget.actorRole,
+      );
+      if (!mounted) return;
+      _exitSelection();
+      final unit = event.amountForSettleMode(mode);
+      AppSnackBar.success(
+        context,
+        'Rendiste ${eligible.length} tickets '
+        '(${mode.label.toLowerCase()} · '
+        '\$${(eligible.length * unit).toStringAsFixed(0)}).',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.error(context, '$e', cause: e);
+    }
   }
 }
 
@@ -517,106 +564,6 @@ class _CollectorSellerCard extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(top: 2),
                 child: Icon(Icons.chevron_right, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CollectorTicketCard extends StatelessWidget {
-  const _CollectorTicketCard({
-    required this.ticket,
-    required this.event,
-    required this.selected,
-    required this.selectable,
-    required this.onToggle,
-    this.collectorName,
-  });
-
-  final Ticket ticket;
-  final Event event;
-  final bool selected;
-  final bool selectable;
-  final VoidCallback? onToggle;
-  final String? collectorName;
-
-  @override
-  Widget build(BuildContext context) {
-    final buyer = ticket.buyerName.trim();
-
-    return Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onToggle,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.border,
-              width: selected ? 1.5 : 1,
-            ),
-            color: selected ? AppColors.accentBg.withValues(alpha: 0.35) : null,
-          ),
-          padding: const EdgeInsets.fromLTRB(6, 12, 12, 12),
-          child: Row(
-            children: [
-              Checkbox(
-                value: selected,
-                onChanged: selectable ? (_) => onToggle?.call() : null,
-                visualDensity: VisualDensity.compact,
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ticket #${ticket.number}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (buyer.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Para: $buyer',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    if (collectorName != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Recaudó: $collectorName',
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    StatusBadge(
-                      label: ticket.statusDisplayLabel,
-                      tone: ticketTone(ticket),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),

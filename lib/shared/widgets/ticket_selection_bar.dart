@@ -7,14 +7,14 @@ class TicketSelectionBar extends StatelessWidget {
   const TicketSelectionBar({
     super.key,
     required this.selectedCount,
-    required this.onMore,
     required this.onClear,
+    this.onMore,
     this.primaryLabel,
     this.onPrimary,
   });
 
   final int selectedCount;
-  final VoidCallback onMore;
+  final VoidCallback? onMore;
   final VoidCallback onClear;
   final String? primaryLabel;
   final VoidCallback? onPrimary;
@@ -40,17 +40,15 @@ class TicketSelectionBar extends StatelessWidget {
                 ),
               ),
               if (primaryLabel != null) ...[
-                FilledButton(
-                  onPressed: onPrimary,
-                  child: Text(primaryLabel!),
-                ),
+                FilledButton(onPressed: onPrimary, child: Text(primaryLabel!)),
                 const SizedBox(width: 4),
               ],
-              IconButton(
-                tooltip: 'Más acciones',
-                onPressed: onMore,
-                icon: const Icon(Icons.more_horiz),
-              ),
+              if (onMore != null)
+                IconButton(
+                  tooltip: 'Más acciones',
+                  onPressed: onMore,
+                  icon: const Icon(Icons.more_horiz),
+                ),
               IconButton(
                 tooltip: 'Cancelar selección',
                 onPressed: onClear,

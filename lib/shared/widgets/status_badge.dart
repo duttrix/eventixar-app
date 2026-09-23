@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 
 /// Semantic tone for pills/badges. Colors live in [TicketStatusStyle.fromTone]
 /// and are mirrored here for [StatusBadge] (avoids circular imports).
-enum BadgeTone { success, danger, warn, info, settle, delivered, accent, neutral }
+enum BadgeTone { success, danger, warn, info, settle, profit, delivered, accent, neutral }
 
 /// Shared (bg, fg) for a [BadgeTone]. Keep in sync with [StatusBadge].
 (Color, Color) badgeToneColors(BadgeTone tone) => switch (tone) {
@@ -13,6 +13,7 @@ enum BadgeTone { success, danger, warn, info, settle, delivered, accent, neutral
       BadgeTone.warn => (AppColors.warnBg, AppColors.warnText),
       BadgeTone.info => (AppColors.infoBg, AppColors.infoText),
       BadgeTone.settle => (AppColors.settleBg, AppColors.settleText),
+      BadgeTone.profit => (AppColors.profitBg, AppColors.profitText),
       BadgeTone.delivered => (AppColors.deliveredBg, AppColors.deliveredText),
       BadgeTone.accent => (AppColors.accentBg, AppColors.accentText),
       BadgeTone.neutral => (AppColors.border, AppColors.textSecondary),
