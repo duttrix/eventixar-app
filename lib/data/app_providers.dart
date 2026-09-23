@@ -670,7 +670,6 @@ class SessionController extends StateNotifier<SessionState> {
 
     final seller = await _ref.read(userRepositoryProvider).isSellerAccount(
           uid: user.uid,
-          email: user.email,
         );
     if (seller) {
       await _ref.read(googleAuthServiceProvider).signOut();

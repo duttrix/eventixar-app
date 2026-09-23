@@ -54,11 +54,12 @@ class UserRepository {
   }
 
   /// Coupon sellers live in `sellers/{uid}` and must not use the organizer app.
-  Future<bool> isSellerAccount({required String uid, String? email}) async {
-    final mail = email?.trim().toLowerCase() ?? '';
-    if (mail.endsWith('@duttrix.app')) return true;
-    final snap = await _firestore.collection('sellers').doc(uid).get();
-    return snap.exists;
+  /// Organizers live in `users/{uid}` (created on first successful login).
+  Future<bool> isSellerAccount({required String uid}) async {
+    final userSnap = await _users.doc(uid).get();
+    if (userSnap.exists) return false;
+    final sellerSnap = await _firestore.collection('sellers').doc(uid).get();
+    return sellerSnap.exists;
   }
 
   /// Deletes every Firestore doc owned by this organizer (events, tickets,
