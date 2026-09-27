@@ -68,14 +68,58 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
     final tickets =
         ref.read(eventTicketsProvider(widget.eventId)).valueOrNull ??
             const <Ticket>[];
-    final ticket = tickets.where((t) => t.number == number).firstOrNull;
-    if (ticket == null) {
+    final matches = tickets.where((t) => t.number == number).toList();
+    if (matches.isEmpty) {
       setState(() {
         _message = 'Ticket #$number no encontrado en este evento.';
         _lastTicket = null;
       });
       return;
     }
+    if (matches.length == 1) {
+      _showTicket(matches.first);
+      return;
+    }
+    _chooseTicket(matches);
+  }
+
+  Future<void> _chooseTicket(List<Ticket> matches) async {
+    final event = ref.read(eventProvider(widget.eventId)).valueOrNull;
+    if (!mounted) return;
+    final chosen = await showModalBottomSheet<Ticket>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Text(
+                  'Hay ${matches.length} tickets #${matches.first.number}',
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+              ),
+              for (final ticket in matches)
+                ListTile(
+                  title: Text(
+                    event?.saleLabelFor(ticket) ?? 'Ticket #${ticket.number}',
+                  ),
+                  subtitle: Text(ticket.status.label),
+                  onTap: () => Navigator.pop(sheetContext, ticket),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || chosen == null) return;
+    _showTicket(chosen);
+  }
+
+  void _showTicket(Ticket ticket) {
+    _numberController.text = '${ticket.number}';
     setState(() {
       _lastTicket = ticket;
       _message = null;
@@ -114,7 +158,8 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
       }
       ticket = tickets.where((t) => t.id == parsed.ticketId).firstOrNull;
     } else if (parsed.number != null) {
-      ticket = tickets.where((t) => t.number == parsed.number).firstOrNull;
+      _lookup(parsed.number);
+      return;
     }
 
     if (ticket == null) {

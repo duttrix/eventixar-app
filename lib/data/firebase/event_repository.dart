@@ -183,18 +183,19 @@ class EventRepository {
       );
       return;
     }
+    var nextNumber = 1;
     for (final product in event.definedProducts) {
       final seeds = <({int number, String? variantId})>[];
       if (product.variants.isEmpty) {
-        for (var n = 1; n <= product.ticketCount; n++) {
-          seeds.add((number: n, variantId: null));
+        for (var i = 0; i < product.ticketCount; i++) {
+          seeds.add((number: nextNumber, variantId: null));
+          nextNumber++;
         }
       } else {
-        var n = 1;
         for (final variant in product.variants) {
           for (var i = 0; i < variant.quota; i++) {
-            seeds.add((number: n, variantId: variant.id));
-            n++;
+            seeds.add((number: nextNumber, variantId: variant.id));
+            nextNumber++;
           }
         }
       }

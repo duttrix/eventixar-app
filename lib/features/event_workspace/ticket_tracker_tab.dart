@@ -126,7 +126,19 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
                   );
                 }
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (matches.length > 1) ...[
+                      Text(
+                        'Hay ${matches.length} tickets con el número '
+                        '$_searchedNumber, uno por producto. Elegí el que corresponde.',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     for (var i = 0; i < matches.length; i++) ...[
                       if (i > 0) const SizedBox(height: 16),
                       _TicketTrackerResult(
