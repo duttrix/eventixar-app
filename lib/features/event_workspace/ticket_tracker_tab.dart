@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
 import '../../data/models/collaborator.dart';
+import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
@@ -45,6 +46,7 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
 
   @override
   Widget build(BuildContext context) {
+    final eventAsync = ref.watch(eventProvider(widget.eventId));
     final ticketsAsync = ref.watch(eventTicketsProvider(widget.eventId));
     final collabsAsync = ref.watch(eventCollaboratorsProvider(widget.eventId));
 
@@ -89,26 +91,32 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
         ),
         const SizedBox(height: 16),
         if (_searchedNumber != null) ...[
-          if (ticketsAsync.isLoading || collabsAsync.isLoading)
+          if (eventAsync.isLoading ||
+              ticketsAsync.isLoading ||
+              collabsAsync.isLoading)
             const Center(child: CircularProgressIndicator())
-          else if (ticketsAsync.hasError || collabsAsync.hasError)
+          else if (eventAsync.hasError ||
+              ticketsAsync.hasError ||
+              collabsAsync.hasError)
             Text(
               'No se pudieron cargar datos: '
-              '${ticketsAsync.error ?? collabsAsync.error}',
+              '${eventAsync.error ?? ticketsAsync.error ?? collabsAsync.error}',
             )
           else ...[
             Builder(
               builder: (context) {
+                final event = eventAsync.requireValue;
                 final tickets = ticketsAsync.requireValue;
                 final collaborators = collabsAsync.requireValue;
-                Ticket? ticket;
-                for (final t in tickets) {
-                  if (t.number == _searchedNumber) {
-                    ticket = t;
-                    break;
-                  }
-                }
-                if (ticket == null) {
+                final matches = tickets
+                    .where((ticket) => ticket.number == _searchedNumber)
+                    .toList()
+                  ..sort(
+                    (a, b) => event
+                        .saleLabelFor(a)
+                        .compareTo(event.saleLabelFor(b)),
+                  );
+                if (matches.isEmpty) {
                   return SectionCard(
                     title: 'Resultado',
                     child: Text(
@@ -117,9 +125,17 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
                     ),
                   );
                 }
-                return _TicketTrackerResult(
-                  ticket: ticket,
-                  collaborators: collaborators,
+                return Column(
+                  children: [
+                    for (var i = 0; i < matches.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 16),
+                      _TicketTrackerResult(
+                        event: event,
+                        ticket: matches[i],
+                        collaborators: collaborators,
+                      ),
+                    ],
+                  ],
                 );
               },
             ),
@@ -132,10 +148,12 @@ class _TicketTrackerTabState extends ConsumerState<TicketTrackerTab> {
 
 class _TicketTrackerResult extends StatelessWidget {
   const _TicketTrackerResult({
+    required this.event,
     required this.ticket,
     required this.collaborators,
   });
 
+  final Event event;
   final Ticket ticket;
   final List<Collaborator> collaborators;
 
@@ -201,6 +219,10 @@ class _TicketTrackerResult extends StatelessWidget {
                 tone: ticketStatusTone(ticket.status),
               ),
               const SizedBox(height: 12),
+              _InfoRow(
+                label: 'Producto',
+                value: event.saleLabelFor(ticket),
+              ),
               _InfoRow(
                 label: 'Vendedor actual',
                 value: _fieldPersonLabel(

@@ -269,6 +269,14 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  event.saleLabelFor(ticket),
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 if (sellerById(ticket.sellerId) != null) ...[
                                   const SizedBox(height: 3),
                                   Text(
