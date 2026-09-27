@@ -269,7 +269,7 @@ class TicketSharePreview extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${event.product} · \$${event.ticketPrice.toStringAsFixed(0)}',
+            event.saleLabelFor(ticket),
             style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
           const SizedBox(height: 18),

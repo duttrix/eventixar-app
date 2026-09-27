@@ -142,6 +142,7 @@ class TicketRange {
     required this.to,
     required this.date,
     this.assignedByCollaboratorId,
+    this.productId,
   });
 
   final String id;
@@ -151,6 +152,9 @@ class TicketRange {
 
   /// Coordinator who assigned this range (null = organizer).
   final String? assignedByCollaboratorId;
+
+  /// Product the range belongs to. Null on events with one legacy product.
+  final String? productId;
 
   int get count => to - from + 1;
 
@@ -165,6 +169,7 @@ class TicketRange {
           ? (data['date'] as Timestamp).toDate()
           : (data['date'] as DateTime? ?? DateTime.now()),
       assignedByCollaboratorId: data['assignedByCollaboratorId'] as String?,
+      productId: (data['productId'] as String?)?.trim(),
     );
   }
 
@@ -176,6 +181,7 @@ class TicketRange {
       'date': Timestamp.fromDate(date),
       if (assignedByCollaboratorId != null)
         'assignedByCollaboratorId': assignedByCollaboratorId,
+      if (productId != null && productId!.isNotEmpty) 'productId': productId,
     };
   }
 }

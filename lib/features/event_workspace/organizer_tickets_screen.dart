@@ -10,6 +10,8 @@ import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
+import '../../shared/widgets/ensure_ticket_variant.dart';
+import '../../shared/widgets/product_pager.dart';
 import '../../shared/widgets/ticket_list_card.dart';
 import '../../shared/widgets/ticket_selection_bar.dart';
 import '../../shared/widgets/ticket_share.dart';
@@ -29,6 +31,7 @@ class _OrganizerTicketsScreenState
     extends ConsumerState<OrganizerTicketsScreen> {
   final Set<TicketStatus> _statusFilters = {};
   final Set<String> _selectedIds = {};
+  int _productIndex = 0;
   bool _selectionMode = false;
   String? _sellerFilterId;
 
@@ -93,7 +96,9 @@ class _OrganizerTicketsScreenState
       uid: organizerName,
     };
 
-    final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
+    final productTickets = event.ticketsOfSlice(tickets, _productIndex);
+    final sorted = [...productTickets]
+      ..sort((a, b) => a.number.compareTo(b.number));
     var visible = _statusFilters.isEmpty
         ? sorted
         : sorted
@@ -154,10 +159,22 @@ class _OrganizerTicketsScreenState
         )
         .toList();
 
+    void changeSlice(int index) {
+      setState(() {
+        _productIndex = index;
+        _selectedIds.clear();
+        _selectionMode = false;
+      });
+    }
+
     return Column(
       children: [
         Expanded(
-          child: ListView(
+          child: ProductSliceSwipe(
+            index: _productIndex,
+            count: event.ticketSlices.length,
+            onChanged: changeSlice,
+            child: ListView(
             padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
             children: [
               TicketStatusCard.summary(
@@ -249,6 +266,12 @@ class _OrganizerTicketsScreenState
                   ],
                 ],
               ),
+              ProductPager(
+                slices: event.ticketSlices,
+                productCount: event.products.length,
+                index: _productIndex,
+                onChanged: changeSlice,
+              ),
               const SizedBox(height: 10),
               if (sorted.isEmpty)
                 const Text(
@@ -325,6 +348,7 @@ class _OrganizerTicketsScreenState
                     ),
                   ),
             ],
+            ),
           ),
         ),
         if (showBar)
@@ -448,6 +472,9 @@ class _OrganizerTicketsScreenState
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
+        final shareable = selected
+            .where((ticket) => ticket.status.canShare)
+            .toList(growable: false);
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
         return SafeArea(
           child: ConstrainedBox(
@@ -543,16 +570,25 @@ class _OrganizerTicketsScreenState
                   },
                 ),
                 ListTile(
+                  enabled: shareable.isNotEmpty,
                   leading: const Icon(AccessShare.shareIcon),
-                  title: Text('Compartir (${selected.length})'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _shareTickets(
-                      event: event,
-                      tickets: selected,
-                      sellerNames: sellerNames,
-                    );
-                  },
+                  title: Text(
+                    shareable.isEmpty
+                        ? 'Compartir'
+                        : shareable.length == selected.length
+                        ? 'Compartir (${shareable.length})'
+                        : 'Compartir (${shareable.length} de ${selected.length})',
+                  ),
+                  onTap: shareable.isEmpty
+                      ? null
+                      : () {
+                          Navigator.pop(sheetContext);
+                          _shareTickets(
+                            event: event,
+                            tickets: shareable,
+                            sellerNames: sellerNames,
+                          );
+                        },
                 ),
                 const SizedBox(height: 8),
               ],
@@ -577,6 +613,15 @@ class _OrganizerTicketsScreenState
       actionVerb: 'cobrar',
     );
     if (!ok || !mounted) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: eligible,
+      actorId: organizerId,
+      actorRole: 'organizer',
+    );
+    if (!ready || !mounted) return;
 
     try {
       await _runBusy(
@@ -639,6 +684,15 @@ class _OrganizerTicketsScreenState
       confirmLabel: 'Reservar',
     );
     if (buyerName == null || !mounted) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: eligible,
+      actorId: organizerId,
+      actorRole: 'organizer',
+    );
+    if (!ready || !mounted) return;
 
     try {
       await _runBusy(
@@ -855,6 +909,15 @@ class _OrganizerTicketsScreenState
     required String organizerId,
   }) async {
     if (event.isReadOnly || !ticket.status.isSellable) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: [ticket],
+      actorId: organizerId,
+      actorRole: 'organizer',
+    );
+    if (!ready || !mounted) return;
 
     String? buyerName = ticket.buyerName.trim().isEmpty
         ? null
@@ -910,6 +973,15 @@ class _OrganizerTicketsScreenState
     if (!ticket.status.isSellable || ticket.status == TicketStatus.reserved) {
       return;
     }
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: [ticket],
+      actorId: organizerId,
+      actorRole: 'organizer',
+    );
+    if (!ready || !mounted) return;
 
     final buyerName = await _askBuyerName(
       title: 'Reservar ticket #${ticket.number}',
@@ -1199,11 +1271,14 @@ class _OrganizerTicketsScreenState
     required List<Ticket> tickets,
     required Map<String, String> sellerNames,
   }) async {
-    if (event.isReadOnly || tickets.isEmpty) return;
+    final shareable = tickets
+        .where((ticket) => ticket.status.canShare)
+        .toList(growable: false);
+    if (event.isReadOnly || shareable.isEmpty) return;
     try {
       await TicketShare.shareImages(
         context,
-        tickets: tickets,
+        tickets: shareable,
         event: event,
         style: event.ticketDesign,
         sellerNames: sellerNames,
@@ -1228,51 +1303,89 @@ class _OrganizerTicketsScreenState
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        final controller = TextEditingController(text: initialName);
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
+      builder: (sheetContext) => _BuyerNameSheet(
+        title: title,
+        requiredName: requiredName,
+        initialName: initialName,
+        confirmLabel: confirmLabel,
+      ),
+    );
+  }
+}
+
+class _BuyerNameSheet extends StatefulWidget {
+  const _BuyerNameSheet({
+    required this.title,
+    required this.requiredName,
+    required this.initialName,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final bool requiredName;
+  final String initialName;
+  final String confirmLabel;
+
+  @override
+  State<_BuyerNameSheet> createState() => _BuyerNameSheetState();
+}
+
+class _BuyerNameSheetState extends State<_BuyerNameSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final name = _controller.text.trim();
+    if (widget.requiredName && name.isEmpty) return;
+    Navigator.pop(context, name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: widget.requiredName
+                  ? 'Destinatario'
+                  : 'Destinatario (opcional)',
+              hintText: 'Ej. Juan Pérez',
+              isDense: true,
+            ),
+            onSubmitted: (_) => _confirm(),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  labelText: requiredName
-                      ? 'Destinatario'
-                      : 'Destinatario (opcional)',
-                  hintText: 'Ej. Juan Pérez',
-                  isDense: true,
-                ),
-                onSubmitted: (value) {
-                  final name = value.trim();
-                  if (requiredName && name.isEmpty) return;
-                  Navigator.pop(sheetContext, name);
-                },
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  final name = controller.text.trim();
-                  if (requiredName && name.isEmpty) return;
-                  Navigator.pop(sheetContext, name);
-                },
-                child: Text(confirmLabel),
-              ),
-            ],
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _confirm,
+            child: Text(widget.confirmLabel),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

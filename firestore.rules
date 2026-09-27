@@ -59,6 +59,7 @@ service cloud.firestore {
           'collectorId',
           'settleMode',
           'settledAmount',
+          'variantId',
           'history',
         ])
         && portalStatusTransition();
@@ -76,7 +77,7 @@ service cloud.firestore {
       return resource.data.status in ['withSeller', 'reserved']
         && request.resource.data.status == 'unassigned'
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'history'])
+          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'variantId', 'history'])
         && request.resource.data.sellerId == null
         && request.resource.data.buyerName == ''
         && request.resource.data.assignedByCollaboratorId == null;
@@ -86,7 +87,7 @@ service cloud.firestore {
       return resource.data.status in ['withSeller', 'reserved', 'collected']
         && request.resource.data.status == 'returned'
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'collectorId', 'history'])
+          .hasOnly(['status', 'sellerId', 'buyerName', 'assignedByCollaboratorId', 'collectorId', 'variantId', 'history'])
         && request.resource.data.sellerId == null
         && request.resource.data.buyerName == ''
         && request.resource.data.assignedByCollaboratorId == null
@@ -200,6 +201,10 @@ service cloud.firestore {
         && request.resource.data.freeEvents == defaultFreeEvents();
       allow update: if isAdmin() || (isOwner(userId) && userUpdateAllowed());
       allow delete: if isOwner(userId);
+
+      match /products/{productId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     match /admins/{uid} {

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
 import '../../data/models/event.dart';
+import '../../data/models/event_product.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/section_card.dart';
@@ -27,6 +28,8 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
 
   final _nameController = TextEditingController();
   final _countController = TextEditingController();
+  final _productCounts = <String, TextEditingController>{};
+  final _variantCounts = <String, TextEditingController>{};
   DateTime? _eventDate;
   final _copyRoles = <CollaboratorRole>{};
 
@@ -34,6 +37,12 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
   void dispose() {
     _nameController.dispose();
     _countController.dispose();
+    for (final controller in _productCounts.values) {
+      controller.dispose();
+    }
+    for (final controller in _variantCounts.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -41,7 +50,17 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
     if (_eventInited) return;
     _eventInited = true;
     _nameController.text = event.name;
-    _countController.text = '${event.ticketCount}';
+    _countController.text = '${event.products.first.ticketCount}';
+    for (final product in event.products) {
+      _productCounts[product.id] = TextEditingController(
+        text: '${product.ticketCount}',
+      );
+      for (final variant in product.variants) {
+        _variantCounts['${product.id}::${variant.id}'] = TextEditingController(
+          text: variant.quota > 0 ? '${variant.quota}' : '',
+        );
+      }
+    }
     _eventDate = DateTime.now().add(const Duration(days: 14));
   }
 
@@ -61,13 +80,50 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
     if (uid == null || _eventDate == null || _submitting) return;
 
     final name = _nameController.text.trim();
-    final ticketCount = int.tryParse(_countController.text) ?? 0;
-    if (name.isEmpty || ticketCount <= 0) {
-      AppSnackBar.warning(
-        context,
-        'Completá el nombre, la fecha y la cantidad de tickets.',
-      );
+    if (name.isEmpty || _eventDate == null) {
+      AppSnackBar.warning(context, 'Completá el nombre y la fecha.');
       return;
+    }
+
+    final clones = <EventProduct>[];
+    var ticketTotal = 0;
+    for (final product in source.products) {
+      if (product.variants.isEmpty) {
+        final raw = source.products.length == 1
+            ? _countController.text
+            : _productCounts[product.id]?.text ?? '';
+        final count = int.tryParse(raw.trim()) ?? 0;
+        if (count <= 0) {
+          AppSnackBar.warning(
+            context,
+            'Ingresá la cantidad de tickets de ${product.name}.',
+          );
+          return;
+        }
+        clones.add(product.cloneForNewEvent().copyWith(ticketCount: count));
+        ticketTotal += count;
+        continue;
+      }
+      final clone = product.cloneForNewEvent();
+      final variants = <EventProductVariant>[];
+      var sum = 0;
+      for (var i = 0; i < product.variants.length; i++) {
+        final sourceVariant = product.variants[i];
+        final raw =
+            _variantCounts['${product.id}::${sourceVariant.id}']?.text ?? '';
+        final qty = int.tryParse(raw.trim()) ?? 0;
+        if (qty <= 0) {
+          AppSnackBar.warning(
+            context,
+            'Ingresá la cantidad de ${sourceVariant.name} en ${product.name}.',
+          );
+          return;
+        }
+        variants.add(clone.variants[i].copyWith(quota: qty));
+        sum += qty;
+      }
+      clones.add(clone.copyWith(variants: variants, ticketCount: sum));
+      ticketTotal += sum;
     }
 
     setState(() => _submitting = true);
@@ -77,10 +133,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
         ownerId: uid,
         ownerEmail: session.userEmail ?? '',
         name: name,
-        product: source.product,
-        ticketPrice: source.ticketPrice,
-        ticketProfit: source.ticketProfit,
-        ticketCount: ticketCount,
+        products: clones,
         eventDate: _eventDate!,
         pickupFrom: source.pickupFrom,
         pickupTo: source.pickupTo,
@@ -109,8 +162,8 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
       AppSnackBar.success(
         context,
         created.usedFreeSlot
-            ? 'Evento duplicado. Se generaron $ticketCount tickets.'
-            : 'Evento duplicado. Se generaron $ticketCount tickets. Completá el pago para activarlo.',
+            ? 'Evento duplicado. Se generaron $ticketTotal tickets.'
+            : 'Evento duplicado. Se generaron $ticketTotal tickets. Completá el pago para activarlo.',
       );
       if (created.usedFreeSlot) {
         context.go('/event/${created.event.id}');
@@ -223,13 +276,33 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _countController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Cantidad de tickets',
-                  ),
-                ),
+                for (var i = 0; i < event.products.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  if (event.products[i].variants.isEmpty)
+                    TextField(
+                      controller: event.products.length == 1
+                          ? _countController
+                          : _productCounts[event.products[i].id],
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText:
+                            'Cantidad de tickets de ${event.products[i].name}',
+                      ),
+                    )
+                  else
+                    for (final variant in event.products[i].variants) ...[
+                      TextField(
+                        controller: _variantCounts[
+                            '${event.products[i].id}::${variant.id}'],
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText:
+                              '${event.products[i].name} · ${variant.name}',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                ],
               ],
             ),
           ),

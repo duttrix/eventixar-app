@@ -153,7 +153,8 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
       floatingActionButton: finished
           ? null
           : FloatingActionButton.extended(
-              onPressed: () => _showAddAssignmentDialog(context, allTickets),
+              onPressed: () =>
+                  _showAddAssignmentDialog(context, event, allTickets),
               icon: const Icon(Icons.add),
               label: const Text('Asignar tickets'),
             ),
@@ -308,6 +309,14 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    event.saleLabelFor(ticket),
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
                                   if (ticket.buyerName.isNotEmpty) ...[
                                     const SizedBox(height: 3),
                                     Text(
@@ -337,98 +346,172 @@ class _SellerDetailScreenState extends ConsumerState<SellerDetailScreen> {
     );
   }
 
-  void _showAddAssignmentDialog(BuildContext context, List<Ticket> allTickets) {
-    final pool = allTickets.where((t) => t.status.isAssignablePool).toList()
-      ..sort((a, b) => a.number.compareTo(b.number));
-    final countController = TextEditingController(
-      text: pool.isEmpty ? '' : '1',
-    );
+  void _showAddAssignmentDialog(
+    BuildContext context,
+    Event event,
+    List<Ticket> allTickets,
+  ) {
+    final slices = event.ticketSlices;
+    final productCount = event.products.length;
+    var sliceIndex = 0;
+    final countController = TextEditingController(text: '1');
+
+    List<Ticket> poolFor(int index) {
+      final pool = allTickets
+          .where((ticket) => ticket.status.isAssignablePool)
+          .toList(growable: false);
+      final ofSlice = [...event.ticketsOfSlice(pool, index)]
+        ..sort((a, b) => a.number.compareTo(b.number));
+      return ofSlice;
+    }
 
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Asignar tickets'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              pool.isEmpty
-                  ? 'No hay tickets disponibles en el pool.'
-                  : '${pool.length} disponibles en el pool (sin vendedor / '
-                        'devueltos). Se asignan los próximos en orden.',
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: countController,
-              enabled: pool.isNotEmpty,
-              autofocus: pool.isNotEmpty,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Cantidad',
-                hintText: pool.isEmpty ? null : 'Máx. ${pool.length}',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final pool = poolFor(sliceIndex);
+          final slice = slices[sliceIndex.clamp(0, slices.length - 1)];
+          final sliceTitle = slice.title(productCount);
+          return AlertDialog(
+            title: const Text('Asignar tickets'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (slices.length > 1) ...[
+                      const Text(
+                        'Elegí qué se asigna. El número es lo que queda en el pool.',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var i = 0; i < slices.length; i++)
+                            ChoiceChip(
+                              label: Text(
+                                '${slices[i].title(productCount)} · ${poolFor(i).length}',
+                              ),
+                              selected: i == sliceIndex,
+                              onSelected: (_) =>
+                                  setDialogState(() => sliceIndex = i),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Text(
+                      pool.isEmpty
+                          ? 'No hay tickets de $sliceTitle en el pool.'
+                          : '${pool.length} de $sliceTitle en el pool. '
+                                'Se asignan los próximos en orden.',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: countController,
+                      enabled: pool.isNotEmpty,
+                      autofocus: pool.isNotEmpty && slices.length < 2,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Cantidad',
+                        hintText: pool.isEmpty ? null : 'Máx. ${pool.length}',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: pool.isEmpty
-                ? null
-                : () async {
-                    final count = int.tryParse(countController.text.trim());
-                    if (count == null || count < 1) {
-                      AppSnackBar.warning(
-                        context,
-                        'Ingresá una cantidad válida.',
-                      );
-                      return;
-                    }
-                    if (count > pool.length) {
-                      AppSnackBar.warning(
-                        context,
-                        'Solo hay ${pool.length} tickets disponibles.',
-                      );
-                      return;
-                    }
-                    try {
-                      final selected = pool.take(count).toList(growable: false);
-                      final ranges = _contiguousRanges(
-                        selected.map((t) => t.number),
-                      );
-                      for (final range in ranges) {
-                        await assignTicketRangeAction(
-                          ref,
-                          eventId: eventId,
-                          sellerId: sellerId,
-                          from: range.$1,
-                          to: range.$2,
-                          assignedByCollaboratorId: widget.actingCoordinatorId,
-                        );
-                      }
-                      if (!dialogContext.mounted) return;
-                      Navigator.pop(dialogContext);
-                      if (!context.mounted) return;
-                      final from = selected.first.number;
-                      final to = selected.last.number;
-                      AppSnackBar.success(
-                        context,
-                        count == 1
-                            ? 'Asignado 1 ticket (#$from).'
-                            : 'Asignados $count tickets (#$from–#$to).',
-                      );
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      AppSnackBar.error(context, '$e', cause: e);
-                    }
-                  },
-            child: const Text('Asignar'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: pool.isEmpty
+                    ? null
+                    : () async {
+                        final count = int.tryParse(countController.text.trim());
+                        if (count == null || count < 1) {
+                          AppSnackBar.warning(
+                            context,
+                            'Ingresá una cantidad válida.',
+                          );
+                          return;
+                        }
+                        if (count > pool.length) {
+                          AppSnackBar.warning(
+                            context,
+                            'Solo hay ${pool.length} tickets de $sliceTitle.',
+                          );
+                          return;
+                        }
+                        try {
+                          final selected = pool.take(count).toList(
+                            growable: false,
+                          );
+                          final ranges = _contiguousRanges(
+                            selected.map((t) => t.number),
+                          );
+                          final productId = selected.first.productId;
+                          for (final range in ranges) {
+                            await assignTicketRangeAction(
+                              ref,
+                              eventId: eventId,
+                              sellerId: sellerId,
+                              from: range.$1,
+                              to: range.$2,
+                              assignedByCollaboratorId:
+                                  widget.actingCoordinatorId,
+                              productId: productId,
+                            );
+                          }
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          if (!context.mounted) return;
+                          final from = selected.first.number;
+                          final to = selected.last.number;
+                          final rangeLabel = count == 1 ? '#$from' : '#$from–#$to';
+                          AppSnackBar.success(
+                            context,
+                            count == 1
+                                ? 'Asignado 1 de $sliceTitle ($rangeLabel).'
+                                : 'Asignados $count de $sliceTitle ($rangeLabel).',
+                          );
+                        } on ArgumentError catch (e) {
+                          if (!context.mounted) return;
+                          AppSnackBar.error(
+                            context,
+                            e.message?.toString() ?? '$e',
+                            reportToCrashlytics: false,
+                          );
+                        } on StateError catch (e) {
+                          if (!context.mounted) return;
+                          AppSnackBar.error(
+                            context,
+                            e.message,
+                            reportToCrashlytics: false,
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          AppSnackBar.error(context, '$e', cause: e);
+                        }
+                      },
+                child: const Text('Asignar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

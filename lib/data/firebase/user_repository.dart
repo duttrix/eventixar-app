@@ -31,11 +31,17 @@ class UserRepository {
 
     await ref.set(map, SetOptions(merge: true));
 
-    // Re-read so createdAt/lastLoginAt come back as concrete timestamps when available.
-    final saved = await ref.get();
-    final savedData = saved.data();
-    if (savedData == null) return profile;
-    return AppUser.fromFirestore(profile.uid, savedData);
+    // Re-read so createdAt/lastLoginAt come back as concrete timestamps when
+    // available. A failure here must not undo a write that already landed.
+    try {
+      final saved = await ref.get();
+      final savedData = saved.data();
+      if (savedData == null) return profile;
+      return AppUser.fromFirestore(profile.uid, savedData);
+    } on FirebaseException catch (e) {
+      debugPrint('User re-read after upsert failed: $e');
+      return profile;
+    }
   }
 
   Future<AppUser?> getByUid(String uid) async {

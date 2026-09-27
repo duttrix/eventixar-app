@@ -74,6 +74,12 @@ extension TicketStatusX on TicketStatus {
       this == TicketStatus.withSeller ||
       this == TicketStatus.reserved;
 
+  /// Image share is only for tickets that were already collected.
+  bool get canShare =>
+      this == TicketStatus.collected ||
+      this == TicketStatus.settled ||
+      this == TicketStatus.delivered;
+
   static TicketStatus fromFirestore(String? value) {
     return TicketStatus.values.firstWhere(
       (s) => s.name == value,
@@ -94,6 +100,7 @@ enum TicketHistoryAction {
   returnedToPool,
   returned,
   reservationCleared,
+  variantSet,
 }
 
 extension TicketHistoryActionX on TicketHistoryAction {
@@ -110,6 +117,7 @@ extension TicketHistoryActionX on TicketHistoryAction {
     TicketHistoryAction.returnedToPool => 'Devuelto al pool',
     TicketHistoryAction.returned => 'Marcado como devuelto',
     TicketHistoryAction.reservationCleared => 'Reserva liberada',
+    TicketHistoryAction.variantSet => 'Opción elegida',
   };
 
   static TicketHistoryAction fromFirestore(String? value) {
@@ -202,6 +210,8 @@ class Ticket {
     this.collectorId,
     this.assignedByCollaboratorId,
     this.buyerName = '',
+    this.productId,
+    this.variantId,
     this.settleMode,
     this.settledAmount,
     List<TicketHistoryEntry>? history,
@@ -224,6 +234,12 @@ class Ticket {
 
   /// Who the ticket was sold / given to (filled when sharing / collecting).
   String buyerName;
+
+  /// Product this ticket was generated for. Null on events with one legacy product.
+  String? productId;
+
+  /// Flavor or priced option, chosen when the ticket is reserved or collected.
+  String? variantId;
 
   /// Whether the seller remitted full price or only profit (when settled).
   TicketSettleMode? settleMode;
@@ -279,6 +295,8 @@ class Ticket {
       collectorId: data['collectorId'] as String?,
       assignedByCollaboratorId: data['assignedByCollaboratorId'] as String?,
       buyerName: (data['buyerName'] as String?) ?? '',
+      productId: (data['productId'] as String?)?.trim(),
+      variantId: (data['variantId'] as String?)?.trim(),
       settleMode: settleModeRaw == null
           ? null
           : TicketSettleModeX.fromFirestore(settleModeRaw),
@@ -296,6 +314,8 @@ class Ticket {
       'collectorId': collectorId,
       'assignedByCollaboratorId': assignedByCollaboratorId,
       'buyerName': buyerName,
+      if (productId != null && productId!.isNotEmpty) 'productId': productId,
+      if (variantId != null && variantId!.isNotEmpty) 'variantId': variantId,
       if (settleMode != null) 'settleMode': settleMode!.firestoreValue,
       if (settledAmount != null) 'settledAmount': settledAmount,
       'history': history.map((e) => e.toFirestoreMap()).toList(),

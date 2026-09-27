@@ -136,9 +136,9 @@ class GoogleAuthService {
         },
       );
     } on GoogleSignInException catch (e, st) {
-      // Credential Manager often reports config errors (missing SHA-1, wrong
-      // package) as "canceled" with a description like "[16] Account reauth
-      // failed". A real back-button cancel usually has an empty description.
+      // Credential Manager reports a real dismiss as "[16] Cancelled by user."
+      // Config errors (missing SHA-1, wrong package) also arrive as canceled,
+      // with a description like "[16] Account reauth failed".
       final detail = e.description?.trim();
       _debug(
         'GoogleSignInException ${e.code.name} description=$detail',
@@ -146,7 +146,7 @@ class GoogleAuthService {
       );
 
       if (e.code == GoogleSignInExceptionCode.canceled &&
-          (detail == null || detail.isEmpty)) {
+          _isUserCanceled(detail)) {
         await _breadcrumb('google_sign_in.user_canceled');
         return null;
       }
@@ -211,6 +211,11 @@ class GoogleAuthService {
         reason: 'apple_sign_in_unexpected',
       );
     }
+  }
+
+  static bool _isUserCanceled(String? detail) {
+    if (detail == null || detail.isEmpty) return true;
+    return detail.toLowerCase().contains('cancel');
   }
 
   static bool _isAppleCanceled(FirebaseAuthException e) {

@@ -11,9 +11,11 @@ import 'firebase/catalog_repository.dart';
 import 'firebase/collaborator_repository.dart';
 import 'firebase/coupon_repository.dart';
 import 'firebase/event_repository.dart';
+import 'firebase/product_catalog_repository.dart';
 import 'firebase/user_repository.dart';
 import 'models/collaborator.dart';
 import 'models/event.dart';
+import 'models/event_product.dart';
 import 'models/help_config.dart';
 import 'models/payment_config.dart';
 import 'models/ticket.dart';
@@ -47,6 +49,21 @@ final collaboratorRepositoryProvider = Provider<CollaboratorRepository>((ref) {
 
 final catalogRepositoryProvider = Provider<CatalogRepository>((ref) {
   return CatalogRepository();
+});
+
+final productCatalogRepositoryProvider = Provider<ProductCatalogRepository>((
+  ref,
+) {
+  return ProductCatalogRepository();
+});
+
+/// Products this organizer already sold, to copy into a new event.
+final organizerProductCatalogProvider = StreamProvider<List<EventProduct>>((
+  ref,
+) {
+  final uid = ref.watch(sessionProvider).userUid;
+  if (uid == null) return Stream.value(const <EventProduct>[]);
+  return ref.watch(productCatalogRepositoryProvider).watch(uid);
 });
 
 /// “Qué se vende” options from Firestore `config/eventProducts`.
@@ -273,6 +290,7 @@ Future<void> assignTicketRangeAction(
   required int from,
   required int to,
   String? assignedByCollaboratorId,
+  String? productId,
 }) async {
   await ref
       .read(eventRepositoryProvider)
@@ -282,6 +300,7 @@ Future<void> assignTicketRangeAction(
         from: from,
         to: to,
         assignedByCollaboratorId: assignedByCollaboratorId,
+        productId: productId,
       );
 }
 
@@ -322,6 +341,23 @@ Future<void> setTicketsBuyerAction(
         eventId: eventId,
         ticketIds: ids,
         buyerName: buyerName,
+        actorId: actorId,
+        actorRole: actorRole,
+      );
+}
+
+Future<void> setTicketsVariantAction(
+  WidgetRef ref, {
+  required String eventId,
+  required Iterable<String> ticketIds,
+  required String variantId,
+  String? actorId,
+  String actorRole = 'seller',
+}) {
+  return ref.read(eventRepositoryProvider).setTicketsVariant(
+        eventId: eventId,
+        ticketIds: ticketIds,
+        variantId: variantId,
         actorId: actorId,
         actorRole: actorRole,
       );
@@ -652,6 +688,23 @@ class SessionController extends StateNotifier<SessionState> {
         await _applyFirebaseUser(user);
       } on SellerLoginBlocked {
         // Already signed out. Stay on login.
+      } catch (e, st) {
+        // isSellerAccount used to escape this listener (offline or
+        // permission-denied) and Crashlytics recorded it as a fatal error
+        // during startup. Keep the Auth profile so the app can open.
+        debugPrint('Applying Firebase user failed: $e\n$st');
+        if (state.collaboratorToken == null && state.userUid != user.uid) {
+          _adoptAuthProfile(user);
+        }
+        if (!_isTransientFirestoreError(e)) {
+          unawaited(
+            CrashReporting.recordNonFatal(
+              e,
+              st,
+              reason: 'session_apply_failed',
+            ),
+          );
+        }
       }
       return;
     }
@@ -668,29 +721,24 @@ class SessionController extends StateNotifier<SessionState> {
     // unless we just cleared it during organizer Google sign-in.
     if (state.collaboratorToken != null) return;
 
-    final seller = await _ref.read(userRepositoryProvider).isSellerAccount(
-          uid: user.uid,
-        );
+    // The first Firestore call after a cold start can run before the Auth
+    // token is attached, which surfaces as permission-denied.
+    await user.getIdToken();
+    final seller = await _isSellerAccount(user);
     if (seller) {
       await _ref.read(googleAuthServiceProvider).signOut();
       throw const SellerLoginBlocked();
     }
 
-    final profile = AppUser.fromAuth(user);
-    state = SessionState(
-      userEmail: profile.email,
-      userUid: profile.uid,
-      displayName: profile.displayName,
-      photoUrl: profile.photoUrl,
-      currentEventId: state.currentEventId,
-    );
-    unawaited(CrashReporting.setUserId(profile.uid));
+    _adoptAuthProfile(user);
+    unawaited(CrashReporting.setUserId(user.uid));
     unawaited(CrashReporting.setEventId(state.currentEventId));
 
     try {
       await _ref.read(userRepositoryProvider).upsertFromAuthUser(user);
     } catch (e, st) {
       debugPrint('Firestore user upsert failed: $e\n$st');
+      if (_isTransientFirestoreError(e)) return;
       unawaited(
         CrashReporting.recordNonFatal(
           e,
@@ -699,6 +747,35 @@ class SessionController extends StateNotifier<SessionState> {
         ),
       );
     }
+  }
+
+  Future<bool> _isSellerAccount(User user) async {
+    final repo = _ref.read(userRepositoryProvider);
+    try {
+      return await repo.isSellerAccount(uid: user.uid);
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') rethrow;
+      await user.getIdToken(true);
+      return repo.isSellerAccount(uid: user.uid);
+    }
+  }
+
+  void _adoptAuthProfile(User user) {
+    final profile = AppUser.fromAuth(user);
+    state = SessionState(
+      userEmail: profile.email,
+      userUid: profile.uid,
+      displayName: profile.displayName,
+      photoUrl: profile.photoUrl,
+      currentEventId: state.currentEventId,
+    );
+  }
+
+  bool _isTransientFirestoreError(Object error) {
+    if (error is! FirebaseException) return false;
+    return error.code == 'unavailable' ||
+        error.code == 'network-request-failed' ||
+        error.code == 'deadline-exceeded';
   }
 
   Future<User?> signInWithGoogle() async {

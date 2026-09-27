@@ -10,8 +10,10 @@ import '../../shared/ticket_pdf.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
+import '../../shared/widgets/ensure_ticket_variant.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/logout_icon_button.dart';
+import '../../shared/widgets/product_pager.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/ticket_list_card.dart';
 import '../../shared/widgets/ticket_selection_bar.dart';
@@ -54,6 +56,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
   final Set<TicketStatus> _statusFilters = {};
+  int _productIndex = 0;
   bool _selectionMode = false;
 
   bool get _isOrganizerSelf =>
@@ -220,6 +223,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                     _selectedIds.clear();
                     _selectionMode = false;
                     _statusFilters.clear();
+                    _productIndex = 0;
                   }),
                 ),
               ),
@@ -281,7 +285,9 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       return sellerNames[id] ?? 'Vendedor';
     }
 
-    final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
+    final sorted = [
+      ...event.ticketsOfSlice(tickets, _productIndex),
+    ]..sort((a, b) => a.number.compareTo(b.number));
     final visible = _statusFilters.isEmpty
         ? sorted
         : sorted
@@ -308,11 +314,23 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         selectableTickets.isNotEmpty &&
         selectableTickets.every((t) => _selectedIds.contains(t.id));
 
+    void changeSlice(int index) {
+      setState(() {
+        _productIndex = index;
+        _selectedIds.clear();
+        _selectionMode = false;
+      });
+    }
+
     return _wrap(
       Column(
         children: [
           Expanded(
-            child: ListView(
+            child: ProductSliceSwipe(
+              index: _productIndex,
+              count: event.ticketSlices.length,
+              onChanged: changeSlice,
+              child: ListView(
               padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
               children: [
                 if (!widget.embedded) ...[
@@ -378,6 +396,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                         ),
                     ],
                   ],
+                ),
+                ProductPager(
+                  slices: event.ticketSlices,
+                  productCount: event.products.length,
+                  index: _productIndex,
+                  onChanged: changeSlice,
                 ),
                 const SizedBox(height: 10),
                 if (sorted.isEmpty)
@@ -455,6 +479,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                       ),
                     ),
               ],
+              ),
             ),
           ),
           if (showBar)
@@ -494,6 +519,7 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   _selectedIds.clear();
                   _selectionMode = false;
                   _statusFilters.clear();
+                  _productIndex = 0;
                 }),
               )
             : null,
@@ -536,6 +562,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       initialName: ticket.buyerName,
     );
     if (buyerName == null || !context.mounted) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: [ticket],
+      actorId: widget.actorId,
+      actorRole: widget.actorRole,
+    );
+    if (!ready || !context.mounted) return;
 
     try {
       await reserveTicketsAction(
@@ -609,6 +644,9 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
+        final shareable = selected
+            .where((ticket) => ticket.status.canShare)
+            .toList(growable: false);
         final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
         return SafeArea(
           child: ConstrainedBox(
@@ -659,17 +697,26 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   },
                 ),
                 ListTile(
+                  enabled: shareable.isNotEmpty,
                   leading: const Icon(AccessShare.shareIcon),
-                  title: Text('Compartir (${selected.length})'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _shareTickets(
-                      context,
-                      event,
-                      selected,
-                      sellerNames: sellerNames,
-                    );
-                  },
+                  title: Text(
+                    shareable.isEmpty
+                        ? 'Compartir'
+                        : shareable.length == selected.length
+                        ? 'Compartir (${shareable.length})'
+                        : 'Compartir (${shareable.length} de ${selected.length})',
+                  ),
+                  onTap: shareable.isEmpty
+                      ? null
+                      : () {
+                          Navigator.pop(sheetContext);
+                          _shareTickets(
+                            context,
+                            event,
+                            shareable,
+                            sellerNames: sellerNames,
+                          );
+                        },
                 ),
                 const SizedBox(height: 8),
               ],
@@ -702,6 +749,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       confirmLabel: 'Reservar',
     );
     if (buyerName == null || !mounted) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: eligible,
+      actorId: widget.actorId,
+      actorRole: widget.actorRole,
+    );
+    if (!ready || !mounted) return;
 
     try {
       await runBusyDialog(
@@ -750,6 +806,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       actionVerb: 'cobrar',
     );
     if (!ok || !mounted) return;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: eligible,
+      actorId: widget.actorId,
+      actorRole: widget.actorRole,
+    );
+    if (!ready || !mounted) return;
 
     try {
       await runBusyDialog(
@@ -800,6 +865,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       if (result == null || !context.mounted) return;
       buyerName = result.trim().isEmpty ? null : result.trim();
     }
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: [ticket],
+      actorId: widget.actorId,
+      actorRole: widget.actorRole,
+    );
+    if (!ready || !context.mounted) return;
 
     try {
       await _claimPoolTicketsIfNeeded(sellerId: sellerId, tickets: [ticket]);
@@ -957,11 +1031,15 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     List<Ticket> tickets, {
     Map<String, String> sellerNames = const {},
   }) async {
+    final shareable = tickets
+        .where((ticket) => ticket.status.canShare)
+        .toList(growable: false);
+    if (shareable.isEmpty) return;
     final toShare = await _prepareTicketsForExport(
       context,
       event: event,
-      tickets: tickets,
-      singleTitle: 'Compartir ticket #${tickets.first.number}',
+      tickets: shareable,
+      singleTitle: 'Compartir ticket #${shareable.first.number}',
       confirmLabel: 'Compartir',
     );
     if (toShare == null || !context.mounted) return;
@@ -1070,45 +1148,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     return showModalBottomSheet<_ShareDetails>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        final buyerController = TextEditingController(text: initialBuyerName);
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              TextField(
-                controller: buyerController,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Destinatario (opcional)',
-                  hintText: 'Ej. Juan Pérez',
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(
-                    sheetContext,
-                    _ShareDetails(buyerName: buyerController.text.trim()),
-                  );
-                },
-                child: Text(confirmLabel),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (sheetContext) => _ShareDetailsSheet(
+        title: title,
+        initialBuyerName: initialBuyerName,
+        confirmLabel: confirmLabel,
+      ),
     );
   }
 
@@ -1122,51 +1166,12 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
     return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        final controller = TextEditingController(text: initialName);
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  labelText: requiredName
-                      ? 'Destinatario'
-                      : 'Destinatario (opcional)',
-                  hintText: 'Ej. Juan Pérez',
-                  isDense: true,
-                ),
-                onSubmitted: (value) {
-                  final name = value.trim();
-                  if (requiredName && name.isEmpty) return;
-                  Navigator.pop(sheetContext, name);
-                },
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  final name = controller.text.trim();
-                  if (requiredName && name.isEmpty) return;
-                  Navigator.pop(sheetContext, name);
-                },
-                child: Text(confirmLabel),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (sheetContext) => _BuyerNameSheet(
+        title: title,
+        requiredName: requiredName,
+        initialName: initialName,
+        confirmLabel: confirmLabel,
+      ),
     );
   }
 }
@@ -1175,4 +1180,152 @@ class _ShareDetails {
   const _ShareDetails({required this.buyerName});
 
   final String buyerName;
+}
+
+class _ShareDetailsSheet extends StatefulWidget {
+  const _ShareDetailsSheet({
+    required this.title,
+    required this.initialBuyerName,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final String initialBuyerName;
+  final String confirmLabel;
+
+  @override
+  State<_ShareDetailsSheet> createState() => _ShareDetailsSheetState();
+}
+
+class _ShareDetailsSheetState extends State<_ShareDetailsSheet> {
+  late final TextEditingController _buyerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _buyerController = TextEditingController(text: widget.initialBuyerName);
+  }
+
+  @override
+  void dispose() {
+    _buyerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _buyerController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Destinatario (opcional)',
+              hintText: 'Ej. Juan Pérez',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(
+                context,
+                _ShareDetails(buyerName: _buyerController.text.trim()),
+              );
+            },
+            child: Text(widget.confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BuyerNameSheet extends StatefulWidget {
+  const _BuyerNameSheet({
+    required this.title,
+    required this.requiredName,
+    required this.initialName,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final bool requiredName;
+  final String initialName;
+  final String confirmLabel;
+
+  @override
+  State<_BuyerNameSheet> createState() => _BuyerNameSheetState();
+}
+
+class _BuyerNameSheetState extends State<_BuyerNameSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final name = _controller.text.trim();
+    if (widget.requiredName && name.isEmpty) return;
+    Navigator.pop(context, name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: widget.requiredName
+                  ? 'Destinatario'
+                  : 'Destinatario (opcional)',
+              hintText: 'Ej. Juan Pérez',
+              isDense: true,
+            ),
+            onSubmitted: (_) => _confirm(),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _confirm,
+            child: Text(widget.confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
 }

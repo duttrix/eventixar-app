@@ -9,8 +9,10 @@ import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../shared/widgets/access_share.dart';
 import '../../shared/widgets/app_snackbar.dart';
+import '../../shared/widgets/ensure_ticket_variant.dart';
 import '../../shared/widgets/event_details_card.dart';
 import '../../shared/widgets/logout_icon_button.dart';
+import '../../shared/widgets/product_pager.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/ticket_list_card.dart';
 import '../../shared/widgets/ticket_selection_bar.dart';
@@ -43,6 +45,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
   Collaborator? _selectedSeller;
   final Set<String> _selectedIds = {};
   final Set<TicketStatus> _statusFilters = {};
+  int _productIndex = 0;
   bool _selectionMode = false;
 
   static bool _isSettleable(TicketStatus status) =>
@@ -168,7 +171,9 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     required Collaborator seller,
     required List<Ticket> tickets,
   }) {
-    final sorted = [...tickets]..sort((a, b) => a.number.compareTo(b.number));
+    final sorted = [
+      ...event.ticketsOfSlice(tickets, _productIndex),
+    ]..sort((a, b) => a.number.compareTo(b.number));
     final visible = _statusFilters.isEmpty
         ? sorted
         : sorted
@@ -201,12 +206,20 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     final profitTickets = sorted.where(isProfitSettle).toList(growable: false);
     final fullSettledTotal = fullTickets.fold<double>(
       0,
-      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+      (sum, t) => sum + t.resolvedSettledAmount(event.settledFallback(t)),
     );
     final profitSettledTotal = profitTickets.fold<double>(
       0,
-      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+      (sum, t) => sum + t.resolvedSettledAmount(event.settledFallback(t)),
     );
+
+    void changeSlice(int index) {
+      setState(() {
+        _productIndex = index;
+        _selectedIds.clear();
+        _selectionMode = false;
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -217,6 +230,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             _selectedSeller = null;
             _selectedIds.clear();
             _statusFilters.clear();
+            _productIndex = 0;
             _selectionMode = false;
           }),
         ),
@@ -225,7 +239,11 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       body: Column(
         children: [
           Expanded(
-            child: ListView(
+            child: ProductSliceSwipe(
+              index: _productIndex,
+              count: event.ticketSlices.length,
+              onChanged: changeSlice,
+              child: ListView(
               padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
               children: [
                 if (widget.showLogout) ...[
@@ -324,6 +342,12 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                     ],
                   ],
                 ),
+                ProductPager(
+                  slices: event.ticketSlices,
+                  productCount: event.products.length,
+                  index: _productIndex,
+                  onChanged: changeSlice,
+                ),
                 const SizedBox(height: 10),
                 if (sorted.isEmpty)
                   const Text(
@@ -368,6 +392,7 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                       ),
                     ),
               ],
+              ),
             ),
           ),
           if (showBar)
@@ -398,8 +423,17 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
     required List<Ticket> eligible,
   }) async {
     if (eligible.isEmpty) return;
-    final fullAmount = event.ticketPrice;
-    final profitAmount = event.ticketProfit;
+    final ready = await ensureTicketVariants(
+      context: context,
+      ref: ref,
+      event: event,
+      tickets: eligible,
+      actorId: widget.actorId,
+      actorRole: widget.actorRole,
+    );
+    if (!ready || !mounted) return;
+    final fullAmount = event.totalFor(eligible, TicketSettleMode.full);
+    final profitAmount = event.totalFor(eligible, TicketSettleMode.profit);
     final mode = await showDialog<TicketSettleMode>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -418,20 +452,24 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, TicketSettleMode.full),
+              onPressed: fullAmount == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, TicketSettleMode.full),
               child: Text(
-                'Ticket completo · '
-                '\$${(eligible.length * fullAmount).toStringAsFixed(0)}',
+                fullAmount == null
+                    ? 'Ticket completo · falta la opción'
+                    : 'Ticket completo · \$${fullAmount.toStringAsFixed(0)}',
               ),
             ),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, TicketSettleMode.profit),
+              onPressed: profitAmount == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, TicketSettleMode.profit),
               child: Text(
-                'Solo ganancia · '
-                '\$${(eligible.length * profitAmount).toStringAsFixed(0)}',
+                profitAmount == null
+                    ? 'Solo ganancia · falta la opción'
+                    : 'Solo ganancia · \$${profitAmount.toStringAsFixed(0)}',
               ),
             ),
           ],
@@ -456,12 +494,12 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       );
       if (!mounted) return;
       _exitSelection();
-      final unit = event.amountForSettleMode(mode);
+      final total = event.totalFor(eligible, mode) ?? 0;
       AppSnackBar.success(
         context,
         'Rendiste ${eligible.length} tickets '
         '(${mode.label.toLowerCase()} · '
-        '\$${(eligible.length * unit).toStringAsFixed(0)}).',
+        '\$${total.toStringAsFixed(0)}).',
       );
     } catch (e) {
       if (!mounted) return;

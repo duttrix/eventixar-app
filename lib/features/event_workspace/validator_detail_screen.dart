@@ -43,6 +43,8 @@ class ValidatorDetailScreen extends ConsumerWidget {
       );
     }
 
+    final event = eventAsync.requireValue;
+
     Collaborator? match;
     for (final c in collabsAsync.requireValue) {
       if (c.id == validatorId) {
@@ -120,6 +122,14 @@ class ValidatorDetailScreen extends ConsumerWidget {
                                 'Ticket #${ticket.number}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                event.saleLabelFor(ticket),
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
                                 ),
                               ),
                               if (ticket.buyerName.trim().isNotEmpty) ...[

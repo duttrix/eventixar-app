@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import 'section_card.dart';
@@ -26,9 +25,12 @@ class EventDetailsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _row('Fecha y horario', '$dateLabel · $from – $to'),
-          if (event.ticketProfit > 0) ...[
+          for (final product in event.products) ...[
             const SizedBox(height: 8),
-            _row('Ganancia', formatMoney(event.ticketProfit)),
+            _row(
+              product.name.trim().isEmpty ? 'Producto' : product.name,
+              '${product.priceSummary} · ${product.ticketCount} tickets',
+            ),
           ],
           if (place.isNotEmpty) ...[
             const SizedBox(height: 8),

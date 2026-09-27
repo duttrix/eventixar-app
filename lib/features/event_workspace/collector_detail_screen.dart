@@ -102,11 +102,11 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
         tickets.where(_isProfitSettle).toList(growable: false);
     final fullAmount = fullTickets.fold<double>(
       0,
-      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+      (sum, t) => sum + t.resolvedSettledAmount(event.settledFallback(t)),
     );
     final profitAmount = profitTickets.fold<double>(
       0,
-      (sum, t) => sum + t.resolvedSettledAmount(event.ticketPrice),
+      (sum, t) => sum + t.resolvedSettledAmount(event.settledFallback(t)),
     );
     final validatedCount =
         tickets.where((t) => t.status == TicketStatus.delivered).length;
@@ -296,7 +296,7 @@ class _CollectorDetailScreenState extends ConsumerState<CollectorDetailScreen> {
                                       ticket.settleMode!.label,
                                     formatMoney(
                                       ticket.resolvedSettledAmount(
-                                        event.ticketPrice,
+                                        event.settledFallback(ticket),
                                       ),
                                     ),
                                   ].join(' · '),

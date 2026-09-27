@@ -156,7 +156,7 @@ class TicketPdf {
           ),
           pw.SizedBox(height: 2),
           pw.Text(
-            '${event.product} - \$${event.ticketPrice.toStringAsFixed(0)}',
+            event.saleLabelFor(ticket),
             maxLines: 1,
             style: pw.TextStyle(color: _white(0.72), fontSize: 9),
           ),

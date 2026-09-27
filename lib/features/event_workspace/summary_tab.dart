@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format/money.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/collaborator.dart';
+import '../../data/models/event.dart';
+import '../../data/models/event_product.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/section_card.dart';
@@ -47,14 +49,10 @@ class SummaryTab extends ConsumerWidget {
     final sellers = collaborators
         .where((c) => c.role == CollaboratorRole.seller)
         .toList();
-    final validators = collaborators
-        .where((c) => c.role == CollaboratorRole.validator)
-        .toList();
-    final collectors = collaborators
-        .where((c) => c.role == CollaboratorRole.collector)
-        .toList();
 
     final total = tickets.isEmpty ? event.ticketCount : tickets.length;
+    final poolTickets = <Ticket>[];
+    final assignedTickets = <Ticket>[];
 
     var assigned = 0;
     var pool = 0;
@@ -69,7 +67,7 @@ class SummaryTab extends ConsumerWidget {
     for (final ticket in tickets) {
       final isPool = ticket.status.isAssignablePool;
       final isProfit = ticket.settleMode == TicketSettleMode.profit;
-      final isReserved = ticket.status == TicketStatus.reserved;
+      final isReserved = _countsAsReserved(ticket);
       final isCobrada =
           ticket.status == TicketStatus.collected ||
           ticket.status == TicketStatus.settled ||
@@ -80,9 +78,11 @@ class SummaryTab extends ConsumerWidget {
 
       if (isPool) {
         pool++;
+        poolTickets.add(ticket);
         if (isReserved) poolReserved++;
       } else {
         assigned++;
+        assignedTickets.add(ticket);
         if (isReserved) assignedReserved++;
       }
 
@@ -119,35 +119,35 @@ class SummaryTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _SectionLabel(
-          'Cantidad',
-          trailing: Text(
-            '$total',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
         const _SectionLabel('Estado'),
         const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
               child: _EstadoCard(
-                value: assigned,
-                label: 'Asignadas',
-                reserved: assignedReserved,
+                value: pool,
+                label: 'En pool',
+                reserved: poolReserved,
+                onTap: () => _showEstadoDetail(
+                  context,
+                  title: 'En pool',
+                  tickets: poolTickets,
+                  event: event,
+                ),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _EstadoCard(
-                value: pool,
-                label: 'Pool',
-                reserved: poolReserved,
+                value: assigned,
+                label: 'Asignados',
+                reserved: assignedReserved,
+                onTap: () => _showEstadoDetail(
+                  context,
+                  title: 'Asignados',
+                  tickets: assignedTickets,
+                  event: event,
+                ),
               ),
             ),
           ],
@@ -177,28 +177,30 @@ class SummaryTab extends ConsumerWidget {
               ? 'Todavía no hay tickets para cobrar.'
               : '${_pct(cobradas, aCobrar)}% del total ya se cobró',
         ),
-        const SizedBox(height: 18),
-        const _SectionLabel('Rendición'),
-        const SizedBox(height: 10),
-        _EquationCard(
-          leftValue: aRendir,
-          leftLabel: 'A rendir',
-          midValue: rendidas,
-          midLabel: 'Rendidas',
-          midSubtitle: rendidas == 0
-              ? null
-              : rendidasGanancia > 0
-              ? '$rendidasFull normales · $rendidasGanancia ganancia'
-              : '$rendidasFull normales',
-          rightValue: faltanRendir,
-          rightLabel: 'Faltan',
-          progressLabel: 'Rendidas sobre cobradas',
-          progressPart: rendidas,
-          progressTotal: cobradas,
-          caption: cobradas == 0
-              ? 'Cuando se cobre, acá se ve cuánto ya se rindió.'
-              : '${_pct(rendidas, cobradas)}% de lo cobrado ya se rindió',
-        ),
+        if (sellers.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          const _SectionLabel('Rendición'),
+          const SizedBox(height: 10),
+          _EquationCard(
+            leftValue: aRendir,
+            leftLabel: 'A rendir',
+            midValue: rendidas,
+            midLabel: 'Rendidas',
+            midSubtitle: rendidas == 0
+                ? null
+                : rendidasGanancia > 0
+                ? '$rendidasFull normales · $rendidasGanancia ganancia'
+                : '$rendidasFull normales',
+            rightValue: faltanRendir,
+            rightLabel: 'Faltan',
+            progressLabel: 'Rendidas sobre cobradas',
+            progressPart: rendidas,
+            progressTotal: cobradas,
+            caption: cobradas == 0
+                ? 'Cuando se cobre, acá se ve cuánto ya se rindió.'
+                : '${_pct(rendidas, cobradas)}% de lo cobrado ya se rindió',
+          ),
+        ],
         const SizedBox(height: 18),
         const _SectionLabel('Validación'),
         const SizedBox(height: 10),
@@ -222,130 +224,17 @@ class SummaryTab extends ConsumerWidget {
               : '${_pct(validados, aValidar)}% de lo cobrado ya se validó',
         ),
         const SizedBox(height: 22),
-        const _SectionLabel('Desempeño'),
+        const _SectionLabel('Por producto'),
         const SizedBox(height: 10),
         SectionCard(
-          title: 'Vendedores',
-          child: sellers.isEmpty
-              ? const Text(
-                  'Todavía no hay vendedores.',
-                  style: TextStyle(color: AppColors.textMuted),
-                )
-              : Column(
-                  children: [
-                    for (final seller in sellers)
-                      Builder(
-                        builder: (context) {
-                          final sold = tickets
-                              .where(
-                                (t) =>
-                                    t.sellerId == seller.id &&
-                                    (t.status == TicketStatus.collected ||
-                                        t.status == TicketStatus.settled ||
-                                        t.status == TicketStatus.delivered),
-                              )
-                              .length;
-                          final held = tickets
-                              .where(
-                                (t) =>
-                                    t.sellerId == seller.id &&
-                                    (t.status == TicketStatus.withSeller ||
-                                        t.status == TicketStatus.reserved),
-                              )
-                              .length;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: [
-                                Expanded(child: Text(seller.name)),
-                                Text(
-                                  '$sold cobrados · ${formatMoney(event.ticketPrice * sold)}'
-                                  '${held > 0 ? ' · $held en mano' : ''}',
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 10),
-        SectionCard(
-          title: 'Recaudadores',
-          child: collectors.isEmpty
-              ? const Text(
-                  'Todavía no hay recaudadores.',
-                  style: TextStyle(color: AppColors.textMuted),
-                )
-              : Column(
-                  children: [
-                    for (final collector in collectors)
-                      Builder(
-                        builder: (context) {
-                          final collectorTickets = tickets
-                              .where((t) => t.collectorId == collector.id)
-                              .toList(growable: false);
-                          final count = collectorTickets.length;
-                          final amount = collectorTickets.fold<double>(
-                            0,
-                            (sum, t) =>
-                                sum +
-                                t.resolvedSettledAmount(event.ticketPrice),
-                          );
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: [
-                                Expanded(child: Text(collector.name)),
-                                Text(
-                                  '$count rendidos · ${formatMoney(amount)}',
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 10),
-        SectionCard(
-          title: 'Validadores',
-          child: validators.isEmpty
-              ? const Text(
-                  'Todavía no hay validadores.',
-                  style: TextStyle(color: AppColors.textMuted),
-                )
-              : Column(
-                  children: [
-                    for (final validator in validators)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Expanded(child: Text(validator.name)),
-                            Text(
-                              '${tickets.where((t) => t.validatorId == validator.id).length} validados',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+          title: 'Qué se vendió',
+          child: Column(
+            children: [
+              for (final product in event.products) ...[
+                _ProductReport(event: event, product: product, tickets: tickets),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -355,6 +244,141 @@ class SummaryTab extends ConsumerWidget {
 int _pct(int part, int total) {
   if (total <= 0) return 0;
   return ((part / total) * 100).round();
+}
+
+/// Still reserved, or reserved and later collected without clearing the hold.
+bool _countsAsReserved(Ticket ticket) {
+  if (ticket.status == TicketStatus.reserved) return true;
+  final sold =
+      ticket.status == TicketStatus.collected ||
+      ticket.status == TicketStatus.settled ||
+      ticket.status == TicketStatus.delivered;
+  if (!sold) return false;
+  var open = false;
+  for (final entry in ticket.history) {
+    if (entry.action == TicketHistoryAction.reserved) open = true;
+    if (entry.action == TicketHistoryAction.reservationCleared) open = false;
+  }
+  return open;
+}
+
+void _showEstadoDetail(
+  BuildContext context, {
+  required String title,
+  required List<Ticket> tickets,
+  required Event event,
+}) {
+  final byStatus = <TicketStatus, int>{};
+  for (final ticket in tickets) {
+    byStatus[ticket.status] = (byStatus[ticket.status] ?? 0) + 1;
+  }
+  final reservedNow = byStatus[TicketStatus.reserved] ?? 0;
+  final reservedThenSold = tickets
+      .where(
+        (ticket) =>
+            ticket.status != TicketStatus.reserved && _countsAsReserved(ticket),
+      )
+      .length;
+
+  final productLines = <String>[];
+  for (final product in event.products) {
+    final ofProduct = tickets
+        .where((ticket) => event.productFor(ticket).id == product.id)
+        .toList(growable: false);
+    if (ofProduct.isEmpty) continue;
+    if (event.products.length > 1) {
+      productLines.add('${product.name}: ${ofProduct.length}');
+    }
+    for (final variant in product.variants) {
+      final count = ofProduct
+          .where((ticket) => ticket.variantId == variant.id)
+          .length;
+      if (count == 0) continue;
+      final prefix = event.products.length > 1 ? '  ' : '';
+      productLines.add('$prefix${variant.name}: $count');
+    }
+  }
+
+  final rows = <(String, int)>[
+    ('Sin vendedor', byStatus[TicketStatus.unassigned] ?? 0),
+    ('Devueltos', byStatus[TicketStatus.returned] ?? 0),
+    ('En poder del vendedor', byStatus[TicketStatus.withSeller] ?? 0),
+    ('Reservados', reservedNow),
+    ('Cobrados', byStatus[TicketStatus.collected] ?? 0),
+    ('Rendidos', byStatus[TicketStatus.settled] ?? 0),
+    ('Validados', byStatus[TicketStatus.delivered] ?? 0),
+  ].where((row) => row.$2 > 0).toList(growable: false);
+
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: Theme.of(sheetContext).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              '${tickets.length} tickets',
+              style: const TextStyle(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 16),
+            if (tickets.isEmpty)
+              const Text(
+                'Todavía no hay tickets en este grupo.',
+                style: TextStyle(color: AppColors.textMuted),
+              )
+            else
+              for (final row in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(row.$1)),
+                      Text(
+                        '${row.$2}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+            if (reservedThenSold > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                '$reservedThenSold se reservaron y después se cobraron.',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (productLines.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'POR PRODUCTO',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final line in productLines)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(line),
+                ),
+            ],
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -390,55 +414,75 @@ class _EstadoCard extends StatelessWidget {
     required this.value,
     required this.label,
     required this.reserved,
+    required this.onTap,
   });
 
   final int value;
   final String label;
   final int reserved;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final ratio = value == 0 ? 0.0 : reserved / value;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
+    return Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              color: AppColors.text,
-            ),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  height: 1.05,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _Bar(value: ratio),
+              const SizedBox(height: 8),
+              Text(
+                '$reserved con reserva (${_pct(reserved, value)}%)',
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _Bar(value: ratio),
-          const SizedBox(height: 8),
-          Text(
-            '$reserved reservadas (${_pct(reserved, value)}%)',
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -662,6 +706,86 @@ class _Bar extends StatelessWidget {
         minHeight: 6,
         backgroundColor: AppColors.border,
         color: AppColors.emerald,
+      ),
+    );
+  }
+}
+
+class _ProductReport extends StatelessWidget {
+  const _ProductReport({
+    required this.event,
+    required this.product,
+    required this.tickets,
+  });
+
+  final Event event;
+  final EventProduct product;
+  final List<Ticket> tickets;
+
+  bool _sold(Ticket ticket) =>
+      ticket.status == TicketStatus.collected ||
+      ticket.status == TicketStatus.settled ||
+      ticket.status == TicketStatus.delivered;
+
+  @override
+  Widget build(BuildContext context) {
+    final ofProduct = tickets
+        .where((ticket) => event.productFor(ticket).id == product.id)
+        .toList(growable: false);
+    final sold = ofProduct.where(_sold).toList(growable: false);
+    final money = sold.fold<double>(
+      0,
+      (sum, ticket) => sum + (event.priceFor(ticket) ?? 0),
+    );
+    final profit = sold.fold<double>(
+      0,
+      (sum, ticket) => sum + (event.profitFor(ticket) ?? 0),
+    );
+    final pieces = product.unit.piecesPerSale > 1
+        ? ' · ${sold.length * product.unit.piecesPerSale} u.'
+        : '';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  product.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text(
+                '${sold.length}/${ofProduct.length} · ${formatMoney(money)}',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Ganancia ${formatMoney(profit)}$pieces',
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+          ),
+          for (final variant in product.variants)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                variant.quota > 0
+                    ? '${variant.name}: ${sold.where((ticket) => ticket.variantId == variant.id).length} / ${variant.quota}'
+                    : '${variant.name}: ${sold.where((ticket) => ticket.variantId == variant.id).length}',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

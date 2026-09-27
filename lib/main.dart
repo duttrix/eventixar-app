@@ -16,10 +16,12 @@ import 'data/app_providers.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
-  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-
+  // Binding and runApp must share a zone. Initializing the binding outside
+  // runZonedGuarded makes Flutter report a fatal "Zone mismatch" on startup.
   await runZonedGuarded(() async {
+    final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);

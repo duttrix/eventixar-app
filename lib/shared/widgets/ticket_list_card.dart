@@ -4,7 +4,6 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import 'access_share.dart';
-import 'ticket_status_style.dart';
 
 /// Ticket row used by organizer and seller lists.
 class TicketListCard extends StatelessWidget {
@@ -81,8 +80,12 @@ class TicketListCard extends StatelessWidget {
       (ticket.status == TicketStatus.withSeller ||
           ticket.status == TicketStatus.reserved);
 
-  bool get _canExport =>
-      !readOnly && (onPrint != null || onShare != null);
+  bool get _canPrint => !readOnly && onPrint != null;
+
+  bool get _canShare =>
+      !readOnly && onShare != null && ticket.status.canShare;
+
+  bool get _canExport => _canPrint || _canShare;
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +156,7 @@ class TicketListCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '\$${event.ticketPrice.toStringAsFixed(0)} · ${event.product}',
+                          event.saleLabelFor(ticket),
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 12,
@@ -296,7 +299,7 @@ class TicketListCard extends StatelessWidget {
                     },
                   ),
                 if (_canExport) ...[
-                  if (onPrint != null)
+                  if (_canPrint)
                     ListTile(
                       leading: const Icon(Icons.print_outlined),
                       title: const Text('Imprimir'),
@@ -305,7 +308,7 @@ class TicketListCard extends StatelessWidget {
                         onPrint?.call();
                       },
                     ),
-                  if (onShare != null)
+                  if (_canShare)
                     ListTile(
                       leading: const Icon(AccessShare.shareIcon),
                       title: const Text('Compartir'),

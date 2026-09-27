@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'event_product.dart';
 import 'ticket.dart';
 import 'ticket_design.dart';
 
@@ -250,6 +251,7 @@ class Event {
     this.collectorsCount = 0,
     this.coordinatorsCount = 0,
     this.notes = '',
+    this.definedProducts = const [],
     this.status = EventStatus.awaitingPayment,
     this.createdAt,
     this.updatedAt,
@@ -286,6 +288,9 @@ class Event {
   String pickupPlace;
   String notes;
 
+  /// Products saved on the event. Empty for events created before products.
+  List<EventProduct> definedProducts;
+
   /// Suggested max sellers when creating the event (not a hard limit).
   int sellersCount;
 
@@ -318,6 +323,117 @@ class Event {
   int? couponOriginalAmount;
   int? couponDiscountAmount;
   int? couponFinalAmount;
+
+  bool get hasDefinedProducts => definedProducts.isNotEmpty;
+
+  /// Products of this event. Older events become a single synthetic product.
+  List<EventProduct> get products => hasDefinedProducts
+      ? definedProducts
+      : [
+          EventProduct.legacy(
+            name: product,
+            price: ticketPrice,
+            profit: ticketProfit,
+            ticketCount: ticketCount,
+          ),
+        ];
+
+  /// Copies product totals into the flat fields used by billing.
+  void applyProductSummary() {
+    if (!hasDefinedProducts) return;
+    final summary = ProductPricingSummary.fromProducts(definedProducts);
+    product = summary.label;
+    ticketPrice = summary.price;
+    ticketProfit = summary.profit;
+    ticketCount = summary.ticketCount;
+  }
+
+  EventProduct productFor(Ticket ticket) {
+    final id = ticket.productId;
+    if (id != null && id.isNotEmpty) {
+      for (final item in products) {
+        if (item.id == id) return item;
+      }
+    }
+    return products.first;
+  }
+
+  /// Pages of the ticket list. A product with variants becomes one page each.
+  List<TicketListSlice> get ticketSlices {
+    final slices = <TicketListSlice>[];
+    for (final product in products) {
+      if (product.variants.isEmpty) {
+        slices.add(TicketListSlice(product: product));
+        continue;
+      }
+      for (final variant in product.variants) {
+        slices.add(TicketListSlice(product: product, variant: variant));
+      }
+    }
+    return slices;
+  }
+
+  /// Tickets of the current product or variant page.
+  List<Ticket> ticketsOfSlice(List<Ticket> tickets, int index) {
+    final slices = ticketSlices;
+    if (slices.length < 2) return tickets;
+    final slice = slices[index.clamp(0, slices.length - 1)];
+    return tickets
+        .where((ticket) => _ticketInSlice(ticket, slice))
+        .toList(growable: false);
+  }
+
+  bool _ticketInSlice(Ticket ticket, TicketListSlice slice) {
+    if (productFor(ticket).id != slice.product.id) return false;
+    final variant = slice.variant;
+    if (variant == null) return true;
+    return ticket.variantId == variant.id;
+  }
+
+  /// Null when the ticket still needs a priced variant.
+  double? priceFor(Ticket ticket) {
+    final item = productFor(ticket);
+    if (!item.priceOnVariant) return item.price;
+    return item.variantById(ticket.variantId)?.price;
+  }
+
+  double? profitFor(Ticket ticket) {
+    final item = productFor(ticket);
+    if (!item.priceOnVariant) return item.profit;
+    return item.variantById(ticket.variantId)?.profit;
+  }
+
+  double? settleAmountFor(Ticket ticket, TicketSettleMode mode) {
+    return switch (mode) {
+      TicketSettleMode.full => priceFor(ticket),
+      TicketSettleMode.profit => profitFor(ticket),
+    };
+  }
+
+  /// Sum of settle amounts, or null if any ticket is missing its price.
+  double? totalFor(Iterable<Ticket> tickets, TicketSettleMode mode) {
+    var total = 0.0;
+    for (final ticket in tickets) {
+      final amount = settleAmountFor(ticket, mode);
+      if (amount == null) return null;
+      total += amount;
+    }
+    return total;
+  }
+
+  double settledFallback(Ticket ticket) => priceFor(ticket) ?? ticketPrice;
+
+  String saleLabelFor(Ticket ticket) {
+    final item = productFor(ticket);
+    final variant = item.variantById(ticket.variantId);
+    final price = priceFor(ticket);
+    final priceText = price == null
+        ? 'Sin precio'
+        : '\$${price.toStringAsFixed(0)}';
+    final name = variant == null ? item.name : '${item.name} · ${variant.name}';
+    if (name.trim().isEmpty) return priceText;
+    return '$priceText · $name';
+  }
 
   /// Amount the collector receives per ticket for a given settle mode.
   double amountForSettleMode(TicketSettleMode mode) => switch (mode) {
@@ -354,15 +470,22 @@ class Event {
   String get eventWhenLabel => '$eventDateLabel  $eventTimeRangeLabel';
 
   factory Event.fromFirestore(String id, Map<String, dynamic> data) {
+    final definedProducts = EventProduct.listFromFirestore(data['products']);
+    final summary = definedProducts.isEmpty
+        ? null
+        : ProductPricingSummary.fromProducts(definedProducts);
     return Event(
       id: id,
       ownerId: (data['ownerId'] as String?) ?? '',
       ownerEmail: (data['ownerEmail'] as String?) ?? '',
       name: (data['name'] as String?) ?? '',
-      product: (data['product'] as String?) ?? '',
-      ticketPrice: (data['ticketPrice'] as num?)?.toDouble() ?? 0,
-      ticketProfit: (data['ticketProfit'] as num?)?.toDouble() ?? 0,
-      ticketCount: (data['ticketCount'] as num?)?.toInt() ?? 0,
+      product: summary?.label ?? ((data['product'] as String?) ?? ''),
+      ticketPrice:
+          summary?.price ?? ((data['ticketPrice'] as num?)?.toDouble() ?? 0),
+      ticketProfit:
+          summary?.profit ?? ((data['ticketProfit'] as num?)?.toDouble() ?? 0),
+      ticketCount:
+          summary?.ticketCount ?? ((data['ticketCount'] as num?)?.toInt() ?? 0),
       eventDate: _readDate(data['eventDate']) ?? DateTime.now(),
       pickupFrom:
           _readTime(data['pickupFrom']) ?? const TimeOfDay(hour: 12, minute: 0),
@@ -374,6 +497,7 @@ class Event {
       collectorsCount: (data['collectorsCount'] as num?)?.toInt() ?? 0,
       coordinatorsCount: (data['coordinatorsCount'] as num?)?.toInt() ?? 0,
       notes: (data['notes'] as String?) ?? '',
+      definedProducts: definedProducts,
       status: EventStatusX.fromFirestore(data['status'] as String?),
       createdAt: _readTimestamp(data['createdAt']),
       updatedAt: _readTimestamp(data['updatedAt']),
@@ -393,14 +517,17 @@ class Event {
     FieldValue? createdAtValue,
     FieldValue? updatedAtValue,
   }) {
+    final summary = definedProducts.isEmpty
+        ? null
+        : ProductPricingSummary.fromProducts(definedProducts);
     return {
       'ownerId': ownerId,
       'ownerEmail': ownerEmail,
       'name': name,
-      'product': product,
-      'ticketPrice': ticketPrice,
-      'ticketProfit': ticketProfit,
-      'ticketCount': ticketCount,
+      'product': summary?.label ?? product,
+      'ticketPrice': summary?.price ?? ticketPrice,
+      'ticketProfit': summary?.profit ?? ticketProfit,
+      'ticketCount': summary?.ticketCount ?? ticketCount,
       'eventDate': Timestamp.fromDate(
         DateTime(eventDate.year, eventDate.month, eventDate.day),
       ),
@@ -412,6 +539,8 @@ class Event {
       'collectorsCount': collectorsCount,
       'coordinatorsCount': coordinatorsCount,
       'notes': notes,
+      if (definedProducts.isNotEmpty)
+        'products': definedProducts.map((item) => item.toMap()).toList(),
       'status': status.firestoreValue,
       'ticketsGenerated': ticketsGenerated,
       'ticketDesign': ticketDesign.toFirestoreMap(),

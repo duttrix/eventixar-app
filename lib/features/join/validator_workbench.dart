@@ -274,6 +274,23 @@ class _ValidatorWorkbenchState extends ConsumerState<ValidatorWorkbench> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
+                    'Producto',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    event.saleLabelFor(lastTicket),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
                     'Destinatario',
                     style: TextStyle(
                       color: AppColors.textMuted,

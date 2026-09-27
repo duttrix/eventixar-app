@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
-import '../../shared/widgets/product_typeahead_field.dart';
+import '../../shared/widgets/event_products_editor.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Edit basic event data (organizer only).
@@ -17,10 +17,8 @@ class EventDataTab extends ConsumerStatefulWidget {
 }
 
 class _EventDataTabState extends ConsumerState<EventDataTab> {
+  final _productsKey = GlobalKey<EventProductsEditorState>();
   late final TextEditingController _nameController;
-  late final TextEditingController _productController;
-  late final TextEditingController _priceController;
-  late final TextEditingController _profitController;
   late final TextEditingController _placeController;
   late final TextEditingController _notesController;
 
@@ -32,9 +30,6 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   @override
   void dispose() {
     _nameController.dispose();
-    _productController.dispose();
-    _priceController.dispose();
-    _profitController.dispose();
     _placeController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -42,13 +37,12 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
-    final product = _productController.text.trim();
-    if (product.isEmpty) {
-      AppSnackBar.warning(context, 'Especificá qué se vende.');
+    final productsError = _productsKey.currentState?.validate();
+    if (productsError != null) {
+      AppSnackBar.warning(context, productsError);
       return;
     }
-    final ticketPrice = double.tryParse(_priceController.text) ?? 0;
-    final ticketProfit = double.tryParse(_profitController.text) ?? 0;
+    final products = _productsKey.currentState?.products() ?? const [];
     final eventDate = _eventDate ?? DateTime.now();
     final pickupFrom = _pickupFrom ?? const TimeOfDay(hour: 12, minute: 0);
     final pickupTo = _pickupTo ?? const TimeOfDay(hour: 15, minute: 0);
@@ -61,15 +55,24 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
           .updateEvent(
             widget.eventId,
             name: name,
-            product: product,
-            ticketPrice: ticketPrice,
-            ticketProfit: ticketProfit,
+            products: products,
             eventDate: eventDate,
             pickupFrom: pickupFrom,
             pickupTo: pickupTo,
             pickupPlace: pickupPlace,
             notes: notes,
           );
+      if (!mounted) return;
+      final uid = ref.read(sessionProvider).userUid;
+      if (uid != null) {
+        try {
+          await ref
+              .read(productCatalogRepositoryProvider)
+              .upsertAll(uid, products);
+        } catch (e) {
+          debugPrint('No se pudo guardar el catálogo de productos: $e');
+        }
+      }
       if (!mounted) return;
       AppSnackBar.success(context, 'Cambios guardados.');
     } catch (e) {
@@ -81,8 +84,6 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
   @override
   Widget build(BuildContext context) {
     final eventAsync = ref.watch(eventProvider(widget.eventId));
-    final products =
-        ref.watch(eventProductsProvider).asData?.value ?? const <String>[];
     if (eventAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -95,13 +96,6 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
     final finished = event.isReadOnly;
     if (!_initialized) {
       _nameController = TextEditingController(text: event.name);
-      _productController = TextEditingController(text: event.product);
-      _priceController = TextEditingController(
-        text: event.ticketPrice.toStringAsFixed(0),
-      );
-      _profitController = TextEditingController(
-        text: event.ticketProfit.toStringAsFixed(0),
-      );
       _placeController = TextEditingController(text: event.pickupPlace);
       _notesController = TextEditingController(text: event.notes);
       _eventDate = event.eventDate;
@@ -124,34 +118,11 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 decoration: const InputDecoration(labelText: 'Nombre'),
               ),
               const SizedBox(height: 12),
-              ProductTypeaheadField(
-                controller: _productController,
-                suggestions: products,
+              EventProductsEditor(
+                key: _productsKey,
+                initialProducts: event.products,
+                lockTicketCounts: true,
                 enabled: !finished,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _priceController,
-                      enabled: !finished,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Precio del ticket',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _profitController,
-                      enabled: !finished,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Ganancia'),
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 12),
               InkWell(

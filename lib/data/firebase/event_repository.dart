@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/collaborator.dart';
 import '../models/event.dart';
+import '../models/event_product.dart';
 import '../models/ticket.dart';
 import '../models/ticket_design.dart';
 import '../models/user.dart';
@@ -70,10 +71,7 @@ class EventRepository {
     required String ownerId,
     required String ownerEmail,
     required String name,
-    required String product,
-    required double ticketPrice,
-    double ticketProfit = 0,
-    required int ticketCount,
+    required List<EventProduct> products,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
     required TimeOfDay pickupTo,
@@ -85,6 +83,9 @@ class EventRepository {
     String notes = '',
     TicketVisualStyle? ticketDesign,
   }) async {
+    if (products.isEmpty) {
+      throw ArgumentError('El evento necesita al menos un producto.');
+    }
     final ref = _events.doc();
     final now = FieldValue.serverTimestamp();
     final event = Event(
@@ -92,10 +93,10 @@ class EventRepository {
       ownerId: ownerId,
       ownerEmail: ownerEmail,
       name: name,
-      product: product,
-      ticketPrice: ticketPrice,
-      ticketProfit: ticketProfit,
-      ticketCount: ticketCount,
+      product: '',
+      ticketPrice: 0,
+      ticketProfit: 0,
+      ticketCount: 0,
       eventDate: eventDate,
       pickupFrom: pickupFrom,
       pickupTo: pickupTo,
@@ -105,10 +106,12 @@ class EventRepository {
       collectorsCount: collectorsCount,
       coordinatorsCount: coordinatorsCount,
       notes: notes,
+      definedProducts: products,
       status: EventStatus.active,
       ticketsGenerated: false,
       ticketDesign: ticketDesign ?? TicketVisualStyle.classic,
     );
+    event.applyProductSummary();
 
     final userRef = _users.doc(ownerId);
     final usedFreeSlot = await _firestore.runTransaction((tx) async {
@@ -128,7 +131,7 @@ class EventRepository {
       return true;
     });
 
-    await _generateTickets(eventId: ref.id, ticketCount: ticketCount);
+    await _generateTickets(event);
     await ref.update({
       'ticketsGenerated': true,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -158,7 +161,7 @@ class EventRepository {
     if (event.ticketsGenerated) return event;
     if (event.status != EventStatus.active) return event;
 
-    await _generateTickets(eventId: event.id, ticketCount: event.ticketCount);
+    await _generateTickets(event);
     await ref.update({
       'status': EventStatus.active.firestoreValue,
       'ticketsGenerated': true,
@@ -170,16 +173,88 @@ class EventRepository {
     return event;
   }
 
-  Future<void> _generateTickets({
+  Future<void> _generateTickets(Event event) async {
+    if (!event.hasDefinedProducts) {
+      await _writeTicketChunk(
+        eventId: event.id,
+        from: 1,
+        to: event.ticketCount,
+        docIdFor: (n) => 't_$n',
+      );
+      return;
+    }
+    for (final product in event.definedProducts) {
+      final seeds = <({int number, String? variantId})>[];
+      if (product.variants.isEmpty) {
+        for (var n = 1; n <= product.ticketCount; n++) {
+          seeds.add((number: n, variantId: null));
+        }
+      } else {
+        var n = 1;
+        for (final variant in product.variants) {
+          for (var i = 0; i < variant.quota; i++) {
+            seeds.add((number: n, variantId: variant.id));
+            n++;
+          }
+        }
+      }
+      await _writeTicketSeeds(
+        eventId: event.id,
+        productId: product.id,
+        seeds: seeds,
+      );
+    }
+  }
+
+  Future<void> _writeTicketSeeds({
     required String eventId,
-    required int ticketCount,
+    required String productId,
+    required List<({int number, String? variantId})> seeds,
   }) async {
     const chunk = 400;
-    for (var start = 1; start <= ticketCount; start += chunk) {
-      final end = (start + chunk - 1).clamp(1, ticketCount);
+    for (var i = 0; i < seeds.length; i += chunk) {
+      final slice = seeds.skip(i).take(chunk);
+      final batch = _firestore.batch();
+      for (final seed in slice) {
+        final ticketRef = _tickets(eventId).doc('t_${productId}_${seed.number}');
+        batch.set(ticketRef, {
+          'number': seed.number,
+          'status': TicketStatus.unassigned.firestoreValue,
+          'sellerId': null,
+          'validatorId': null,
+          'collectorId': null,
+          'assignedByCollaboratorId': null,
+          'buyerName': '',
+          'productId': productId,
+          'variantId': ?seed.variantId,
+          'history': [
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.created,
+              toStatus: TicketStatus.unassigned,
+              actorRole: 'organizer',
+            ).toFirestoreMap(),
+          ],
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> _writeTicketChunk({
+    required String eventId,
+    required int from,
+    required int to,
+    required String Function(int number) docIdFor,
+    String? productId,
+  }) async {
+    if (to < from) return;
+    const chunk = 400;
+    for (var start = from; start <= to; start += chunk) {
+      final end = (start + chunk - 1).clamp(from, to);
       final batch = _firestore.batch();
       for (var n = start; n <= end; n++) {
-        final ticketRef = _tickets(eventId).doc('t_$n');
+        final ticketRef = _tickets(eventId).doc(docIdFor(n));
         batch.set(ticketRef, {
           'number': n,
           'status': TicketStatus.unassigned.firestoreValue,
@@ -188,6 +263,7 @@ class EventRepository {
           'collectorId': null,
           'assignedByCollaboratorId': null,
           'buyerName': '',
+          'productId': ?productId,
           'history': [
             TicketHistoryEntry(
               at: DateTime.now(),
@@ -247,25 +323,37 @@ class EventRepository {
     required int from,
     required int to,
     String? assignedByCollaboratorId,
+    String? productId,
   }) async {
     await _ensureWritable(eventId);
     if (to < from) {
       throw ArgumentError('El rango es inválido (hasta < desde).');
     }
 
-    final snap = await _tickets(eventId)
-        .where('number', isGreaterThanOrEqualTo: from)
-        .where('number', isLessThanOrEqualTo: to)
-        .get();
+    final Query<Map<String, dynamic>> query;
+    if (productId != null && productId.isNotEmpty) {
+      query = _tickets(eventId).where('productId', isEqualTo: productId);
+    } else {
+      query = _tickets(eventId)
+          .where('number', isGreaterThanOrEqualTo: from)
+          .where('number', isLessThanOrEqualTo: to);
+    }
+    final snap = await query.get();
+    final docs = (productId != null && productId.isNotEmpty)
+        ? snap.docs.where((doc) {
+            final number = (doc.data()['number'] as num?)?.toInt() ?? 0;
+            return number >= from && number <= to;
+          }).toList(growable: false)
+        : snap.docs;
 
     final expected = to - from + 1;
-    if (snap.docs.length != expected) {
+    if (docs.length != expected) {
       throw StateError(
         'Algunos tickets del rango no existen. Revisá la cantidad del evento.',
       );
     }
 
-    for (final doc in snap.docs) {
+    for (final doc in docs) {
       final status = TicketStatusX.fromFirestore(doc.data()['status'] as String?);
       if (!status.isAssignablePool) {
         throw StateError(
@@ -280,6 +368,7 @@ class EventRepository {
       to: to,
       date: DateTime.now(),
       assignedByCollaboratorId: assignedByCollaboratorId,
+      productId: productId,
     );
 
     final sellerSnap =
@@ -295,9 +384,9 @@ class EventRepository {
 
     // Chunk ticket updates to stay under Firestore's batch limit.
     const chunk = 400;
-    for (var i = 0; i < snap.docs.length; i += chunk) {
+    for (var i = 0; i < docs.length; i += chunk) {
       final batch = _firestore.batch();
-      final slice = snap.docs.skip(i).take(chunk);
+      final slice = docs.skip(i).take(chunk);
       for (final doc in slice) {
         final from = TicketStatusX.fromFirestore(doc.data()['status'] as String?);
         final history = TicketHistoryEntry(
@@ -626,6 +715,7 @@ class EventRepository {
         'buyerName': '',
         'assignedByCollaboratorId': null,
         'collectorId': null,
+        'variantId': null,
       },
     );
   }
@@ -650,6 +740,7 @@ class EventRepository {
         'sellerId': null,
         'buyerName': '',
         'assignedByCollaboratorId': null,
+        'variantId': null,
       },
     );
   }
@@ -778,29 +869,174 @@ class EventRepository {
     if (event.isReadOnly) {
       throw StateError('El evento ya finalizó. Solo consulta.');
     }
-    final amount = event.amountForSettleMode(settleMode);
-    final note = settleMode == TicketSettleMode.full
-        ? 'Rendido ticket completo (\$${amount.toStringAsFixed(0)})'
-        : 'Rendida solo ganancia (\$${amount.toStringAsFixed(0)})';
-    await _updateTicketStatuses(
-      eventId: eventId,
-      ticketIds: ticketIds,
-      expectedStatuses: {
-        TicketStatus.withSeller,
-        TicketStatus.reserved,
-        TicketStatus.collected,
-      },
-      newStatus: TicketStatus.settled,
-      historyAction: TicketHistoryAction.settled,
-      actorRole: actorRole,
-      actorId: collectorId,
-      note: note,
-      extraFields: {
-        'collectorId': collectorId,
-        'settleMode': settleMode.firestoreValue,
-        'settledAmount': amount,
-      },
+    final ids = ticketIds.toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final actorDisplayName = await _collaboratorName(eventId, collectorId);
+    const chunk = 400;
+    for (var i = 0; i < ids.length; i += chunk) {
+      final slice = ids.skip(i).take(chunk).toList(growable: false);
+      final snaps = await Future.wait(
+        slice.map((id) => _tickets(eventId).doc(id).get()),
+      );
+      final batch = _firestore.batch();
+      for (var j = 0; j < slice.length; j++) {
+        final snap = snaps[j];
+        final data = snap.data();
+        if (!snap.exists || data == null) {
+          throw StateError('Ticket ${slice[j]} no encontrado.');
+        }
+        final ticket = Ticket.fromFirestore(
+          id: snap.id,
+          eventId: eventId,
+          data: data,
+        );
+        final status = ticket.status;
+        if (status != TicketStatus.withSeller &&
+            status != TicketStatus.reserved &&
+            status != TicketStatus.collected) {
+          throw StateError(
+            'Ticket #${ticket.number} no está en el estado esperado.',
+          );
+        }
+        final amount = event.settleAmountFor(ticket, settleMode);
+        if (amount == null) {
+          throw StateError(
+            'El ticket #${ticket.number} no tiene precio. Elegí la opción.',
+          );
+        }
+        final note = settleMode == TicketSettleMode.full
+            ? 'Rendido ticket completo (\$${amount.toStringAsFixed(0)})'
+            : 'Rendida solo ganancia (\$${amount.toStringAsFixed(0)})';
+        batch.update(snap.reference, {
+          'status': TicketStatus.settled.firestoreValue,
+          'collectorId': collectorId,
+          'settleMode': settleMode.firestoreValue,
+          'settledAmount': amount,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.settled,
+              fromStatus: status,
+              toStatus: TicketStatus.settled,
+              actorId: collectorId,
+              actorRole: actorRole,
+              actorName: actorDisplayName,
+              note: note,
+            ).toFirestoreMap(),
+          ]),
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  /// Sets the flavor or priced option on tickets that do not have one yet.
+  Future<void> setTicketsVariant({
+    required String eventId,
+    required Iterable<String> ticketIds,
+    required String variantId,
+    String? actorId,
+    String actorRole = 'seller',
+  }) async {
+    final event = await getById(eventId);
+    if (event == null) {
+      throw StateError('Evento $eventId no encontrado.');
+    }
+    if (event.isReadOnly) {
+      throw StateError('El evento ya finalizó. Solo consulta.');
+    }
+    EventProduct? owner;
+    EventProductVariant? variant;
+    for (final product in event.products) {
+      final found = product.variantById(variantId);
+      if (found != null) {
+        owner = product;
+        variant = found;
+        break;
+      }
+    }
+    if (owner == null || variant == null) {
+      throw StateError('Esa opción no existe en el evento.');
+    }
+
+    final ids = ticketIds.toSet().toList(growable: false);
+    if (ids.isEmpty) return;
+    final snaps = await Future.wait(
+      ids.map((id) => _tickets(eventId).doc(id).get()),
     );
+    final tickets = <Ticket>[];
+    for (final snap in snaps) {
+      final data = snap.data();
+      if (!snap.exists || data == null) {
+        throw StateError('Ticket ${snap.id} no encontrado.');
+      }
+      final ticket = Ticket.fromFirestore(
+        id: snap.id,
+        eventId: eventId,
+        data: data,
+      );
+      if (event.productFor(ticket).id != owner.id) {
+        throw StateError(
+          'La opción no corresponde al producto del ticket #${ticket.number}.',
+        );
+      }
+      tickets.add(ticket);
+    }
+
+    if (variant.quota > 0) {
+      final existing = await _tickets(eventId)
+          .where('variantId', isEqualTo: variantId)
+          .get();
+      final updating = ids.toSet();
+      var used = 0;
+      for (final doc in existing.docs) {
+        if (updating.contains(doc.id)) continue;
+        used++;
+      }
+      var adding = 0;
+      for (final ticket in tickets) {
+        if (ticket.variantId == variantId) continue;
+        adding++;
+      }
+      if (used + adding > variant.quota) {
+        final left = variant.quota - used;
+        throw StateError(
+          left > 0
+              ? 'No hay cupo de ${variant.name}. Quedan $left.'
+              : 'No hay cupo de ${variant.name}.',
+        );
+      }
+    }
+
+    final actorName = await _collaboratorName(eventId, actorId);
+    const chunk = 400;
+    for (var i = 0; i < tickets.length; i += chunk) {
+      final slice = tickets.skip(i).take(chunk).toList(growable: false);
+      final pending = slice
+          .where((ticket) => ticket.variantId != variantId)
+          .toList(growable: false);
+      if (pending.isEmpty) continue;
+      final batch = _firestore.batch();
+      for (final ticket in pending) {
+        batch.update(_tickets(eventId).doc(ticket.id), {
+          'variantId': variantId,
+          'history': FieldValue.arrayUnion([
+            TicketHistoryEntry(
+              at: DateTime.now(),
+              action: TicketHistoryAction.variantSet,
+              fromStatus: ticket.status,
+              toStatus: ticket.status,
+              actorId: actorId,
+              actorRole: actorRole,
+              actorName: actorName,
+              note: 'Opción: ${variant.name}',
+            ).toFirestoreMap(),
+          ]),
+        });
+      }
+      await batch.commit();
+    }
   }
 
   Future<void> _updateTicketStatuses({
@@ -882,9 +1118,7 @@ class EventRepository {
   Future<Event> updateEvent(
     String eventId, {
     required String name,
-    required String product,
-    required double ticketPrice,
-    required double ticketProfit,
+    required List<EventProduct> products,
     required DateTime eventDate,
     required TimeOfDay pickupFrom,
     required TimeOfDay pickupTo,
@@ -892,12 +1126,70 @@ class EventRepository {
     required String notes,
   }) async {
     await _ensureWritable(eventId);
+    if (products.isEmpty) {
+      throw ArgumentError('El evento necesita al menos un producto.');
+    }
+    final current = await getById(eventId);
+    if (current == null) throw StateError('Evento $eventId no encontrado.');
+    if (current.ticketsGenerated &&
+        products.length != current.products.length) {
+      throw StateError('No se pueden agregar ni quitar productos.');
+    }
+    for (var i = 0; i < products.length; i++) {
+      final next = products[i];
+      final previous = current.products[i];
+      if (next.id != previous.id || next.ticketCount != previous.ticketCount) {
+        throw StateError(
+          'La cantidad de tickets de ${previous.name} no se puede cambiar.',
+        );
+      }
+      if (!current.ticketsGenerated) continue;
+      if (next.variants.length != previous.variants.length) {
+        throw StateError(
+          'No se pueden cambiar las opciones de ${previous.name}.',
+        );
+      }
+      for (var j = 0; j < next.variants.length; j++) {
+        final nextVariant = next.variants[j];
+        final previousVariant = previous.variants[j];
+        if (nextVariant.id != previousVariant.id ||
+            nextVariant.quota != previousVariant.quota) {
+          throw StateError(
+            'La cantidad de ${previousVariant.name} no se puede cambiar.',
+          );
+        }
+      }
+    }
+    final draft = Event(
+      id: current.id,
+      ownerId: current.ownerId,
+      ownerEmail: current.ownerEmail,
+      name: name,
+      product: current.product,
+      ticketPrice: current.ticketPrice,
+      ticketProfit: current.ticketProfit,
+      ticketCount: current.ticketCount,
+      eventDate: eventDate,
+      pickupFrom: pickupFrom,
+      pickupTo: pickupTo,
+      pickupPlace: pickupPlace,
+      sellersCount: current.sellersCount,
+      validatorsCount: current.validatorsCount,
+      collectorsCount: current.collectorsCount,
+      coordinatorsCount: current.coordinatorsCount,
+      notes: notes,
+      definedProducts: products,
+      status: current.status,
+    );
+    draft.applyProductSummary();
     final ref = _events.doc(eventId);
     await ref.update({
       'name': name,
-      'product': product,
-      'ticketPrice': ticketPrice,
-      'ticketProfit': ticketProfit,
+      'product': draft.product,
+      'ticketPrice': draft.ticketPrice,
+      'ticketProfit': draft.ticketProfit,
+      'ticketCount': draft.ticketCount,
+      'products': products.map((item) => item.toMap()).toList(),
       'eventDate': Timestamp.fromDate(
         DateTime(eventDate.year, eventDate.month, eventDate.day),
       ),
