@@ -18,7 +18,6 @@ import '../../features/join/coordinator_portal_screen.dart';
 import '../../features/join/join_screens.dart';
 import '../../features/onboarding/copy_event_screen.dart';
 import '../../features/onboarding/create_event_screen.dart';
-import '../../features/onboarding/pay_event_screen.dart';
 import 'deep_link_mapper.dart';
 import 'go_router_refresh_stream.dart';
 
@@ -110,11 +109,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/create-event',
         builder: (context, state) => const CreateEventScreen(),
-      ),
-      GoRoute(
-        path: '/create-event/pay/:eventId',
-        builder: (context, state) =>
-            PayEventScreen(eventId: state.pathParameters['eventId']!),
       ),
       GoRoute(
         path: '/join/:token',

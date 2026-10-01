@@ -5,11 +5,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/app_providers.dart';
+import '../../data/models/event.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/event_products_editor.dart';
 import '../../shared/widgets/section_card.dart';
 
-/// Create-event form. A free slot opens the workspace; otherwise checkout.
+/// Create-event form. The event is created already active.
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
 
@@ -51,10 +52,22 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void _goBack() {
     if (_submitting) return;
     if (_step > 0) {
-      setState(() => _step = 0);
+      setState(() => _step -= 1);
       return;
     }
     context.pop();
+  }
+
+  void _selectStep(int next) {
+    if (_submitting || next == _step) return;
+    if (next < _step) {
+      setState(() => _step = next);
+      return;
+    }
+    if (next == _step + 1) {
+      if (_step == 0) _next();
+      if (_step == 1) _nextFromProducts();
+    }
   }
 
   void _next() {
@@ -64,6 +77,22 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _step = 1);
+  }
+
+  void _nextFromProducts() {
+    final productsError = _productsKey.currentState?.validate();
+    if (productsError != null) {
+      setState(() => _attempted = true);
+      AppSnackBar.warning(context, productsError);
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _step = 2);
+  }
+
+  int get _ticketCount {
+    final products = _productsKey.currentState?.products() ?? const [];
+    return products.fold<int>(0, (total, product) => total + product.ticketCount);
   }
 
   Future<void> _submit() async {
@@ -106,15 +135,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       if (!mounted) return;
       AppSnackBar.success(
         context,
-        created.usedFreeSlot
-            ? 'Evento creado. Se generaron ${created.event.ticketCount} tickets.'
-            : 'Evento creado. Se generaron ${created.event.ticketCount} tickets. Completá el pago para activarlo.',
+        'Evento creado. Se generaron ${created.event.ticketCount} tickets.',
       );
-      if (created.usedFreeSlot) {
-        context.go('/event/${created.event.id}');
-      } else {
-        context.go('/create-event/pay/${created.event.id}');
-      }
+      context.go('/event/${created.event.id}');
     } on FirebaseException catch (e) {
       if (!mounted) return;
       AppSnackBar.error(context, 'No se pudo crear el evento: $e', cause: e);
@@ -128,23 +151,26 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
     final catalog =
         ref.watch(organizerProductCatalogProvider).asData?.value ?? const [];
-
-    final createLabel = organizer != null && organizer.canCreateFreeEvent
-        ? 'Crear evento (${organizer.freeEvents} gratis)'
-        : 'Crear evento';
+    final pricing = ref.watch(eventPricingProvider).asData?.value;
+    final quote = pricing == null
+        ? null
+        : EventQuote.calculate(ticketCount: _ticketCount, pricing: pricing);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_step == 0 ? 'Datos del evento' : 'Qué se vende'),
+        title: const Text('Crear evento'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _submitting ? null : _goBack,
         ),
       ),
-      body: IndexedStack(
+      body: Column(
+        children: [
+          _CreateStepBar(step: _step, onStep: _selectStep),
+          Expanded(
+            child: IndexedStack(
         index: _step,
         sizing: StackFit.expand,
         children: [
@@ -166,11 +192,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
           ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text(
-                'Paso 2 de 2',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
               SectionCard(
                 title: 'Qué se vende',
                 child: EventProductsEditor(
@@ -182,20 +203,23 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _submitting ? null : _submit,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(createLabel),
+                onPressed: _nextFromProducts,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text('Siguiente'),
                 ),
               ),
               const SizedBox(height: 24),
             ],
+          ),
+          _PaymentStep(
+            quote: quote,
+            ticketCount: _ticketCount,
+            submitting: _submitting,
+            onCreate: _submit,
+          ),
+        ],
+            ),
           ),
         ],
       ),
@@ -239,11 +263,6 @@ class _EventDataStep extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Paso 1 de 2',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-        ),
-        const SizedBox(height: 12),
         SectionCard(
           title: 'Datos del evento',
           child: Column(
@@ -344,6 +363,242 @@ class _EventDataStep extends StatelessWidget {
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
             child: Text('Siguiente'),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _CreateStepBar extends StatelessWidget {
+  const _CreateStepBar({required this.step, required this.onStep});
+
+  final int step;
+  final ValueChanged<int> onStep;
+
+  static const _labels = ['Datos', 'Qué se vende', 'Pago'];
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            return Stack(
+              children: [
+                Positioned(
+                  left: width / 6,
+                  width: width / 3,
+                  top: 10,
+                  child: _StepLine(active: step >= 1),
+                ),
+                Positioned(
+                  left: width / 2,
+                  width: width / 3,
+                  top: 10,
+                  child: _StepLine(active: step >= 2),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < _labels.length; i++)
+                      Expanded(
+                        child: _StepNode(
+                          number: i + 1,
+                          label: _labels[i],
+                          done: step > i,
+                          current: step == i,
+                          onTap: () => onStep(i),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _StepLine extends StatelessWidget {
+  const _StepLine({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: active ? AppColors.accent : AppColors.border,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: const SizedBox(height: 2),
+    );
+  }
+}
+
+class _StepNode extends StatelessWidget {
+  const _StepNode({
+    required this.number,
+    required this.label,
+    required this.done,
+    required this.current,
+    required this.onTap,
+  });
+
+  final int number;
+  final String label;
+  final bool done;
+  final bool current;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = current || done;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Column(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active ? AppColors.accent : AppColors.surface2,
+              border: active ? null : Border.all(color: AppColors.borderStrong),
+            ),
+            child: done
+                ? const Icon(Icons.check, size: 13, color: Colors.white)
+                : Text(
+                    '$number',
+                    style: TextStyle(
+                      color: current ? Colors.white : AppColors.textMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      height: 1,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.15,
+              fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+              color: current
+                  ? AppColors.text
+                  : done
+                  ? AppColors.accentText
+                  : AppColors.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentStep extends StatelessWidget {
+  const _PaymentStep({
+    required this.quote,
+    required this.ticketCount,
+    required this.submitting,
+    required this.onCreate,
+  });
+
+  final EventQuote? quote;
+  final int ticketCount;
+  final bool submitting;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final showPrice = quote != null && quote!.amount > 0;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SectionCard(
+          title: 'Pago',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$ticketCount tickets',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (showPrice) ...[
+                Text(
+                  quote!.priceLabel,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w800,
+                    decoration: TextDecoration.lineThrough,
+                    decorationColor: AppColors.textMuted,
+                  ),
+                ),
+                if (quote!.breakdown.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    quote!.breakdown.first,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+              ],
+              Text(
+                'Gratis',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Hoy lo creás sin costo. Estamos preparando la gestión de pago, para que puedas abonarlo directamente desde la app.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton(
+          onPressed: submitting ? null : onCreate,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: submitting
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Crear Evento'),
           ),
         ),
         const SizedBox(height: 24),

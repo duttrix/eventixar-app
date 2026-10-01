@@ -161,15 +161,9 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
       if (!mounted) return;
       AppSnackBar.success(
         context,
-        created.usedFreeSlot
-            ? 'Evento duplicado. Se generaron $ticketTotal tickets.'
-            : 'Evento duplicado. Se generaron $ticketTotal tickets. Completá el pago para activarlo.',
+        'Evento duplicado. Se generaron $ticketTotal tickets.',
       );
-      if (created.usedFreeSlot) {
-        context.go('/event/${created.event.id}');
-      } else {
-        context.go('/create-event/pay/${created.event.id}');
-      }
+      context.go('/event/${created.event.id}');
     } on FirebaseException catch (e) {
       if (!mounted) return;
       AppSnackBar.error(context, 'No se pudo duplicar: $e', cause: e);
@@ -207,7 +201,6 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
     List<Collaborator> team,
     bool teamLoading,
   ) {
-    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
     int countFor(CollaboratorRole role) =>
         team.where((c) => c.role == role).length;
 
@@ -356,9 +349,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Text(
-                      organizer != null && organizer.canCreateFreeEvent
-                          ? 'Duplicar evento (${organizer.freeEvents} gratis)'
-                          : 'Duplicar evento',
+                      'Duplicar evento',
                     ),
             ),
           ),

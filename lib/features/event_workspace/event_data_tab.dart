@@ -221,11 +221,6 @@ class _EventDataTabState extends ConsumerState<EventDataTab> {
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: 'Notas'),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Tickets: ${event.ticketCount} · Vendedores: ${event.sellersCount} · Coordinadores: ${event.coordinatorsCount} · Validadores: ${event.validatorsCount}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
           ),
         ),

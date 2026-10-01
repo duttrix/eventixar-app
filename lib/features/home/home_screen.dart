@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
-import '../../data/models/user.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
@@ -14,7 +13,7 @@ import '../../shared/widgets/logout_icon_button.dart';
 import '../../shared/widgets/section_card.dart';
 import '../../shared/widgets/status_badge.dart';
 
-/// Organizer home: Activos, Por pagar y Finalizados. Sin menú lateral.
+/// Organizer home: eventos activos y finalizados.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -28,7 +27,6 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final displayName = session.displayName;
-    final organizer = ref.watch(currentOrganizerProvider).asData?.value;
     return ref.watch(organizerEventsProvider).when(
           loading: () => Scaffold(
             appBar: _appBar(context, ref, email, displayName: displayName),
@@ -51,7 +49,6 @@ class HomeScreen extends ConsumerWidget {
             email: email,
             displayName: displayName,
             all: events,
-            organizer: organizer,
           ),
         );
   }
@@ -91,12 +88,14 @@ class HomeScreen extends ConsumerWidget {
     required String email,
     required String? displayName,
     required List<Event> all,
-    required AppUser? organizer,
   }) {
-    final active =
-        all.where((e) => e.status == EventStatus.active).toList();
-    final awaitingPayment =
-        all.where((e) => e.status == EventStatus.awaitingPayment).toList();
+    final active = all
+        .where(
+          (e) =>
+              e.status == EventStatus.active ||
+              e.status == EventStatus.awaitingPayment,
+        )
+        .toList();
     final finished =
         all.where((e) => e.status == EventStatus.finished).toList();
 
@@ -110,11 +109,7 @@ class HomeScreen extends ConsumerWidget {
             child: ElevatedButton.icon(
               onPressed: () => context.push('/create-event'),
               icon: const Icon(Icons.add),
-              label: Text(
-                organizer != null && organizer.canCreateFreeEvent
-                    ? 'Crear evento nuevo (${organizer.freeEvents} gratis)'
-                    : 'Crear evento nuevo',
-              ),
+              label: const Text('Crear Evento'),
             ),
           ),
           const SizedBox(height: 28),
@@ -125,16 +120,6 @@ class HomeScreen extends ConsumerWidget {
             onTap: (event) {
               ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
               context.push('/event/${event.id}');
-            },
-          ),
-          const SizedBox(height: 24),
-          _EventSection(
-            title: 'Por pagar',
-            events: awaitingPayment,
-            emptyText: 'No hay eventos pendientes de pago.',
-            onTap: (event) {
-              ref.read(sessionProvider.notifier).setCurrentEvent(event.id);
-              context.push('/create-event/pay/${event.id}');
             },
           ),
           const SizedBox(height: 24),
@@ -214,8 +199,10 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = DateFormat('dd/MM/yyyy').format(event.eventDate);
     final (label, tone) = switch (event.status) {
-      EventStatus.active => ('Activo', BadgeTone.success),
-      EventStatus.awaitingPayment => ('Pendiente de pago', BadgeTone.warn),
+      EventStatus.active || EventStatus.awaitingPayment => (
+        'Activo',
+        BadgeTone.success,
+      ),
       EventStatus.finished => ('Finalizado', BadgeTone.neutral),
     };
 

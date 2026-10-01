@@ -54,7 +54,9 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     ref.listen(eventProvider(widget.eventId), (previous, next) {
       final event = next.asData?.value;
       if (event == null || _ensuringTickets) return;
-      if (event.status != EventStatus.active || event.ticketsGenerated) return;
+      if (event.status == EventStatus.finished || event.ticketsGenerated) {
+        return;
+      }
       _ensuringTickets = true;
       ref.read(eventRepositoryProvider).ensureActiveEventReady(event.id).whenComplete(() {
         _ensuringTickets = false;
@@ -89,7 +91,7 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
 
     final (statusLabel, statusTone) = switch (event.status) {
       EventStatus.finished => ('Finalizado', BadgeTone.neutral),
-      EventStatus.awaitingPayment => ('Pendiente de pago', BadgeTone.warn),
+      EventStatus.awaitingPayment => ('Habilitado', BadgeTone.success),
       EventStatus.active => ('Habilitado', BadgeTone.success),
     };
 

@@ -6,7 +6,6 @@ import '../models/event.dart';
 import '../models/event_product.dart';
 import '../models/ticket.dart';
 import '../models/ticket_design.dart';
-import '../models/user.dart';
 
 /// Firestore access for organizer events + ticket bootstrap.
 class EventRepository {
@@ -17,9 +16,6 @@ class EventRepository {
 
   CollectionReference<Map<String, dynamic>> get _events =>
       _firestore.collection('events');
-
-  CollectionReference<Map<String, dynamic>> get _users =>
-      _firestore.collection('users');
 
   CollectionReference<Map<String, dynamic>> _tickets(String eventId) =>
       _events.doc(eventId).collection('tickets');
@@ -65,8 +61,7 @@ class EventRepository {
     }
   }
 
-  /// Creates the full event (tickets included).
-  /// Uses a free slot when `users.freeEvents` > 0 (`active`); otherwise `awaitingPayment`.
+  /// Creates the event already active. Payment is not collected in the app.
   Future<({Event event, bool usedFreeSlot})> createEvent({
     required String ownerId,
     required String ownerEmail,
@@ -113,23 +108,9 @@ class EventRepository {
     );
     event.applyProductSummary();
 
-    final userRef = _users.doc(ownerId);
-    final usedFreeSlot = await _firestore.runTransaction((tx) async {
-      final userSnap = await tx.get(userRef);
-      final raw = userSnap.data()?['freeEvents'];
-      final remaining =
-          raw is num ? raw.toInt() : AppUser.defaultFreeEvents;
-      final useFree = remaining > 0;
-      event.status =
-          useFree ? EventStatus.active : EventStatus.awaitingPayment;
-      tx.set(
-        ref,
-        event.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
-      );
-      if (!useFree) return false;
-      tx.update(userRef, {'freeEvents': remaining - 1});
-      return true;
-    });
+    await ref.set(
+      event.toFirestoreMap(createdAtValue: now, updatedAtValue: now),
+    );
 
     await _generateTickets(event);
     await ref.update({
@@ -137,7 +118,7 @@ class EventRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     event.ticketsGenerated = true;
-    return (event: event, usedFreeSlot: usedFreeSlot);
+    return (event: event, usedFreeSlot: true);
   }
 
   /// Organizer told us they transferred. Event stays in awaitingPayment.
@@ -158,10 +139,14 @@ class EventRepository {
     }
 
     var event = Event.fromFirestore(snap.id, data);
-    if (event.ticketsGenerated) return event;
-    if (event.status != EventStatus.active) return event;
+    if (event.ticketsGenerated && event.status == EventStatus.active) {
+      return event;
+    }
+    if (event.status == EventStatus.finished) return event;
 
-    await _generateTickets(event);
+    if (!event.ticketsGenerated) {
+      await _generateTickets(event);
+    }
     await ref.update({
       'status': EventStatus.active.firestoreValue,
       'ticketsGenerated': true,
