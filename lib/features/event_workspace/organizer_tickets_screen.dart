@@ -1289,14 +1289,14 @@ class _OrganizerTicketsScreenState
         .toList(growable: false);
     if (event.isReadOnly || shareable.isEmpty) return;
     try {
-      await TicketShare.shareImages(
+      final opened = await TicketShare.shareImages(
         context,
         tickets: shareable,
         event: event,
         style: event.ticketDesign,
         sellerNames: sellerNames,
       );
-      if (_selectionMode && mounted) _exitSelection();
+      if (opened && _selectionMode && mounted) _exitSelection();
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.error(

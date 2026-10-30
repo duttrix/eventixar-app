@@ -9,6 +9,7 @@ import '../../data/models/event.dart';
 import '../../data/models/event_product.dart';
 import '../../data/app_providers.dart';
 import '../../shared/widgets/app_snackbar.dart';
+import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/section_card.dart';
 
 /// Duplicate a finished event: new date + ticket count, optional team copy.
@@ -129,7 +130,11 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
     setState(() => _submitting = true);
     try {
       final eventRepo = ref.read(eventRepositoryProvider);
-      final created = await eventRepo.createEvent(
+      final created = await runBusyFullscreen(
+        context,
+        message: 'Duplicando el evento...',
+        messages: longEventCreateMessages(ticketTotal),
+        work: () => eventRepo.createEvent(
         ownerId: uid,
         ownerEmail: session.userEmail ?? '',
         name: name,
@@ -144,6 +149,7 @@ class _CopyEventScreenState extends ConsumerState<CopyEventScreen> {
         coordinatorsCount: source.coordinatorsCount,
         notes: source.notes,
         ticketDesign: source.ticketDesign,
+      ),
       );
 
       final rolesToCopy = {

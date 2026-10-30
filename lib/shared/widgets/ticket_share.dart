@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -19,6 +19,8 @@ export '../../data/models/ticket_design.dart';
 /// Share de tickets como **imágenes PNG** (sin texto/links al comprador).
 class TicketShare {
   TicketShare._();
+
+  static const _whatsAppChannel = MethodChannel('eventixar/whatsapp');
 
   /// Fixed Argentine mobile prefix for WhatsApp (`+54 9…`).
   static const whatsAppArPrefix = ArWhatsAppPhone.prefix;
@@ -135,21 +137,28 @@ class TicketShare {
     return files;
   }
 
-  /// Generates PNG(s) and opens the system share sheet (WhatsApp, etc.).
+  /// Asks for a mobile number and opens that WhatsApp chat.
+  /// Android attaches the ticket images in the composer.
+  /// iPhone opens the same chat and leaves the image on the clipboard,
+  /// because WhatsApp there cannot receive the file and the number together.
   ///
-  /// No caption/text is attached: the buyer should receive only the images.
-  static Future<void> shareImages(
+  /// Returns false when the user dismisses the phone sheet.
+  static Future<bool> shareImages(
     BuildContext context, {
     required List<Ticket> tickets,
     required Event event,
     TicketVisualStyle style = TicketVisualStyle.classic,
     Map<String, String> sellerNames = const {},
   }) async {
-    if (tickets.isEmpty) return;
+    if (tickets.isEmpty) return false;
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) {
       throw StateError('No hay Overlay para renderizar el ticket.');
     }
+
+    final phone = await _askWhatsAppPhone(context, count: tickets.length);
+    if (phone == null || !context.mounted) return false;
+
     final files = await buildImageFiles(
       overlay,
       tickets: tickets,
@@ -157,13 +166,35 @@ class TicketShare {
       style: style,
       sellerNames: sellerNames,
     );
-    await Share.shareXFiles(files);
+    try {
+      await _whatsAppChannel.invokeMethod<void>('shareImages', {
+        'phone': phone,
+        'paths': [for (final file in files) file.path],
+      });
+    } on PlatformException catch (error) {
+      throw StateError(error.message ?? 'No se pudo abrir WhatsApp.');
+    }
+    return true;
   }
 
   static String _sellerNameFor(Ticket ticket, Map<String, String> sellerNames) {
     final id = ticket.sellerId?.trim();
     if (id == null || id.isEmpty) return '';
     return sellerNames[id]?.trim() ?? '';
+  }
+
+  static Future<String?> _askWhatsAppPhone(
+    BuildContext context, {
+    required int count,
+  }) {
+    final title = count == 1
+        ? 'Compartir por WhatsApp'
+        : 'Compartir $count tickets por WhatsApp';
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _WhatsAppPhoneSheet(title: title),
+    );
   }
 }
 
@@ -370,4 +401,86 @@ class TicketSharePreview extends StatelessWidget {
       offset: const Offset(0, 4),
     ),
   ];
+}
+
+class _WhatsAppPhoneSheet extends StatefulWidget {
+  const _WhatsAppPhoneSheet({required this.title});
+
+  final String title;
+
+  @override
+  State<_WhatsAppPhoneSheet> createState() => _WhatsAppPhoneSheetState();
+}
+
+class _WhatsAppPhoneSheetState extends State<_WhatsAppPhoneSheet> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final digits = ArWhatsAppPhone.toWaMeDigits(_controller.text);
+    if (digits == null) {
+      setState(() => _error = 'Ingresá un celular válido.');
+      return;
+    }
+    Navigator.pop(context, digits);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(
+            Platform.isIOS
+                ? 'Se abre el chat de ese número, aunque no lo tengas agendado. '
+                    'Ahí mantené apretado y pegá la imagen.'
+                : 'Se abre el chat de ese número, aunque no lo tengas agendado.',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'Celular',
+              hintText: '11 2345 6789',
+              errorText: _error,
+              isDense: true,
+            ),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onSubmitted: (_) => _confirm(),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _confirm,
+            child: const Text('Abrir WhatsApp'),
+          ),
+        ],
+      ),
+    );
+  }
 }

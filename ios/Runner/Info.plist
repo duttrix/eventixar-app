@@ -50,6 +50,7 @@
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
 			<string>whatsapp</string>
+			<string>whatsapp-business</string>
 			<string>https</string>
 		</array>
 		<key>NSCameraUsageDescription</key>

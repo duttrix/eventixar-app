@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -51,11 +53,20 @@ Future<T> runBusyDialog<T>(
 }
 
 /// Opaque full-screen loader. Blocks back and taps until [work] finishes.
+///
+/// When [messages] has more than one line, they rotate so a long wait
+/// does not look frozen.
 Future<T> runBusyFullscreen<T>(
   BuildContext context, {
   required String message,
+  List<String> messages = const [],
   required Future<T> Function() work,
 }) async {
+  final lines = messages.isEmpty ? [message] : messages;
+  var index = 0;
+  Timer? timer;
+  void Function(void Function())? setDialogState;
+
   showGeneralDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -69,21 +80,27 @@ Future<T> runBusyFullscreen<T>(
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 20),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.text,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              child: StatefulBuilder(
+                builder: (_, setState) {
+                  setDialogState = setState;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 20),
+                      Text(
+                        lines[index],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.text,
+                          fontSize: 16,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -92,11 +109,31 @@ Future<T> runBusyFullscreen<T>(
     },
   );
 
+  if (lines.length > 1) {
+    timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      index = (index + 1) % lines.length;
+      setDialogState?.call(() {});
+    });
+  }
+
   try {
     return await work();
   } finally {
+    timer?.cancel();
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
     }
   }
+}
+
+/// Copy shown while a large event is being created.
+List<String> longEventCreateMessages(int ticketCount) {
+  if (ticketCount <= 5000) return const [];
+  return const [
+    'Estamos creando tu evento.',
+    'Estamos generando tus tickets.',
+    'Tickets listos para cobrar.',
+    'Ya falta poco.',
+    'No cierres la app. En un momento terminamos.',
+  ];
 }
