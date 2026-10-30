@@ -170,13 +170,14 @@ class _OrganizerTicketsScreenState
     return Column(
       children: [
         Expanded(
-          child: ProductSliceSwipe(
-            index: _productIndex,
-            count: event.ticketSlices.length,
-            onChanged: changeSlice,
-            child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
               TicketStatusCard.summary(
                 tickets: sorted,
                 selected: _statusFilters,
@@ -272,7 +273,17 @@ class _OrganizerTicketsScreenState
                 index: _productIndex,
                 onChanged: changeSlice,
               ),
-              const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ProductSliceSwipe(
+                  index: _productIndex,
+                  count: event.ticketSlices.length,
+                  onChanged: changeSlice,
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(16, 10, 16, showBar ? 8 : 16),
+                    children: [
               if (sorted.isEmpty)
                 const Text(
                   'Todavía no hay tickets en este evento.',
@@ -347,8 +358,11 @@ class _OrganizerTicketsScreenState
                       ),
                     ),
                   ),
+                    ],
+                  ),
+                ),
+              ),
             ],
-            ),
           ),
         ),
         if (showBar)
@@ -714,7 +728,6 @@ class _OrganizerTicketsScreenState
         },
       );
       if (!mounted) return;
-      _exitSelection();
       AppSnackBar.success(
         context,
         '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '

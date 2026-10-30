@@ -326,13 +326,14 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
       Column(
         children: [
           Expanded(
-            child: ProductSliceSwipe(
-              index: _productIndex,
-              count: event.ticketSlices.length,
-              onChanged: changeSlice,
-              child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                 if (!widget.embedded) ...[
                   EventDetailsCard(event: event),
                   const SizedBox(height: 12),
@@ -403,7 +404,22 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                   index: _productIndex,
                   onChanged: changeSlice,
                 ),
-                const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ProductSliceSwipe(
+                    index: _productIndex,
+                    count: event.ticketSlices.length,
+                    onChanged: changeSlice,
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        10,
+                        16,
+                        showBar ? 8 : 16,
+                      ),
+                      children: [
                 if (sorted.isEmpty)
                   Text(
                     canSelfAssign
@@ -478,8 +494,11 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
                         ], sellerNames: sellerNames),
                       ),
                     ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
-              ),
             ),
           ),
           if (showBar)
@@ -582,8 +601,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         actorId: widget.actorId,
         actorRole: widget.actorRole,
       );
-      if (!mounted) return;
-      setState(() => _selectedIds.remove(ticket.id));
     } catch (e) {
       if (!context.mounted) return;
       AppSnackBar.error(context, '$e', cause: e);
@@ -780,7 +797,6 @@ class _SellerWorkbenchState extends ConsumerState<SellerWorkbench> {
         },
       );
       if (!mounted) return;
-      _exitSelection();
       AppSnackBar.success(
         context,
         '${eligible.length} ticket${eligible.length == 1 ? '' : 's'} '

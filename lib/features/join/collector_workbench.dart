@@ -239,13 +239,14 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
       body: Column(
         children: [
           Expanded(
-            child: ProductSliceSwipe(
-              index: _productIndex,
-              count: event.ticketSlices.length,
-              onChanged: changeSlice,
-              child: ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, showBar ? 8 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                 if (widget.showLogout) ...[
                   EventDetailsCard(event: event),
                   const SizedBox(height: 12),
@@ -348,7 +349,22 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                   index: _productIndex,
                   onChanged: changeSlice,
                 ),
-                const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ProductSliceSwipe(
+                    index: _productIndex,
+                    count: event.ticketSlices.length,
+                    onChanged: changeSlice,
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        10,
+                        16,
+                        showBar ? 8 : 16,
+                      ),
+                      children: [
                 if (sorted.isEmpty)
                   const Text(
                     'Este vendedor no tiene tickets.',
@@ -391,8 +407,11 @@ class _CollectorWorkbenchState extends ConsumerState<CollectorWorkbench> {
                               },
                       ),
                     ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
-              ),
             ),
           ),
           if (showBar)
