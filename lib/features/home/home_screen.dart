@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_redirect.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/busy_dialog.dart';
 import '../../shared/widgets/help_whatsapp.dart';
@@ -107,7 +108,11 @@ class HomeScreen extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => context.push('/create-event'),
+              onPressed: () async {
+                if (await followAppRedirectIfSet(context, ref)) return;
+                if (!context.mounted) return;
+                context.push('/create-event');
+              },
               icon: const Icon(Icons.add),
               label: const Text('Crear Evento'),
             ),

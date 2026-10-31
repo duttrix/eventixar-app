@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/app_config.dart';
 import '../models/event.dart';
 import '../models/help_config.dart';
 import '../models/payment_config.dart';
@@ -22,6 +23,9 @@ class CatalogRepository {
 
   DocumentReference<Map<String, dynamic>> get _payment =>
       _firestore.collection('config').doc('payment');
+
+  DocumentReference<Map<String, dynamic>> get _app =>
+      _firestore.collection('config').doc('app');
 
   /// Live suggestions for “qué se vende” (free text always allowed).
   Stream<List<String>> watchEventProducts() {
@@ -51,6 +55,12 @@ class CatalogRepository {
   /// Live bank transfer details from `config/payment`.
   Stream<PaymentConfig?> watchPayment() {
     return _payment.snapshots().map(_paymentFromSnap);
+  }
+
+  /// One-shot read of `config/app`, loaded when the app starts.
+  Future<AppConfig> getAppConfig() async {
+    final snap = await _app.get();
+    return AppConfig.fromFirestore(snap.data());
   }
 
   List<String> _productsFromSnap(

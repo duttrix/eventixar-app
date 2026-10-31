@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:eventixar/core/auth/google_auth_service.dart';
 import 'package:eventixar/core/session/collaborator_session_storage.dart';
 import 'package:eventixar/data/app_providers.dart';
+import 'package:eventixar/data/models/app_config.dart';
 import 'package:eventixar/data/models/collaborator.dart';
 import 'package:eventixar/main.dart';
 
@@ -44,8 +45,10 @@ void main() {
       ProviderScope(
         overrides: [
           googleAuthServiceProvider.overrideWithValue(_NoAuthService()),
-          collaboratorSessionStorageProvider
-              .overrideWithValue(_EmptySessionStorage()),
+          collaboratorSessionStorageProvider.overrideWithValue(
+            _EmptySessionStorage(),
+          ),
+          appConfigProvider.overrideWith((ref) async => const AppConfig()),
         ],
         child: const DuttrixApp(),
       ),
@@ -55,6 +58,6 @@ void main() {
     expect(find.text('GESTIÓN DE EVENTOS'), findsOneWidget);
     expect(find.textContaining('uttrix'), findsWidgets);
     expect(find.text('Continuar con Google'), findsOneWidget);
-    expect(find.text('Continuar con Apple (próximamente)'), findsNothing);
+    expect(find.text('Continuar con Apple'), findsNothing);
   });
 }

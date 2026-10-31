@@ -13,6 +13,7 @@ import 'firebase/coupon_repository.dart';
 import 'firebase/event_repository.dart';
 import 'firebase/product_catalog_repository.dart';
 import 'firebase/user_repository.dart';
+import 'models/app_config.dart';
 import 'models/collaborator.dart';
 import 'models/event.dart';
 import 'models/event_product.dart';
@@ -91,6 +92,11 @@ final helpConfigProvider = StreamProvider<HelpConfig?>((ref) {
 /// Bank transfer details from Firestore `config/payment`.
 final paymentConfigProvider = StreamProvider<PaymentConfig?>((ref) {
   return ref.watch(catalogRepositoryProvider).watchPayment();
+});
+
+/// Remote settings from Firestore `config/app`, fetched once at startup.
+final appConfigProvider = FutureProvider<AppConfig>((ref) {
+  return ref.watch(catalogRepositoryProvider).getAppConfig();
 });
 
 /// Live events owned by the signed-in organizer.

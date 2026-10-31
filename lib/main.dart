@@ -100,6 +100,8 @@ class _DuttrixAppState extends ConsumerState<DuttrixApp>
 
   @override
   Widget build(BuildContext context) {
+    // Kick off `config/app` as soon as the app starts and keep the result.
+    ref.watch(appConfigProvider);
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(

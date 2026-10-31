@@ -330,7 +330,7 @@ service cloud.firestore {
     match /config/{docId} {
       allow read: if true;
       allow write: if isAdmin()
-        && docId in ['eventPricing', 'eventProducts', 'help', 'payment'];
+        && docId in ['eventPricing', 'eventProducts', 'help', 'payment', 'app'];
     }
 
     match /{document=**} {

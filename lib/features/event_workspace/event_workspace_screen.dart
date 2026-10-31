@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/models/event.dart';
 import '../../data/models/ticket.dart';
 import '../../data/app_providers.dart';
+import '../../shared/widgets/app_redirect.dart';
 import '../../shared/widgets/app_shell.dart';
 import '../../shared/widgets/app_snackbar.dart';
 import '../../shared/widgets/async_body.dart';
@@ -98,7 +99,13 @@ class _EventWorkspaceScreenState extends ConsumerState<EventWorkspaceScreen> {
     return AppShell(
       title: _labelFor(_selected),
       onHome: () => context.go('/home'),
-      onFinish: event.isReadOnly ? null : () => _confirmFinish(context),
+      onFinish: event.isReadOnly
+          ? null
+          : () async {
+              if (await followAppRedirectIfSet(context, ref)) return;
+              if (!context.mounted) return;
+              await _confirmFinish(context);
+            },
       onDuplicate: event.isReadOnly
           ? () => context.push('/event/${widget.eventId}/copy')
           : null,
