@@ -36,6 +36,33 @@ service cloud.firestore {
         || request.resource.data.status == resource.data.status;
     }
 
+    function ownerPaymentChangeAllowed() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['paymentStatus'])
+        || (
+          request.resource.data.paymentStatus == 'informed'
+          && (
+            !('paymentStatus' in resource.data)
+            || resource.data.paymentStatus == 'pending'
+            || resource.data.paymentStatus == 'informed'
+          )
+        );
+    }
+
+    function adminMarkPaid() {
+      return isAdmin()
+        && request.resource.data.paymentStatus == 'paid'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['paymentStatus', 'status', 'updatedAt'])
+        && (
+          request.resource.data.status == resource.data.status
+          || (
+            resource.data.status == 'awaitingPayment'
+            && request.resource.data.status == 'active'
+          )
+        );
+    }
+
     function isOwner(ownerId) {
       return isSignedIn() && request.auth.uid == ownerId;
     }
@@ -273,16 +300,19 @@ service cloud.firestore {
     match /events/{eventId} {
       allow get: if true;
       allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
-        || (isAdmin() && resource.data.status == 'awaitingPayment');
+        || (isAdmin() && resource.data.status == 'awaitingPayment')
+        || (isAdmin() && resource.data.paymentStatus in ['pending', 'informed']);
       allow create: if isSignedIn()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.status == 'active';
       allow update: if adminActivateUnpaidEvent()
+        || adminMarkPaid()
         || ownerActivateUnpaidEvent()
         || (isSignedIn()
             && resource.data.ownerId == request.auth.uid
             && request.resource.data.ownerId == resource.data.ownerId
-            && ownerKeepsUnpaidStatus());
+            && ownerKeepsUnpaidStatus()
+            && ownerPaymentChangeAllowed());
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       match /tickets/{ticketId} {
