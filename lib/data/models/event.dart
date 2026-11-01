@@ -177,32 +177,37 @@ class EventPricingConfig {
 
     for (final tier in tiers) {
       if (count >= tier.min && count <= tier.max) {
+        final amount = count * tier.price;
         final label = tier.label.isEmpty
             ? 'De ${tier.min} a ${tier.max} tickets'
             : tier.label;
+        final line = tier.price == 0
+            ? '$label → Gratis'
+            : '$count × \$${EventQuote.formatAmount(tier.price)} → \$${EventQuote.formatAmount(amount)}';
         return EventQuote(
-          amount: tier.price,
-          label: tier.price == 0 ? 'Gratis' : 'Cotización del evento',
-          breakdown: [
-            '$label → \$${EventQuote.formatAmount(tier.price)}',
-            note,
-          ],
+          amount: amount,
+          label: amount == 0 ? 'Gratis' : 'Cotización del evento',
+          breakdown: [line, note],
         );
       }
     }
 
     final overage = this.overage;
     if (overage != null && count > overage.baseMax) {
-      final amount = overage.basePrice +
-          ((count - overage.baseMax) * overage.pricePerTicket);
+      final extra = count - overage.baseMax;
+      final amount =
+          count * overage.basePrice + extra * overage.pricePerTicket;
       final plan = overage.label.isEmpty
           ? 'A medida ($count tickets)'
           : '${overage.label} ($count tickets)';
+      final extraLine = extra > 0 && overage.pricePerTicket > 0
+          ? ' + $extra × \$${EventQuote.formatAmount(overage.pricePerTicket)}'
+          : '';
       return EventQuote(
         amount: amount,
         label: 'Cotización del evento',
         breakdown: [
-          '$plan → \$${EventQuote.formatAmount(amount)}',
+          '$plan → $count × \$${EventQuote.formatAmount(overage.basePrice)}$extraLine = \$${EventQuote.formatAmount(amount)}',
           note,
         ],
       );
